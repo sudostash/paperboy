@@ -21,12 +21,14 @@ import asyncio
 import functools
 import json
 import os
+import posixpath
 import shutil
 import sys
 import threading
 import webbrowser
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import unquote, urlsplit
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
@@ -42,8 +44,13 @@ from demo_pdfs import build  # noqa: E402
 from scenarios import SCENARIOS  # noqa: E402
 
 
+def _field(obj, snake: str, camel: str, default=None):
+    """Read a result field under its mcp 2.x (snake_case) or 1.x (camelCase) name."""
+    return getattr(obj, snake, getattr(obj, camel, default))
+
+
 def _payload(result) -> object:
-    structured = getattr(result, "structuredContent", None)
+    structured = _field(result, "structured_content", "structuredContent")
     if isinstance(structured, dict):
         return structured.get("result", structured)
     text = result.content[0].text if result.content else ""
@@ -71,9 +78,12 @@ async def run_scenario(slug: str, scenario: dict, out: Path = OUT) -> dict:
     params = StdioServerParameters(command=sys.executable, args=["-m", "paperboy"],
                                    env=env, cwd=str(workspace))
     steps = []
+    failure = None
     async with stdio_client(params) as (r, w), ClientSession(r, w) as session:
         await session.initialize()
         for step in scenario["steps"]:
+            if failure:
+                break
             step = dict(step)
             if step["type"] == "tools":
                 listed = await session.list_tools()
@@ -84,7 +94,7 @@ async def run_scenario(slug: str, scenario: dict, out: Path = OUT) -> dict:
                 } for t in listed.tools]
             elif step["type"] == "call":
                 result = await session.call_tool(step["tool"], step["args"])
-                step["isError"] = bool(getattr(result, "isError", False))
+                step["isError"] = bool(_field(result, "is_error", "isError", False))
                 step["result"] = _payload(result)
                 tool = next(t for t in (await session.list_tools()).tools
                             if t.name == step["tool"])
@@ -92,8 +102,11 @@ async def run_scenario(slug: str, scenario: dict, out: Path = OUT) -> dict:
                                               "read_only_hint"))
                 step["title"] = _hint(tool.annotations, "title", "title") or step["tool"]
                 if step["isError"]:
-                    raise RuntimeError(f"{slug}: {step['tool']} failed: {step['result']}")
+                    failure = f"{slug}: {step['tool']} failed: {step['result']}"
             steps.append(step)
+    # Raised outside the session so it isn't wrapped in the client's ExceptionGroup.
+    if failure:
+        raise RuntimeError(failure)
 
     transcript = {k: v for k, v in scenario.items() if k != "steps"}
     transcript.update(slug=slug, steps=steps, root=DISPLAY_ROOT)
@@ -103,31 +116,53 @@ async def run_scenario(slug: str, scenario: dict, out: Path = OUT) -> dict:
     return json.loads(text)
 
 
-class _QuietHandler(SimpleHTTPRequestHandler):
+class _DemoHandler(SimpleHTTPRequestHandler):
+    """Serve only ``/viewer/`` (from the repo) and ``/out/`` (from *out*); 404 otherwise."""
+
+    def __init__(self, *args, out: Path, **kwargs):
+        self.out = out
+        super().__init__(*args, directory=str(DEMOS), **kwargs)
+
+    def translate_path(self, path: str) -> str:
+        # Normalize before routing so "/viewer/../x" cannot reach outside the two trees.
+        route = posixpath.normpath(unquote(urlsplit(path).path))
+        if route.startswith("/out/"):
+            self.directory = str(self.out)
+            return super().translate_path(route[len("/out"):])
+        if route.startswith("/viewer/"):
+            return super().translate_path(route)
+        return ""  # send_head() answers 404 for an empty path
+
     def log_message(self, *args) -> None:
         pass
 
 
-def _serve() -> ThreadingHTTPServer:
-    handler = functools.partial(_QuietHandler, directory=str(DEMOS))
+def _serve(out: Path = OUT) -> ThreadingHTTPServer:
+    """Start a localhost-only server for the viewer on a free port."""
+    handler = functools.partial(_DemoHandler, out=out)
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     return server
 
 
-async def record(slugs: list[str], headed: bool) -> None:
+async def record(slugs: list[str], headed: bool, out: Path = OUT, speed: int = 1) -> list[Path]:
+    """Record each scenario to ``<out>/videos/<slug>.webm``; return the video paths.
+
+    ``speed`` > 1 plays the viewer faster (for tests); recordings use 1.
+    """
     from playwright.async_api import async_playwright  # optional: the [demo] extra
 
-    videos = OUT / "videos"
+    videos = out / "videos"
     videos.mkdir(parents=True, exist_ok=True)
-    server = _serve()
+    server = _serve(out)
     port = server.server_address[1]
+    recorded = []
     try:
         async with async_playwright() as pw:
             browser = await pw.chromium.launch(headless=not headed)
             for slug in slugs:
-                await run_scenario(slug, SCENARIOS[slug])
-                raw = OUT / slug / "raw"
+                await run_scenario(slug, SCENARIOS[slug], out)
+                raw = out / slug / "raw"
                 context = await browser.new_context(
                     viewport=VIEWPORT, device_scale_factor=1,
                     record_video_dir=str(raw), record_video_size=VIEWPORT,
@@ -135,7 +170,7 @@ async def record(slugs: list[str], headed: bool) -> None:
                 page = await context.new_page()
                 errors: list[str] = []
                 page.on("pageerror", lambda e, errors=errors: errors.append(str(e)))
-                await page.goto(f"http://127.0.0.1:{port}/viewer/index.html?s={slug}")
+                await page.goto(f"http://127.0.0.1:{port}/viewer/index.html?s={slug}&speed={speed}")
                 await page.wait_for_function("window.__demoDone || window.__demoError",
                                              timeout=180_000)
                 await context.close()
@@ -144,21 +179,27 @@ async def record(slugs: list[str], headed: bool) -> None:
                 target = videos / f"{slug}.webm"
                 await page.video.save_as(str(target))
                 shutil.rmtree(raw, ignore_errors=True)
-                print(f"recorded {target.relative_to(DEMOS.parent)}")
+                recorded.append(target)
+                print(f"recorded {target}")
             await browser.close()
     finally:
         server.shutdown()
+    return recorded
 
 
-def preview(slug: str) -> None:
+def _wait_forever() -> None:
+    threading.Event().wait()
+
+
+def preview(slug: str, out: Path = OUT) -> None:
     """Run the scenario, then serve the viewer and open it in the default browser."""
-    asyncio.run(run_scenario(slug, SCENARIOS[slug]))
-    server = _serve()
+    asyncio.run(run_scenario(slug, SCENARIOS[slug], out))
+    server = _serve(out)
     url = f"http://127.0.0.1:{server.server_address[1]}/viewer/index.html?s={slug}"
     print(f"Playing {slug} at {url} (reload to replay, Ctrl+C to stop)")
     webbrowser.open(url)
     try:
-        threading.Event().wait()
+        _wait_forever()
     except KeyboardInterrupt:
         pass
     finally:

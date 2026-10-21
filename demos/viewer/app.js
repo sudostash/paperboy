@@ -5,12 +5,15 @@ import * as pdfjs from "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pd
 pdfjs.GlobalWorkerOptions.workerSrc =
   "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.worker.min.mjs";
 
-const slug = new URLSearchParams(location.search).get("s");
+const params = new URLSearchParams(location.search);
+const slug = params.get("s");
+// ?speed=N plays N times faster; tests use it, recordings play at 1x.
+const speed = Math.max(Number(params.get("speed")) || 1, 1);
 const base = `../out/${slug}`;
 const log = document.getElementById("log");
 const stage = document.getElementById("stage");
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms / speed));
 
 function el(tag, cls, text) {
   const node = document.createElement(tag);

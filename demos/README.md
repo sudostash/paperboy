@@ -14,7 +14,10 @@ Short, reproducible tutorial videos for each Paperboy feature, for guides and do
 4. Playwright records the viewer at 1280×720 to `out/videos/<scenario>.webm`.
 
 Nothing in a video is mocked: if a tool's behavior changes, re-recording reflects it.
-`tests/test_demos.py` runs every scenario's tool calls in CI so they cannot silently break.
+`tests/test_demos.py` covers the harness: sample PDFs, scenario shape, every scenario's tool
+calls against the real server, the localhost server's path restrictions, the CLI, and (with the
+`[demo]` extra and Chromium) full viewer playback and video recording. The browser tests skip
+without Chromium; the `demos` CI job installs it so they always run there.
 
 ## Usage
 
