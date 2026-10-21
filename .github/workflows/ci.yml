@@ -32,5 +32,29 @@ jobs:
       - name: Lint
         run: ruff check .
 
+      - name: Test (branch coverage must stay at or above 95%)
+        run: pytest -q --cov=paperboy --cov-branch --cov-report=term-missing --cov-fail-under=95
+
+  test-mcp1:
+    # The server supports both mcp 1.x and 2.x, which differ in import paths and
+    # in how tool errors reach clients; run the suite on the latest 1.x too.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system binaries (qpdf)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends qpdf
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]" "mcp<2"
+
       - name: Test
         run: pytest -q

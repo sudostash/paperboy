@@ -1,14 +1,16 @@
 """Inspection: page count, metadata, encryption status, validation."""
 from __future__ import annotations
 
-import subprocess
+import re
 from pathlib import Path
 
 import pikepdf
 
 from ..config import Settings
 from ..errors import PdfUserError
-from .base import open_pdf
+from .base import open_pdf, run_qpdf
+
+_PASSWORD_LINE = re.compile(r"^((?:User|Owner) password = ).*$", re.MULTILINE)
 
 
 def pdf_info(path: Path, settings: Settings, password: str | None = None) -> dict:
@@ -60,23 +62,18 @@ def check_pdf(path: Path, settings: Settings, password: str | None = None) -> di
     Uses the qpdf CLI's checker when available for a thorough report; otherwise
     falls back to attempting a full parse with pikepdf.
     """
-    problems: list[str] = []
     if settings.qpdf_path:
-        cmd = [settings.qpdf_path, "--check"]
-        if password:
-            cmd.append(f"--password={password}")
-        cmd.append(str(path))
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-        output = (proc.stdout + proc.stderr).strip()
-        # qpdf exit codes: 0 ok, 2 errors, 3 warnings.
-        healthy = proc.returncode == 0
-        for line in output.splitlines():
-            line = line.strip()
-            if line and not line.lower().startswith("checking"):
-                if "no syntax or stream encoding errors" in line.lower():
-                    continue
-                problems.append(line)
-        return {"path": str(path), "healthy": healthy, "checker": "qpdf",
+        proc = run_qpdf(settings, ["--check", str(path)], password)
+        # qpdf echoes the password it was given ("User password = ..."); never return it.
+        output = _PASSWORD_LINE.sub(r"\1[redacted]", (proc.stdout + proc.stderr).strip())
+        # qpdf exit codes: 0 ok, 2 errors, 3 warnings. Other lines are informational
+        # ("PDF Version: 1.7", "File is not encrypted", permissions, ...).
+        problems = [
+            line.strip() for line in output.splitlines()
+            if line.startswith("WARNING")
+            or (line.startswith("qpdf:") and "succeeded with warnings" not in line)
+        ]
+        return {"path": str(path), "healthy": proc.returncode == 0, "checker": "qpdf",
                 "problems": problems, "raw": output[:4000]}
 
     # Fallback: a successful open + page walk means it parses.

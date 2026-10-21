@@ -4,6 +4,38 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- `check_pdf` reported qpdf's informational lines ("PDF Version: 1.3", "File is not encrypted")
+  as problems on healthy files; only warnings and errors are reported now.
+- `check_pdf` returned the supplied password in its output (qpdf echoes it); it is now redacted.
+- Passwords given to the qpdf CLI (`check_pdf`, `flatten_pdf`) were visible in the process
+  list; they are now sent over stdin.
+- qpdf timeouts surfaced as internal errors; they are now clear user errors.
+- `flatten_pdf` always failed on password-protected input.
+- `repair_pdf` ignored the page-count limit.
+- `merge_pdfs` and `images_to_pdf` could overwrite one of their own inputs when
+  `overwrite=true`; they now refuse, like every other tool.
+- Corrupt and oversized ("decompression bomb") images surfaced as internal errors; they are
+  now clear user errors naming the file.
+- Text conversion collapsed indentation and runs of spaces (breaking YAML, code, and logs).
+- Page specs containing non-ASCII digits (e.g. "²") crashed instead of being rejected.
+- With mcp 1.x, unexpected exceptions leaked their internal message to the client; they are
+  now logged server-side and replaced with a generic error.
+- `paperboy install all`, as documented, was rejected; it now installs into every detected
+  client.
+- Client configs that were valid JSON but not an MCP config crashed the installer with a
+  traceback; they are now reported and left untouched.
+
+### Changed
+- `encrypt_pdf` with `allow_copy=false` no longer blocks screen readers (accessibility
+  permission is always granted, per PDF 2.0).
+
+### Added
+- Tests for every module (60% to 99% branch coverage), a 95% branch-coverage gate in CI,
+  and a CI job that runs the suite against mcp 1.x.
+
 ## [0.1.0] - 2026-10-12
 
 ### Added

@@ -25,7 +25,7 @@ def _page_count(path: Path) -> int:
 
 def _text_to_pdf(src: Path, out: Path) -> None:
     from reportlab.lib.pagesizes import LETTER
-    from reportlab.lib.utils import simpleSplit
+    from reportlab.pdfbase.pdfmetrics import stringWidth
     from reportlab.pdfgen import canvas
 
     font, size, lead, margin = "Courier", 10, 12, 54
@@ -34,8 +34,11 @@ def _text_to_pdf(src: Path, out: Path) -> None:
     y = height - margin
     c.setFont(font, size)
     text = src.read_text(encoding="utf-8", errors="replace").replace("\t", "    ")
+    # Courier is monospaced, so wrap by character count. Word-based wrapping would
+    # collapse indentation and runs of spaces, which matter in code, YAML, and logs.
+    per_line = max(1, int((width - 2 * margin) // stringWidth(" ", font, size)))
     for raw in text.splitlines() or [""]:
-        for line in simpleSplit(raw, font, size, width - 2 * margin) or [""]:
+        for line in [raw[i:i + per_line] for i in range(0, len(raw), per_line)] or [""]:
             if y < margin:
                 c.showPage()
                 c.setFont(font, size)
@@ -46,12 +49,18 @@ def _text_to_pdf(src: Path, out: Path) -> None:
 
 
 def _images_to_pdf(paths: list[Path], out: Path) -> None:
-    from PIL import Image
+    from PIL import Image, UnidentifiedImageError
 
     imgs = []
     try:
         for p in paths:
-            img = Image.open(p)
+            try:
+                img = Image.open(p)
+                img.load()
+            except Image.DecompressionBombError as exc:
+                raise PdfUserError(f"{p.name} is too large to convert safely") from exc
+            except (UnidentifiedImageError, OSError) as exc:
+                raise PdfUserError(f"{p.name} is not a readable image: {exc}") from exc
             if img.mode in ("RGBA", "LA", "P"):
                 bg = Image.new("RGB", img.size, "white")
                 rgba = img.convert("RGBA")

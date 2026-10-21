@@ -1,6 +1,7 @@
 """Shared engine helpers: opening, limit enforcement, metadata copy."""
 from __future__ import annotations
 
+import subprocess
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -54,3 +55,23 @@ def copy_docinfo(src: pikepdf.Pdf, dst: pikepdf.Pdf) -> None:
     except Exception:
         # Metadata copy is best-effort; never fail an operation over it.
         pass
+
+
+def run_qpdf(
+    settings: Settings, args: list[str], password: str | None = None, timeout: int = 120
+) -> subprocess.CompletedProcess:
+    """Run the qpdf CLI and return the completed process.
+
+    The password is sent on stdin (``--password-file=-``), never in argv, so
+    other local users cannot read it from the process list. A timeout becomes a
+    PdfUserError rather than an internal crash.
+    """
+    cmd = [settings.qpdf_path]
+    if password:
+        cmd.append("--password-file=-")
+    cmd += args
+    try:
+        return subprocess.run(cmd, input=password or "", capture_output=True, text=True,
+                              timeout=timeout)
+    except subprocess.TimeoutExpired as exc:
+        raise PdfUserError(f"qpdf timed out after {timeout}s") from exc

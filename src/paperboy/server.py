@@ -32,6 +32,8 @@ mcp = _Server(SERVER_NAME)
 def _guard(fn):
     """Turn anticipated engine failures into visible MCP tool errors.
 
+    Any other exception is logged here and replaced with a generic message, so
+    internal details never reach the client (mcp 1.x would forward them).
     ``functools.wraps`` sets ``__wrapped__`` so the MCP SDK still reads the real
     parameter signature when building each tool's input schema.
     """
@@ -39,13 +41,31 @@ def _guard(fn):
     def wrapper(*args, **kwargs):
         try:
             return fn(*args, **kwargs)
+        except ToolError:
+            raise
         except PdfUserError as exc:
             raise ToolError(str(exc)) from exc
+        except Exception as exc:
+            logger.exception("Unexpected error in %s", fn.__name__)
+            raise ToolError(
+                f"Internal error in {fn.__name__}; details were logged by the server"
+            ) from exc
     return wrapper
 
 
 def _overwrite(flag: Optional[bool]) -> bool:
     return SETTINGS.default_overwrite if flag is None else flag
+
+
+def _combined_output(output_path: str, inputs: list, overwrite: Optional[bool]):
+    """Resolve the output of a many-to-one tool; it may never replace one of its inputs."""
+    out = resolve(output_path, SETTINGS)
+    if out in inputs:
+        raise ToolError("Output path is the same as an input; choose a different output_path")
+    if out.exists() and not _overwrite(overwrite):
+        raise ToolError(f"{out} already exists (pass overwrite=true to replace it)")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    return out
 
 
 # --------------------------------------------------------------------------- #
@@ -228,10 +248,7 @@ def merge_pdfs(
     for original, resolved in zip(input_paths, srcs, strict=True):
         if passwords and original in passwords:
             resolved_pw[str(resolved)] = passwords[original]
-    out = resolve(output_path, SETTINGS)
-    if out.exists() and not _overwrite(overwrite):
-        raise ToolError(f"{out} already exists (pass overwrite=true to replace it)")
-    out.parent.mkdir(parents=True, exist_ok=True)
+    out = _combined_output(output_path, srcs, overwrite)
     return engine.merge_pdfs(srcs, out, SETTINGS, resolved_pw)
 
 
@@ -362,10 +379,7 @@ def images_to_pdf(
     if not isinstance(input_paths, list) or not input_paths:
         raise ToolError("Provide at least one image path")
     srcs = [require_input(p, SETTINGS) for p in input_paths]
-    out = resolve(output_path, SETTINGS)
-    if out.exists() and not _overwrite(overwrite):
-        raise ToolError(f"{out} already exists (pass overwrite=true to replace it)")
-    out.parent.mkdir(parents=True, exist_ok=True)
+    out = _combined_output(output_path, srcs, overwrite)
     return engine.images_to_pdf(srcs, out, SETTINGS)
 
 

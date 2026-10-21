@@ -1,0 +1,261 @@
+"""Inspection: pdf_info, check_pdf, extract_text, get_metadata."""
+from __future__ import annotations
+
+import dataclasses
+import subprocess
+
+import pikepdf
+import pytest
+
+from paperboy import engine as E
+from paperboy.errors import PdfUserError
+
+from conftest import HAS_QPDF
+
+# --- pdf_info --------------------------------------------------------------
+
+
+def test_pdf_info_reports_document_facts(doc, settings):
+    info = E.pdf_info(doc, settings)
+    assert info["path"] == str(doc)
+    assert info["size_bytes"] == doc.stat().st_size
+    assert info["pages"] == 5
+    assert info["is_encrypted"] is False
+    assert info["pdf_version"].startswith("1.")
+    assert info["linearized"] is False
+    assert info["first_page_size_pt"] == pytest.approx([595.3, 841.9], abs=0.5)  # A4
+    assert isinstance(info["metadata"], dict)
+    assert "permissions" not in info
+
+
+def test_pdf_info_on_encrypted_without_password_needs_one(make_encrypted, settings):
+    info = E.pdf_info(make_encrypted(), settings)
+    assert info["is_encrypted"] is True
+    assert "pages" not in info
+    assert "Password required" in info["note"]
+
+
+def test_pdf_info_with_password_reports_permissions(make_encrypted, settings):
+    locked = make_encrypted(password="pw", owner="owner",
+                            allow=pikepdf.Permissions(print_highres=False,
+                                                      print_lowres=False))
+    info = E.pdf_info(locked, settings, "pw")
+    assert info["pages"] == 3
+    assert info["is_encrypted"] is True
+    assert info["permissions"]["print_highres"] is False
+    assert info["permissions"]["extract"] is True
+
+
+def test_pdf_info_wrong_password(make_encrypted, settings):
+    with pytest.raises(PdfUserError, match="Incorrect password"):
+        E.pdf_info(make_encrypted(), settings, "nope")
+
+
+def test_pdf_info_rejects_non_pdf(tmp_path, settings):
+    junk = tmp_path / "junk.pdf"
+    junk.write_text("not a pdf")
+    with pytest.raises(PdfUserError, match="Could not open PDF"):
+        E.pdf_info(junk, settings)
+
+
+def test_pdf_info_reports_linearized_files(doc, tmp_path, settings):
+    out = tmp_path / "lin.pdf"
+    with pikepdf.open(doc) as pdf:
+        pdf.save(out, linearize=True)
+    assert E.pdf_info(out, settings)["linearized"] is True
+
+
+def test_pdf_info_includes_metadata(doc, tmp_path, settings):
+    out = tmp_path / "meta.pdf"
+    E.set_metadata(doc, out, {"title": "Hello"}, settings)
+    assert "Hello" in E.pdf_info(out, settings)["metadata"].values()
+
+
+def test_pdf_info_enforces_nothing_beyond_reading(make_pdf, settings):
+    # A zero-page document is unusual but valid; no first-page size is reported.
+    src = make_pdf("one.pdf", 1)
+    with pikepdf.open(src, allow_overwriting_input=True) as pdf:
+        del pdf.pages[0]
+        pdf.save(src)
+    info = E.pdf_info(src, settings)
+    assert info["pages"] == 0
+    assert "first_page_size_pt" not in info
+
+
+# --- check_pdf ---------------------------------------------------------------
+
+
+def test_check_pdf_fallback_on_healthy_file(doc, settings):
+    res = E.check_pdf(doc, dataclasses.replace(settings, qpdf_path=None))
+    assert res == {"path": str(doc), "healthy": True, "checker": "pikepdf", "problems": []}
+
+
+def test_check_pdf_fallback_on_unreadable_file(tmp_path, settings):
+    junk = tmp_path / "junk.pdf"
+    junk.write_text("garbage")
+    with pytest.raises(PdfUserError, match="Could not open PDF"):
+        E.check_pdf(junk, dataclasses.replace(settings, qpdf_path=None))
+
+
+def test_check_pdf_fallback_needs_password(make_encrypted, settings):
+    with pytest.raises(PdfUserError, match="supply its password"):
+        E.check_pdf(make_encrypted(), dataclasses.replace(settings, qpdf_path=None))
+
+
+@pytest.mark.skipif(not HAS_QPDF, reason="qpdf CLI not installed")
+def test_check_pdf_with_qpdf_on_healthy_file(doc, settings):
+    res = E.check_pdf(doc, settings)
+    assert res["checker"] == "qpdf"
+    assert res["healthy"] is True
+    assert res["problems"] == []
+
+
+@pytest.mark.skipif(not HAS_QPDF, reason="qpdf CLI not installed")
+def test_check_pdf_with_qpdf_reports_damage(doc, tmp_path, settings):
+    damaged = tmp_path / "damaged.pdf"
+    data = doc.read_bytes()
+    damaged.write_bytes(data.replace(b"xref", b"xxxx", 1))
+    res = E.check_pdf(damaged, settings)
+    assert res["checker"] == "qpdf"
+    assert res["healthy"] is False  # recoverable, but damaged
+    assert all(p.startswith(("WARNING", "qpdf:")) for p in res["problems"])
+    assert any("xref" in p for p in res["problems"])
+
+
+@pytest.mark.skipif(not HAS_QPDF, reason="qpdf CLI not installed")
+def test_check_pdf_with_qpdf_and_password_never_echoes_it(make_encrypted, settings):
+    res = E.check_pdf(make_encrypted(password="hunter2"), settings, "hunter2")
+    assert res["healthy"] is True
+    assert res["problems"] == []
+    assert "hunter2" not in str(res)
+    assert "User password = [redacted]" in res["raw"]
+
+
+@pytest.mark.skipif(not HAS_QPDF, reason="qpdf CLI not installed")
+def test_check_pdf_with_qpdf_wrong_password(make_encrypted, settings):
+    res = E.check_pdf(make_encrypted(password="pw"), settings, "nope")
+    assert res["healthy"] is False
+    assert any("invalid password" in p for p in res["problems"])
+
+
+@pytest.mark.skipif(not HAS_QPDF, reason="qpdf CLI not installed")
+def test_check_pdf_with_qpdf_on_truncated_file(doc, tmp_path, settings):
+    truncated = tmp_path / "trunc.pdf"
+    data = doc.read_bytes()
+    truncated.write_bytes(data[: len(data) // 2])
+    res = E.check_pdf(truncated, settings)
+    assert res["healthy"] is False
+    assert res["problems"]
+
+
+def test_check_pdf_qpdf_timeout_is_a_user_error(doc, settings, monkeypatch):
+    def hang(*args, **kwargs):
+        raise subprocess.TimeoutExpired(args[0], kwargs.get("timeout"))
+
+    monkeypatch.setattr(subprocess, "run", hang)
+    with pytest.raises(PdfUserError, match="timed out"):
+        E.check_pdf(doc, dataclasses.replace(settings, qpdf_path="/usr/bin/qpdf"))
+
+
+# --- extract_text ------------------------------------------------------------
+
+
+def test_extract_text_all_pages(doc, settings):
+    res = E.extract_text(doc, settings)
+    assert res["pages_read"] == 5
+    assert res["truncated"] is False
+    for n in range(1, 6):
+        assert f"--- Page {n} ---" in res["text"]
+        assert f"PAGE-{n}" in res["text"]
+
+
+def test_extract_text_selected_pages_in_order(doc, settings):
+    res = E.extract_text(doc, settings, pages="4,2")
+    assert res["pages_read"] == 2
+    assert res["text"].index("PAGE-4") < res["text"].index("PAGE-2")
+    assert "PAGE-1" not in res["text"]
+
+
+def test_extract_text_truncates(doc, settings):
+    res = E.extract_text(doc, settings, max_chars=20)
+    assert res["truncated"] is True
+    assert res["text"].endswith("[truncated]")
+    assert len(res["text"]) == 20 + len("\n[truncated]")
+
+
+def test_extract_text_encrypted(make_encrypted, settings):
+    locked = make_encrypted(password="pw")
+    with pytest.raises(PdfUserError, match="supply its password"):
+        E.extract_text(locked, settings)
+    with pytest.raises(PdfUserError, match="Incorrect password"):
+        E.extract_text(locked, settings, password="bad")
+    assert "PAGE-1" in E.extract_text(locked, settings, password="pw")["text"]
+
+
+def test_extract_text_rejects_non_pdf(tmp_path, settings):
+    junk = tmp_path / "junk.pdf"
+    junk.write_text("garbage")
+    with pytest.raises(PdfUserError, match="Could not read PDF"):
+        E.extract_text(junk, settings)
+
+
+def test_extract_text_enforces_page_cap(doc, settings):
+    with pytest.raises(PdfUserError, match="over the 2 limit"):
+        E.extract_text(doc, dataclasses.replace(settings, max_pages=2))
+
+
+def test_extract_text_bad_page_spec(doc, settings):
+    with pytest.raises(PdfUserError, match="out of range"):
+        E.extract_text(doc, settings, pages="9")
+
+
+# --- get_metadata --------------------------------------------------------------
+
+
+def test_get_metadata_returns_known_fields_only(doc, tmp_path, settings):
+    out = tmp_path / "m.pdf"
+    E.set_metadata(doc, out, {"title": "T", "author": "Ann, Bob", "keywords": "a b"}, settings)
+    res = E.get_metadata(out, settings)
+    assert res["path"] == str(out)
+    assert res["metadata"]["title"] == "T"
+    assert res["metadata"]["author"] == "Ann, Bob"   # list joined back
+    assert res["metadata"]["keywords"] == "a b"
+
+
+def test_get_metadata_empty(doc, settings):
+    assert E.get_metadata(doc, settings)["metadata"].keys() <= {"producer", "creator"}
+
+
+def test_get_metadata_encrypted(make_encrypted, settings):
+    with pytest.raises(PdfUserError):
+        E.get_metadata(make_encrypted(), settings)
+    assert E.get_metadata(make_encrypted("b.pdf", password="x"), settings, "x")["path"]
+
+
+def test_pdf_info_survives_unreadable_metadata(doc, settings, monkeypatch):
+    def broken(self, *a, **k):
+        raise RuntimeError("bad XMP")
+
+    monkeypatch.setattr(pikepdf.Pdf, "open_metadata", broken)
+    info = E.pdf_info(doc, settings)
+    assert info["metadata"] == {}
+    assert info["pages"] == 5
+
+
+def test_check_pdf_fallback_reports_unparseable_pages(doc, settings, monkeypatch):
+    from contextlib import contextmanager
+
+    from paperboy.engine import info as info_module
+
+    class BrokenPages:
+        def __iter__(self):
+            raise pikepdf.PdfError("page tree is corrupt")
+
+    @contextmanager
+    def fake_open(*args, **kwargs):
+        yield type("Doc", (), {"pages": BrokenPages()})()
+
+    monkeypatch.setattr(info_module, "open_pdf", fake_open)
+    res = E.check_pdf(doc, dataclasses.replace(settings, qpdf_path=None))
+    assert res["healthy"] is False
+    assert res["problems"] == ["page tree is corrupt"]

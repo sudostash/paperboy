@@ -13,3 +13,5 @@ venv/
 *.pdf
 !tests/**/*.pdf
 .DS_Store
+.coverage
+htmlcov/

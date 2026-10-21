@@ -20,7 +20,9 @@ _ALGORITHMS = {
 
 def _permissions(allow_print: bool, allow_copy: bool, allow_modify: bool) -> pikepdf.Permissions:
     return pikepdf.Permissions(
-        accessibility=allow_copy,
+        # Never block screen readers: PDF 2.0 deprecates this bit and requires
+        # readers to ignore it, and qpdf already forces it on for AES-256.
+        accessibility=True,
         extract=allow_copy,
         print_lowres=allow_print,
         print_highres=allow_print,

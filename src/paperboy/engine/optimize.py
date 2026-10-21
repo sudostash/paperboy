@@ -1,14 +1,13 @@
 """Optimization, repair, and annotation flattening."""
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 
 import pikepdf
 
 from ..config import Settings
 from ..errors import DependencyError, PdfUserError
-from .base import open_pdf
+from .base import open_pdf, run_qpdf
 
 
 def optimize_pdf(
@@ -57,6 +56,10 @@ def repair_pdf(path: Path, out: Path, settings: Settings, password: str | None =
         raise PdfUserError(f"PDF is too damaged to repair automatically: {exc}") from exc
     with pdf:
         pages = len(pdf.pages)
+        if pages > settings.max_pages:
+            raise PdfUserError(
+                f"Document has {pages} pages, over the {settings.max_pages} page limit"
+            )
         pdf.save(str(out))
     return {"output": str(out), "pages": pages}
 
@@ -68,15 +71,15 @@ def flatten_pdf(path: Path, out: Path, settings: Settings, password: str | None 
             "flatten_pdf needs the qpdf command-line tool on PATH "
             "(install qpdf, or set PAPERBOY_QPDF)"
         )
-    cmd = [settings.qpdf_path]
-    if password:
-        cmd.append(f"--password={password}")
-    cmd += ["--flatten-annotations=all", "--generate-appearances", str(path), str(out)]
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    proc = run_qpdf(
+        settings, ["--flatten-annotations=all", "--generate-appearances", str(path), str(out)],
+        password,
+    )
     if proc.returncode not in (0, 3):  # 3 == warnings
         raise PdfUserError(
             f"Flatten failed: {(proc.stderr or proc.stdout).strip()}"
         )
-    with open_pdf(out, settings) as pdf:
+    # qpdf keeps the input's encryption, so the output opens with the same password.
+    with open_pdf(out, settings, password) as pdf:
         pages = len(pdf.pages)
     return {"output": str(out), "pages": pages, "warnings": proc.returncode == 3}

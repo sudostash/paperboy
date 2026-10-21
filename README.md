@@ -173,6 +173,14 @@ All configuration is environment variables. Sensible defaults; nothing is requir
 - **Subprocess timeouts** bound every LibreOffice and qpdf call.
 - **No silent overwrites** — a tool refuses to clobber an existing file unless you opt in.
 - **Passwords are tool arguments**, so they appear in the client's tool-call log. `decrypt_pdf` requires the real password; it does not crack anything.
+  Passwords handed to the qpdf CLI go over stdin, never the command line, so other local users
+  can't read them from the process list, and `check_pdf` redacts the password qpdf echoes back.
+- **Internal errors stay on the server.** Anticipated problems (bad path, wrong password,
+  out-of-range page) are returned with a clear message; anything unexpected is logged by the
+  server and the client only sees a generic "internal error", on both mcp 1.x and 2.x.
+- **Copy protection never blocks screen readers.** `allow_copy=false` stops text extraction but
+  always keeps the accessibility permission, as PDF 2.0 requires (RC4-40, the oldest scheme,
+  has no separate accessibility bit).
 
 ## Architecture
 
@@ -194,11 +202,14 @@ streamable-HTTP transport (with upload/download + auth) without touching the PDF
 
 ```bash
 pip install -e ".[dev]"
-pytest          # engine, path confinement, and a real stdio round-trip
+pytest          # engine, path confinement, server policy, CLI, installer, real stdio round-trip
+pytest --cov=paperboy --cov-branch --cov-report=term-missing   # CI requires >= 95% branch coverage
 ruff check .
 ```
 
-Tests that need LibreOffice or the qpdf CLI skip automatically when those binaries are absent.
+Every module has a test file (`tests/test_<module>.py`). Tests that need the qpdf CLI skip when
+it is absent; LibreOffice conversions are tested with a stand-in `soffice` script, so they run
+everywhere. CI also runs the suite against mcp 1.x.
 
 ## Roadmap
 
