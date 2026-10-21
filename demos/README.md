@@ -26,7 +26,12 @@ python demos/record.py --list               # available scenarios
 python demos/record.py                      # record all
 python demos/record.py tool-annotations     # record one
 python demos/record.py tool-annotations --headed
+python demos/record.py --preview tool-annotations   # play in your browser, no video
 ```
+
+Don't open `viewer/index.html` directly: browsers block its scripts on `file://`, and it needs a
+recorded transcript plus a `?s=<scenario>` parameter. `--preview` sets all of that up. To just
+watch a finished recording, open `out/videos/<scenario>.webm` in a browser.
 
 The viewer loads pdf.js from cdn.jsdelivr.net, so recording needs network access.
 `demos/out/` is gitignored; videos are generated locally, not committed.

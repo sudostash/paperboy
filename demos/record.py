@@ -11,7 +11,8 @@ Usage:
     pip install -e ".[demo]" && playwright install chromium
     python demos/record.py                     # every scenario
     python demos/record.py tool-annotations    # just one
-    python demos/record.py --headed --list
+    python demos/record.py --list
+    python demos/record.py --preview tool-annotations   # play in your browser, no video
 """
 from __future__ import annotations
 
@@ -23,6 +24,7 @@ import os
 import shutil
 import sys
 import threading
+import webbrowser
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -148,11 +150,28 @@ async def record(slugs: list[str], headed: bool) -> None:
         server.shutdown()
 
 
+def preview(slug: str) -> None:
+    """Run the scenario, then serve the viewer and open it in the default browser."""
+    asyncio.run(run_scenario(slug, SCENARIOS[slug]))
+    server = _serve()
+    url = f"http://127.0.0.1:{server.server_address[1]}/viewer/index.html?s={slug}"
+    print(f"Playing {slug} at {url} (reload to replay, Ctrl+C to stop)")
+    webbrowser.open(url)
+    try:
+        threading.Event().wait()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.shutdown()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("slugs", nargs="*", help="scenarios to record (default: all)")
     parser.add_argument("--headed", action="store_true", help="show the browser")
     parser.add_argument("--list", action="store_true", help="list scenarios and exit")
+    parser.add_argument("--preview", action="store_true",
+                        help="play one scenario in your browser instead of recording")
     args = parser.parse_args()
     if args.list:
         for slug, s in SCENARIOS.items():
@@ -161,6 +180,11 @@ def main() -> None:
     unknown = set(args.slugs) - SCENARIOS.keys()
     if unknown:
         parser.error(f"unknown scenario(s): {', '.join(sorted(unknown))}")
+    if args.preview:
+        if len(args.slugs) != 1:
+            parser.error("--preview takes exactly one scenario")
+        preview(args.slugs[0])
+        return
     asyncio.run(record(args.slugs or list(SCENARIOS), args.headed))
 
 

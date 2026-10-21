@@ -22,6 +22,15 @@
       <div class="placeholder">Results appear here</div>
     </section>
   </main>
+  <script>
+    // Browsers block module scripts and fetch() on file:// pages, so app.js
+    // never runs there; say why instead of showing an empty page.
+    if (location.protocol === "file:") {
+      document.getElementById("stage").innerHTML =
+        '<div class="placeholder"><p>This viewer must be served over HTTP, not opened as a file.</p>' +
+        "<code>python demos/record.py --preview tool-annotations</code></div>";
+    }
+  </script>
   <script type="module" src="app.js"></script>
 </body>
 </html>

@@ -134,7 +134,9 @@ async function call(step) {
 }
 
 async function play() {
-  const script = await (await fetch(`${base}/script.json`)).json();
+  const res = await fetch(`${base}/script.json`);
+  if (!res.ok) throw new Error("no recorded transcript");
+  const script = await res.json();
   document.getElementById("title").textContent = script.title;
   document.getElementById("subtitle").textContent = script.subtitle;
   await sleep(800);
@@ -155,8 +157,20 @@ async function play() {
   window.__demoDone = true;
 }
 
-play().catch((err) => {
-  console.error(err);
-  window.__demoError = String(err);
-  throw err;
-});
+function explain(message) {
+  const box = el("div", "placeholder");
+  box.append(el("p", null, message),
+    el("code", null, "python demos/record.py --preview tool-annotations"));
+  stage.replaceChildren(box);
+}
+
+if (!slug) {
+  explain("No scenario selected. Open this page through the preview server:");
+} else {
+  play().catch((err) => {
+    console.error(err);
+    window.__demoError = String(err);
+    explain(`Could not load scenario “${slug}” (${err.message}). Record it first, or run:`);
+    throw err;
+  });
+}

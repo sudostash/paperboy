@@ -145,7 +145,16 @@ body {
   flex-direction: column;
   gap: 16px;
 }
-.placeholder { margin: auto; color: var(--muted); }
+.placeholder { margin: auto; color: var(--muted); text-align: center; }
+.placeholder code {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--code);
+  color: var(--ink);
+  font: 13px var(--mono);
+}
 
 .stage h2 { margin: 0; font-size: 15px; color: var(--muted); font-weight: 600; }
 
