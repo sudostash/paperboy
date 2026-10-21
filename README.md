@@ -172,6 +172,19 @@ All configuration is environment variables. Sensible defaults; nothing is requir
 - **File-size and page-count caps** keep a malicious or runaway PDF from exhausting memory.
 - **Subprocess timeouts** bound every LibreOffice and qpdf call.
 - **No silent overwrites** — a tool refuses to clobber an existing file unless you opt in.
+- **Protected stays protected.** Rotating, reordering, splitting, merging, optimizing,
+  repairing, flattening, or editing the metadata of a password-protected PDF produces a
+  protected output: AES-256, the same user password, and the same permissions. Only
+  `decrypt_pdf` removes a password. Results say `"password_protected": true` (or
+  `"permissions_restricted": true` for files that open freely but restrict printing/copying).
+  - Supplying the **user** password: the output gets a new random owner password, so its
+    restrictions stay enforced.
+  - Supplying the **owner** password: older encryption (RC4, AES-128) lets qpdf recover the
+    user password, so it is kept. For AES-256 it can't be recovered, so the output opens with
+    the password you supplied and the result says `"user_password_changed": true`.
+  - **Merging** protected files: they must share one password (otherwise the merge is refused,
+    so no input's pages become readable with another input's password), and the output gets
+    the strictest permissions of all its inputs.
 - **Tool annotations** tell clients what each tool does. The four inspection tools
   (`pdf_info`, `get_metadata`, `check_pdf`, `extract_text`) are marked `readOnlyHint`, so clients
   may run them without a prompt. Every tool that writes a file is marked `destructiveHint`

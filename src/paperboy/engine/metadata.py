@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ..config import Settings
-from .base import open_pdf
+from .base import inherit_protection, open_pdf
 
 # Friendly names mapped to XMP/docinfo keys pikepdf understands.
 _FIELDS = {
@@ -54,5 +54,6 @@ def set_metadata(
                     m[_FIELDS[friendly]] = [v.strip() for v in value.split(",") if v.strip()]
                 else:
                     m[_FIELDS[friendly]] = value
-        pdf.save(str(out))
-    return {"output": str(out), "updated": sorted(fields)}
+        protection = inherit_protection(pdf, password)
+        pdf.save(str(out), encryption=protection.encryption)
+    return protection.report({"output": str(out), "updated": sorted(fields)})

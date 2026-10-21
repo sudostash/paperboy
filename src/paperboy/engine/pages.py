@@ -8,7 +8,7 @@ import pikepdf
 from ..config import Settings
 from ..errors import PdfUserError
 from ..pagespec import parse_pages
-from .base import copy_docinfo, open_pdf
+from .base import combine_protections, copy_docinfo, inherit_protection, open_pdf
 
 
 def rearrange_pages(
@@ -30,8 +30,10 @@ def rearrange_pages(
         for i in order:
             dst.pages.append(src.pages[i])
         copy_docinfo(src, dst)
-        dst.save(str(out))
-    return {"output": str(out), "pages": len(order), "order": [i + 1 for i in order]}
+        protection = inherit_protection(src, password)
+        dst.save(str(out), encryption=protection.encryption)
+    return protection.report(
+        {"output": str(out), "pages": len(order), "order": [i + 1 for i in order]})
 
 
 def delete_pages(
@@ -47,8 +49,10 @@ def delete_pages(
         for i in keep:
             dst.pages.append(src.pages[i])
         copy_docinfo(src, dst)
-        dst.save(str(out))
-    return {"output": str(out), "pages": len(keep), "deleted": sorted(i + 1 for i in drop)}
+        protection = inherit_protection(src, password)
+        dst.save(str(out), encryption=protection.encryption)
+    return protection.report(
+        {"output": str(out), "pages": len(keep), "deleted": sorted(i + 1 for i in drop)})
 
 
 def extract_pages(
@@ -60,8 +64,9 @@ def extract_pages(
         for i in idx:
             dst.pages.append(src.pages[i])
         copy_docinfo(src, dst)
-        dst.save(str(out))
-    return {"output": str(out), "pages": len(idx)}
+        protection = inherit_protection(src, password)
+        dst.save(str(out), encryption=protection.encryption)
+    return protection.report({"output": str(out), "pages": len(idx)})
 
 
 def rotate_pages(
@@ -80,8 +85,9 @@ def rotate_pages(
         targets = set(parse_pages(pages, total, dedupe=True)) if pages else set(range(total))
         for i in targets:
             pikepdf.Page(src.pages[i]).rotate(degrees, relative=True)
-        src.save(str(out))
-    return {"output": str(out), "rotated_pages": sorted(i + 1 for i in targets)}
+        protection = inherit_protection(src, password)
+        src.save(str(out), encryption=protection.encryption)
+    return protection.report({"output": str(out), "rotated_pages": sorted(i + 1 for i in targets)})
 
 
 def merge_pdfs(
@@ -96,7 +102,7 @@ def merge_pdfs(
     passwords = passwords or {}
     dst = pikepdf.new()
     total = 0
-    first_src = None
+    protections = []
     try:
         for p in inputs:
             pw = passwords.get(str(p))
@@ -107,12 +113,12 @@ def merge_pdfs(
                     )
                 dst.pages.extend(src.pages)
                 total += len(src.pages)
-                if first_src is None:
-                    first_src = p
-        dst.save(str(out))
+                protections.append(inherit_protection(src, pw))
+        protection = combine_protections(protections)
+        dst.save(str(out), encryption=protection.encryption)
     finally:
         dst.close()
-    return {"output": str(out), "pages": total, "sources": len(inputs)}
+    return protection.report({"output": str(out), "pages": total, "sources": len(inputs)})
 
 
 def split_pdf(
@@ -134,6 +140,7 @@ def split_pdf(
         )
         if not groups:
             raise PdfUserError("No ranges to split")
+        protection = inherit_protection(src, password)
         outputs = []
         for n, idx in enumerate(groups, 1):
             out = out_dir / f"{path.stem}_part{n:03d}.pdf"
@@ -143,7 +150,7 @@ def split_pdf(
             for i in idx:
                 dst.pages.append(src.pages[i])
             copy_docinfo(src, dst)
-            dst.save(str(out))
+            dst.save(str(out), encryption=protection.encryption)
             dst.close()
             outputs.append(str(out))
-    return {"output_dir": str(out_dir), "files": outputs, "count": len(outputs)}
+    return protection.report({"output_dir": str(out_dir), "files": outputs, "count": len(outputs)})

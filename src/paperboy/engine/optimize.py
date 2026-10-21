@@ -7,7 +7,7 @@ import pikepdf
 
 from ..config import Settings
 from ..errors import DependencyError, PdfUserError
-from .base import open_pdf, run_qpdf
+from .base import inherit_protection, open_pdf, run_qpdf
 
 
 def optimize_pdf(
@@ -22,8 +22,10 @@ def optimize_pdf(
     before = path.stat().st_size
     with open_pdf(path, settings, password) as pdf:
         pages = len(pdf.pages)
+        protection = inherit_protection(pdf, password)
         pdf.save(
             str(out),
+            encryption=protection.encryption,
             linearize=linearize,
             compress_streams=compress,
             object_stream_mode=(
@@ -33,14 +35,14 @@ def optimize_pdf(
             ),
         )
     after = out.stat().st_size
-    return {
+    return protection.report({
         "output": str(out),
         "pages": pages,
         "size_before": before,
         "size_after": after,
         "saved_bytes": before - after,
         "linearized": linearize,
-    }
+    })
 
 
 def repair_pdf(path: Path, out: Path, settings: Settings, password: str | None = None) -> dict:
@@ -60,8 +62,9 @@ def repair_pdf(path: Path, out: Path, settings: Settings, password: str | None =
             raise PdfUserError(
                 f"Document has {pages} pages, over the {settings.max_pages} page limit"
             )
-        pdf.save(str(out))
-    return {"output": str(out), "pages": pages}
+        protection = inherit_protection(pdf, password)
+        pdf.save(str(out), encryption=protection.encryption)
+    return protection.report({"output": str(out), "pages": pages})
 
 
 def flatten_pdf(path: Path, out: Path, settings: Settings, password: str | None = None) -> dict:
@@ -71,22 +74,29 @@ def flatten_pdf(path: Path, out: Path, settings: Settings, password: str | None 
             "flatten_pdf needs the qpdf command-line tool on PATH "
             "(install qpdf, or set PAPERBOY_QPDF)"
         )
-    with open_pdf(path, settings, password):
-        pass  # password and page cap are checked before qpdf does any work
+    # Password and page cap are checked before qpdf does any work.
+    with open_pdf(path, settings, password) as src:
+        protection = inherit_protection(src, password)
+    flattened = out.with_name(f".{out.name}.flattening")
     try:
         proc = run_qpdf(
             settings,
-            ["--flatten-annotations=all", "--generate-appearances", str(path), str(out)],
+            ["--flatten-annotations=all", "--generate-appearances", str(path), str(flattened)],
             password,
         )
         if proc.returncode not in (0, 3):  # 3 == warnings
             raise PdfUserError(
                 f"Flatten failed: {(proc.stderr or proc.stdout).strip()}"
             )
-        # qpdf keeps the input's encryption, so the output opens with the same password.
-        with open_pdf(out, settings, password) as pdf:
+        # qpdf keeps the input's encryption (possibly an old algorithm); re-save with
+        # the same protection every other tool gives its output.
+        with open_pdf(flattened, settings, password) as pdf:
             pages = len(pdf.pages)
+            pdf.save(str(out), encryption=protection.encryption)
     except BaseException:
         out.unlink(missing_ok=True)
         raise
-    return {"output": str(out), "pages": pages, "warnings": proc.returncode == 3}
+    finally:
+        flattened.unlink(missing_ok=True)
+    return protection.report(
+        {"output": str(out), "pages": pages, "warnings": proc.returncode == 3})

@@ -21,6 +21,13 @@ All notable changes to this project are documented here. The format follows
   permission is always granted, per PDF 2.0).
 
 ### Fixed
+- **Security:** rotating, reordering, deleting, extracting, splitting, merging, optimizing,
+  repairing, or setting metadata on a password-protected PDF wrote an *unprotected* output.
+  Outputs now keep the input's protection (AES-256, same user password and permissions);
+  only `decrypt_pdf` removes it. Results report `"password_protected": true`,
+  `"permissions_restricted": true`, or `"user_password_changed": true` as appropriate.
+  Merging protected inputs with different passwords is refused; `flatten_pdf` outputs are
+  re-saved with AES-256 instead of keeping the input's (possibly RC4) encryption.
 - `check_pdf` reported qpdf's informational lines ("PDF Version: 1.3", "File is not encrypted")
   as problems on healthy files; only warnings and errors are reported now.
 - `check_pdf` returned the supplied password in its output (qpdf echoes it); it is now redacted.

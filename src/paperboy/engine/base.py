@@ -1,11 +1,14 @@
 """Shared engine helpers: opening, limit enforcement, metadata copy."""
 from __future__ import annotations
 
+import secrets
 import subprocess
 from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 
 import pikepdf
+import pikepdf.codec  # noqa: F401  registers the "pdfdoc" codec
 
 from ..config import Settings
 from ..errors import PdfUserError
@@ -34,6 +37,76 @@ def open_pdf(path: Path, settings: Settings, password: str | None = None):
         yield pdf
     finally:
         pdf.close()
+
+
+@dataclass(frozen=True)
+class Protection:
+    """How an output derived from protected input(s) is protected."""
+
+    encryption: pikepdf.Encryption | bool = False
+    user_password_changed: bool = False
+
+    def report(self, result: dict) -> dict:
+        """Add what the caller needs to know about the output's protection."""
+        if self.encryption:
+            if self.encryption.user:
+                result["password_protected"] = True
+            else:  # opens without a password, but keeps its restrictions
+                result["permissions_restricted"] = True
+            if self.user_password_changed:
+                result["user_password_changed"] = True
+        return result
+
+
+def inherit_protection(src: pikepdf.Pdf, password: str | None) -> Protection:
+    """Protection for an output derived from *src*.
+
+    Outputs of a protected input stay protected (AES-256, same user password and
+    permissions); only decrypt_pdf removes protection. Decided from the open
+    document alone, never by reopening its file.
+    """
+    if not src.is_encrypted:
+        return Protection()
+    if src.user_password_matched:
+        # The owner password is unknown; a random one keeps the permissions enforceable.
+        user, owner, changed = password or "", secrets.token_urlsafe(32), False
+    else:  # opened with the owner password
+        owner = password or ""
+        if src.encryption.R <= 4:  # qpdf recovers the user password, in PDFDocEncoding
+            user, changed = src.encryption.user_password.decode("pdfdoc"), False
+        else:  # AES-256 cannot be recovered: never fall back to "opens without a password"
+            user, changed = password or secrets.token_urlsafe(32), True
+    return Protection(pikepdf.Encryption(user=user, owner=owner, R=6, allow=src.allow), changed)
+
+
+def combine_protections(protections: list[Protection]) -> Protection:
+    """Protection for a merge: the strictest of its protected inputs.
+
+    Inputs that need different passwords are refused rather than letting one
+    input's password (or none) open another input's pages.
+    """
+    encrypted = [p.encryption for p in protections if p.encryption]
+    if not encrypted:
+        return Protection()
+    users = {e.user for e in encrypted if e.user}
+    if len(users) > 1:
+        raise PdfUserError(
+            "The encrypted inputs have different passwords; decrypt them, or re-encrypt them "
+            "with the same password, before merging"
+        )
+    owners = {e.owner for e in encrypted}
+    allow = pikepdf.Permissions(**{
+        field: all(getattr(e.allow, field) for e in encrypted)
+        for field in pikepdf.Permissions._fields
+    })
+    return Protection(
+        pikepdf.Encryption(
+            user=users.pop() if users else "",
+            owner=owners.pop() if len(owners) == 1 else secrets.token_urlsafe(32),
+            R=6, allow=allow,
+        ),
+        any(p.user_password_changed for p in protections),
+    )
 
 
 def is_encrypted(path: Path) -> bool:
