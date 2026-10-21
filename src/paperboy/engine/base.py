@@ -64,14 +64,22 @@ def run_qpdf(
 
     The password is sent on stdin (``--password-file=-``), never in argv, so
     other local users cannot read it from the process list. A timeout becomes a
-    PdfUserError rather than an internal crash.
+    PdfUserError rather than an internal crash. Output is decoded from bytes:
+    text mode would turn a "\r" into a line break and fail on non-UTF-8 output.
     """
+    if password and ("\n" in password or "\r" in password):
+        # qpdf reads only the first line of the password file and ignores the rest.
+        raise PdfUserError("Passwords containing a line break are not supported here")
     cmd = [settings.qpdf_path]
     if password:
         cmd.append("--password-file=-")
     cmd += args
     try:
-        return subprocess.run(cmd, input=password or "", capture_output=True, text=True,
-                              timeout=timeout)
+        proc = subprocess.run(cmd, input=(password or "").encode("utf-8"),
+                              capture_output=True, timeout=timeout)
     except subprocess.TimeoutExpired as exc:
         raise PdfUserError(f"qpdf timed out after {timeout}s") from exc
+    return subprocess.CompletedProcess(
+        proc.args, proc.returncode,
+        proc.stdout.decode("utf-8", "replace"), proc.stderr.decode("utf-8", "replace"),
+    )

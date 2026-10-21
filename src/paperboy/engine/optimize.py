@@ -71,15 +71,22 @@ def flatten_pdf(path: Path, out: Path, settings: Settings, password: str | None 
             "flatten_pdf needs the qpdf command-line tool on PATH "
             "(install qpdf, or set PAPERBOY_QPDF)"
         )
-    proc = run_qpdf(
-        settings, ["--flatten-annotations=all", "--generate-appearances", str(path), str(out)],
-        password,
-    )
-    if proc.returncode not in (0, 3):  # 3 == warnings
-        raise PdfUserError(
-            f"Flatten failed: {(proc.stderr or proc.stdout).strip()}"
+    with open_pdf(path, settings, password):
+        pass  # password and page cap are checked before qpdf does any work
+    try:
+        proc = run_qpdf(
+            settings,
+            ["--flatten-annotations=all", "--generate-appearances", str(path), str(out)],
+            password,
         )
-    # qpdf keeps the input's encryption, so the output opens with the same password.
-    with open_pdf(out, settings, password) as pdf:
-        pages = len(pdf.pages)
+        if proc.returncode not in (0, 3):  # 3 == warnings
+            raise PdfUserError(
+                f"Flatten failed: {(proc.stderr or proc.stdout).strip()}"
+            )
+        # qpdf keeps the input's encryption, so the output opens with the same password.
+        with open_pdf(out, settings, password) as pdf:
+            pages = len(pdf.pages)
+    except BaseException:
+        out.unlink(missing_ok=True)
+        raise
     return {"output": str(out), "pages": pages, "warnings": proc.returncode == 3}

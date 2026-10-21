@@ -307,3 +307,21 @@ def test_serve_runs_quietly_when_confined(monkeypatch, caplog, sandbox):
         S.serve()
     assert ran == [True]
     assert "PAPERBOY_ROOT is not set" not in caplog.text
+
+
+def test_merge_into_a_hard_link_of_an_input_is_refused(make_pdf, tmp_path):
+    import os
+    a, b = make_pdf("a.pdf", 1), make_pdf("b.pdf", 1)
+    os.link(a, tmp_path / "alias.pdf")
+    with pytest.raises(S.ToolError, match="same as an input"):
+        S.merge_pdfs([str(a), str(b)], str(tmp_path / "alias.pdf"), overwrite=True)
+    assert page_labels(a) == ["PAGE-1"]
+
+
+def test_merge_into_case_variant_of_an_input_is_refused(make_pdf):
+    a, b = make_pdf("a.pdf", 1), make_pdf("b.pdf", 1)
+    if not a.with_name("A.PDF").exists():
+        pytest.skip("case-sensitive filesystem")
+    with pytest.raises(S.ToolError, match="same as an input"):
+        S.merge_pdfs([str(a), str(b)], str(a.with_name("A.PDF")), overwrite=True)
+    assert page_labels(a) == ["PAGE-1"]

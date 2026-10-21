@@ -136,10 +136,10 @@ def test_flatten_encrypted_input_with_password(tmp_path, settings):
 
 
 @pytest.mark.skipif(not HAS_QPDF, reason="qpdf CLI not installed")
-def test_flatten_reports_qpdf_failure(tmp_path, settings):
+def test_flatten_rejects_unreadable_input_before_running_qpdf(tmp_path, settings):
     junk = tmp_path / "junk.pdf"
     junk.write_text("not a pdf")
-    with pytest.raises(PdfUserError, match="Flatten failed"):
+    with pytest.raises(PdfUserError, match="Could not open PDF"):
         E.flatten_pdf(junk, tmp_path / "f.pdf", settings)
 
 
@@ -148,7 +148,7 @@ def test_flatten_reports_warnings(doc, tmp_path, settings, monkeypatch):
 
     def warn(cmd, **kwargs):
         out.write_bytes(doc.read_bytes())  # qpdf wrote output but warned
-        return subprocess.CompletedProcess(cmd, 3, "", "WARNING: something")
+        return subprocess.CompletedProcess(cmd, 3, b"", b"WARNING: something")
 
     monkeypatch.setattr(subprocess, "run", warn)
     res = E.flatten_pdf(doc, out, dataclasses.replace(settings, qpdf_path="qpdf"))
@@ -163,3 +163,25 @@ def test_flatten_timeout_is_a_user_error(doc, tmp_path, settings, monkeypatch):
     monkeypatch.setattr(subprocess, "run", hang)
     with pytest.raises(PdfUserError, match="timed out"):
         E.flatten_pdf(doc, tmp_path / "f.pdf", dataclasses.replace(settings, qpdf_path="q"))
+
+
+def test_flatten_checks_page_cap_before_running_qpdf(doc, tmp_path, settings, monkeypatch):
+    ran = []
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: ran.append(a))
+    with pytest.raises(PdfUserError, match="page limit"):
+        E.flatten_pdf(doc, tmp_path / "f.pdf",
+                      dataclasses.replace(settings, qpdf_path="qpdf", max_pages=2))
+    assert ran == []
+
+
+def test_flatten_removes_output_when_qpdf_fails(doc, tmp_path, settings, monkeypatch):
+    out = tmp_path / "f.pdf"
+
+    def half_written(cmd, **kwargs):
+        out.write_bytes(b"%PDF-1.4 partial")
+        return subprocess.CompletedProcess(cmd, 2, b"", b"qpdf: something broke")
+
+    monkeypatch.setattr(subprocess, "run", half_written)
+    with pytest.raises(PdfUserError, match="Flatten failed: qpdf: something broke"):
+        E.flatten_pdf(doc, out, dataclasses.replace(settings, qpdf_path="qpdf"))
+    assert not out.exists()

@@ -14,7 +14,7 @@ from typing import Optional
 from . import SERVER_NAME, __version__, engine
 from .config import Settings
 from .errors import PdfUserError
-from .paths import prepare_output, prepare_output_dir, require_input, resolve
+from .paths import prepare_output, prepare_output_dir, require_input, resolve, same_file
 
 try:  # mcp >= 2.0 renamed FastMCP to MCPServer
     from mcp.server.mcpserver import MCPServer as _Server
@@ -60,7 +60,7 @@ def _overwrite(flag: Optional[bool]) -> bool:
 def _combined_output(output_path: str, inputs: list, overwrite: Optional[bool]):
     """Resolve the output of a many-to-one tool; it may never replace one of its inputs."""
     out = resolve(output_path, SETTINGS)
-    if out in inputs:
+    if any(same_file(out, src) for src in inputs):
         raise ToolError("Output path is the same as an input; choose a different output_path")
     if out.exists() and not _overwrite(overwrite):
         raise ToolError(f"{out} already exists (pass overwrite=true to replace it)")

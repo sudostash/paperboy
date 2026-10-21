@@ -241,3 +241,44 @@ def test_every_office_extension_routes_to_libreoffice(tmp_path, settings, ext):
     src.write_bytes(b"x")
     with pytest.raises(DependencyError):
         E.convert_to_pdf(src, tmp_path / "x.pdf", dataclasses.replace(settings, soffice_path=None))
+
+
+# --- review findings: resource limits ------------------------------------------------
+
+
+def test_failed_image_is_closed(tmp_path, settings, monkeypatch):
+    closed = []
+    real_close = Image.Image.close
+    monkeypatch.setattr(Image.Image, "close", lambda self: (closed.append(1), real_close(self)))
+
+    def broken_load(self):
+        raise OSError("truncated")
+
+    from PIL import ImageFile
+    monkeypatch.setattr(ImageFile.ImageFile, "load", broken_load)
+    with pytest.raises(PdfUserError, match="not a readable image"):
+        E.images_to_pdf([_image(tmp_path / "a.png")], tmp_path / "x.pdf", settings)
+    assert closed
+
+
+def test_image_over_the_pixel_limit_is_refused_not_just_warned(tmp_path, settings,
+                                                               monkeypatch):
+    src = _image(tmp_path / "big.png", size=(100, 100))
+    monkeypatch.setattr(Image, "MAX_IMAGE_PIXELS", 6000)  # 10,000 px: warning zone (< 2x)
+    with pytest.raises(PdfUserError, match="too large"):
+        E.images_to_pdf([src], tmp_path / "b.pdf", settings)
+
+
+def test_images_to_pdf_enforces_page_cap(tmp_path, settings):
+    paths = [_image(tmp_path / f"{n}.png") for n in range(3)]
+    with pytest.raises(PdfUserError, match="over the 2 page limit"):
+        E.images_to_pdf(paths, tmp_path / "x.pdf", dataclasses.replace(settings, max_pages=2))
+    assert not (tmp_path / "x.pdf").exists()
+
+
+def test_text_conversion_enforces_page_cap(tmp_path, settings):
+    src = tmp_path / "huge.txt"
+    src.write_text("x" * 84 * 60 * 5)  # about five pages of wrapped text
+    with pytest.raises(PdfUserError, match="over the 2 page limit"):
+        E.convert_to_pdf(src, tmp_path / "h.pdf", dataclasses.replace(settings, max_pages=2))
+    assert not (tmp_path / "h.pdf").exists()

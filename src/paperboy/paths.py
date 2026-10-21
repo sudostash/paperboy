@@ -6,6 +6,7 @@ at an AI agent: it cannot read or write outside the configured sandbox.
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from .config import Settings
@@ -43,6 +44,17 @@ def require_input(path: str, settings: Settings) -> Path:
     return p
 
 
+def same_file(a: Path, b: Path) -> bool:
+    """True if *a* and *b* name the same file, including via hard links or a
+    case-insensitive filesystem (where ``resolve()`` keeps the given case)."""
+    if a == b:
+        return True
+    try:
+        return os.path.samefile(a, b)
+    except OSError:  # either side does not exist yet
+        return False
+
+
 def prepare_output(
     input_path: Path,
     output_path: str | None,
@@ -56,7 +68,7 @@ def prepare_output(
         out = resolve(output_path, settings)
     else:
         out = input_path.with_name(f"{input_path.stem}{suffix}{ext}")
-    if out == input_path:
+    if same_file(out, input_path):
         raise PdfUserError(
             "Output path is the same as the input; choose a different output_path"
         )

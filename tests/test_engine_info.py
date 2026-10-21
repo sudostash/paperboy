@@ -259,3 +259,59 @@ def test_check_pdf_fallback_reports_unparseable_pages(doc, settings, monkeypatch
     res = E.check_pdf(doc, dataclasses.replace(settings, qpdf_path=None))
     assert res["healthy"] is False
     assert res["problems"] == ["page tree is corrupt"]
+
+
+# --- review findings: qpdf output handling ---------------------------------------
+
+
+def _fake_qpdf(monkeypatch, stdout: bytes, code: int = 0):
+    def run(cmd, **kwargs):
+        return subprocess.CompletedProcess(cmd, code, stdout, b"")
+
+    monkeypatch.setattr(subprocess, "run", run)
+
+
+def test_check_pdf_keeps_qpdf_error_lines(doc, settings, monkeypatch):
+    _fake_qpdf(monkeypatch, (
+        b"checking doc.pdf\nPDF Version: 1.3\nFile is not encrypted\nFile is not linearized\n"
+        b"WARNING: doc.pdf (offset 9): stream error\n"
+        b"ERROR: page 1: content stream (content stream object 4 0): errors while decoding\n"
+        b"qpdf: errors detected\n"), code=2)
+    res = E.check_pdf(doc, dataclasses.replace(settings, qpdf_path="qpdf"))
+    assert res["problems"] == [
+        "WARNING: doc.pdf (offset 9): stream error",
+        "ERROR: page 1: content stream (content stream object 4 0): errors while decoding",
+        "qpdf: errors detected",
+    ]
+
+
+@pytest.mark.parametrize("secret", [b"hunter2", b"qz\rxv7", b"qz\nxv7", b"qzx\xe9", b"qz\r\nxv7"])
+def test_check_pdf_never_returns_any_part_of_a_recovered_password(doc, settings, monkeypatch,
+                                                                  secret):
+    _fake_qpdf(monkeypatch, (
+        b"checking doc.pdf\nPDF Version: 1.6\nR = 4\nP = -4\n"
+        b"User password = " + secret + b"\nSupplied password is owner password\n"
+        b"extract for accessibility: allowed\nFile is not linearized\n"
+        b"No syntax or stream encoding errors found; the file may still contain\n"
+        b"errors that qpdf cannot detect\n"))
+    res = E.check_pdf(doc, dataclasses.replace(settings, qpdf_path="qpdf"), "owner")
+    text = str(res)
+    for fragment in secret.replace(b"\r", b"\n").split(b"\n"):
+        if fragment:
+            assert fragment.decode("utf-8", "replace") not in text
+    assert res["healthy"] is True
+    assert res["problems"] == []
+    assert "User password = [redacted]" in res["raw"]
+
+
+@pytest.mark.skipif(not HAS_QPDF, reason="qpdf CLI not installed")
+def test_check_pdf_with_owner_password_hides_recovered_user_password(make_encrypted, tmp_path,
+                                                                     settings):
+    src = make_encrypted("plain-src.pdf", password="x")
+    rc4 = tmp_path / "rc4.pdf"
+    with pikepdf.open(src, password="x") as pdf:
+        pdf.save(rc4, encryption=pikepdf.Encryption(user="us\rer2", owner="boss", R=4,
+                                                    aes=False, metadata=False))
+    res = E.check_pdf(rc4, settings, "boss")
+    assert "er2" not in str(res)
+    assert "User password = [redacted]" in res["raw"]

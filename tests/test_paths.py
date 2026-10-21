@@ -198,3 +198,21 @@ def test_prepare_output_dir_is_confined(sandbox):
     with pytest.raises(PdfUserError, match="outside the allowed root"):
         prepare_output_dir(str(outside / "parts"), s)
     assert not (outside / "parts").exists()
+
+
+# --- review findings: same file under a different name -----------------------------
+
+
+def test_output_hard_link_to_input_is_refused(doc, settings, tmp_path):
+    import os
+    os.link(doc, tmp_path / "hard.pdf")
+    with pytest.raises(PdfUserError, match="same as the input"):
+        prepare_output(doc, str(tmp_path / "hard.pdf"), "_x", True, settings)
+
+
+def test_output_case_variant_of_input_is_refused_on_case_insensitive_fs(doc, settings):
+    upper = doc.with_name("DOC.PDF")
+    if not upper.exists():
+        pytest.skip("case-sensitive filesystem: DOC.PDF is a different file")
+    with pytest.raises(PdfUserError, match="same as the input"):
+        prepare_output(doc, str(upper), "_x", True, settings)

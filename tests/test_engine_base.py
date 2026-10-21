@@ -123,7 +123,7 @@ def _capture_run(monkeypatch) -> list[dict]:
 
     def fake_run(cmd, **kwargs):
         calls.append({"cmd": cmd, **kwargs})
-        return subprocess.CompletedProcess(cmd, 0, "", "")
+        return subprocess.CompletedProcess(cmd, 0, b"", b"")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
     return calls
@@ -134,7 +134,7 @@ def test_run_qpdf_sends_password_on_stdin_not_argv(settings, monkeypatch):
     run_qpdf(dataclasses.replace(settings, qpdf_path="qpdf"), ["--check", "f.pdf"], "s3cret")
     (call,) = calls
     assert call["cmd"] == ["qpdf", "--password-file=-", "--check", "f.pdf"]
-    assert call["input"] == "s3cret"
+    assert call["input"] == b"s3cret"
     assert not any("s3cret" in part for part in call["cmd"])
     assert call["timeout"] == 120
 
@@ -159,3 +159,22 @@ def test_run_qpdf_password_works_with_real_qpdf(make_encrypted, settings):
     locked = make_encrypted(password="pw")
     assert run_qpdf(settings, ["--check", str(locked)], "pw").returncode == 0
     assert run_qpdf(settings, ["--check", str(locked)], "bad").returncode == 2
+
+
+@pytest.mark.parametrize("password", ["a\nb", "a\rb"])
+def test_run_qpdf_rejects_multiline_passwords(settings, monkeypatch, password):
+    calls = _capture_run(monkeypatch)
+    with pytest.raises(PdfUserError, match="line break"):
+        run_qpdf(dataclasses.replace(settings, qpdf_path="qpdf"), ["x"], password)
+    assert calls == []
+
+
+def test_run_qpdf_decodes_output_safely(settings, monkeypatch):
+    def run(cmd, **kwargs):
+        assert kwargs["input"] == "pässword".encode()
+        return subprocess.CompletedProcess(cmd, 0, b"caf\xe9\r\n", b"oops \xff")
+
+    monkeypatch.setattr(subprocess, "run", run)
+    proc = run_qpdf(dataclasses.replace(settings, qpdf_path="qpdf"), ["x"], "pässword")
+    assert proc.stdout == "caf�\r\n"  # raw bytes decoded, \r kept as-is
+    assert proc.stderr == "oops �"

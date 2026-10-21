@@ -10,7 +10,20 @@ from ..config import Settings
 from ..errors import PdfUserError
 from .base import open_pdf, run_qpdf
 
-_PASSWORD_LINE = re.compile(r"^((?:User|Owner) password = ).*$", re.MULTILINE)
+# qpdf echoes the user password, even one it recovered from the owner password, and
+# the value may span lines; redact up to the next line qpdf always prints after it.
+_PASSWORD_VALUE = re.compile(
+    r"(User password = ).*?"
+    r"(?=\n(?:Supplied password is|extract for|stream encryption|File is|No syntax)|\Z)",
+    re.DOTALL,
+)
+# Lines qpdf --check prints for every file; anything else is a warning or error.
+_INFO_LINE = re.compile(
+    r"checking |PDF Version:|R = |P = |User password = |Supplied password is|File is "
+    r"|No syntax or stream encoding errors|errors that qpdf cannot detect"
+    r"|qpdf: operation succeeded with warnings|(?:stream|string|file) encryption method:"
+    r"|(?:extract|print|modify) [^:]*: (?:allowed|not allowed)$"
+)
 
 
 def pdf_info(path: Path, settings: Settings, password: str | None = None) -> dict:
@@ -64,14 +77,11 @@ def check_pdf(path: Path, settings: Settings, password: str | None = None) -> di
     """
     if settings.qpdf_path:
         proc = run_qpdf(settings, ["--check", str(path)], password)
-        # qpdf echoes the password it was given ("User password = ..."); never return it.
-        output = _PASSWORD_LINE.sub(r"\1[redacted]", (proc.stdout + proc.stderr).strip())
-        # qpdf exit codes: 0 ok, 2 errors, 3 warnings. Other lines are informational
-        # ("PDF Version: 1.7", "File is not encrypted", permissions, ...).
+        output = _PASSWORD_VALUE.sub(r"\1[redacted]", (proc.stdout + proc.stderr).strip())
+        # qpdf exit codes: 0 ok, 2 errors, 3 warnings.
         problems = [
             line.strip() for line in output.splitlines()
-            if line.startswith("WARNING")
-            or (line.startswith("qpdf:") and "succeeded with warnings" not in line)
+            if line.strip() and not _INFO_LINE.match(line.strip())
         ]
         return {"path": str(path), "healthy": proc.returncode == 0, "checker": "qpdf",
                 "problems": problems, "raw": output[:4000]}

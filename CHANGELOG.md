@@ -20,6 +20,15 @@ All notable changes to this project are documented here. The format follows
 - Corrupt and oversized ("decompression bomb") images surfaced as internal errors; they are
   now clear user errors naming the file.
 - Text conversion collapsed indentation and runs of spaces (breaking YAML, code, and logs).
+- An output could replace its own input through a hard link or a differently-cased name on
+  case-insensitive filesystems (macOS, Windows); outputs are now compared by file identity.
+- `check_pdf` could return part of a user password that qpdf recovered from the owner
+  password, and crashed on non-UTF-8 output; qpdf output is now decoded safely and fully
+  redacted. Passwords with line breaks, which qpdf would silently truncate, are rejected.
+- Text conversion and `images_to_pdf` had no page-count limit, and images in Pillow's
+  "decompression bomb" warning range were converted; both are now refused.
+- `flatten_pdf` checked the page limit only after qpdf ran and could leave a partial output
+  behind on failure.
 - Page specs containing non-ASCII digits (e.g. "²") crashed instead of being rejected.
 - With mcp 1.x, unexpected exceptions leaked their internal message to the client; they are
   now logged server-side and replaced with a generic error.
