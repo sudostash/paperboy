@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- MCP tool annotations on every tool: a human-readable `title`, `readOnlyHint` on the four
+  inspection tools, `destructiveHint` on tools that write files, and `openWorldHint: false`
+  throughout, so clients can auto-run safe tools and keep confirming writes.
+- `demos/`: Playwright harness that records a tutorial video per feature from real tool
+  calls, plus a `demo` optional dependency group.
+- Tests for every module (60% to 99% branch coverage), a 95% branch-coverage gate in CI,
+  and a CI job that runs the suite against mcp 1.x.
+
+### Changed
+- Minimum `mcp` version raised from 1.2 to 1.7, the first release with tool annotations.
+- `encrypt_pdf` with `allow_copy=false` no longer blocks screen readers (accessibility
+  permission is always granted, per PDF 2.0).
+
 ### Fixed
 - `check_pdf` reported qpdf's informational lines ("PDF Version: 1.3", "File is not encrypted")
   as problems on healthy files; only warnings and errors are reported now.
@@ -36,14 +50,6 @@ All notable changes to this project are documented here. The format follows
   client.
 - Client configs that were valid JSON but not an MCP config crashed the installer with a
   traceback; they are now reported and left untouched.
-
-### Changed
-- `encrypt_pdf` with `allow_copy=false` no longer blocks screen readers (accessibility
-  permission is always granted, per PDF 2.0).
-
-### Added
-- Tests for every module (60% to 99% branch coverage), a 95% branch-coverage gate in CI,
-  and a CI job that runs the suite against mcp 1.x.
 
 ## [0.1.0] - 2026-10-12
 
