@@ -24,9 +24,9 @@ classifiers = [
 ]
 dependencies = [
     "mcp>=1.10",
-    "pikepdf>=8.0",
-    "pypdf>=4.0",
-    "reportlab>=4.0",
+    "pikepdf>=8.12",       # earlier wheels cannot do RC4/AES-128 (no OpenSSL legacy provider)
+    "pypdf[crypto]>=4.0",  # crypto: reading AES-encrypted PDFs needs cryptography
+    "reportlab>=4.0.4",    # 4.0.0-4.0.3 hard-require pycairo, a native build
     "Pillow>=10.0",
     "typing-extensions>=4.11",
 ]

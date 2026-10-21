@@ -18,6 +18,8 @@ All notable changes to this project are documented here. The format follows
   and a CI job that runs the suite against mcp 1.x.
 
 ### Changed
+- `pdf_info`'s `metadata` now holds the same friendly fields as `get_metadata` (`title`,
+  `author`, `subject`, `keywords`, `creator`, `producer`) instead of raw XMP keys.
 - Tool results always contain every field: values that don't apply are `null` (e.g.
   `pdf_info` fields that need a password, `check_pdf`'s `raw` without qpdf), and writer tools
   always report `password_protected`, `permissions_restricted`, and `user_password_changed`.
@@ -29,6 +31,15 @@ All notable changes to this project are documented here. The format follows
   permission is always granted, per PDF 2.0).
 
 ### Fixed
+- `pdf_info` and `get_metadata` reported no metadata for PDFs that store it only in the
+  classic Info dictionary (very common); fields now come from XMP when present, otherwise
+  from the Info dictionary. An empty XMP value no longer shows up as the string "None".
+- Reading AES-encrypted PDFs (`extract_text`, page counts) needs `cryptography`, which was
+  only installed by accident through newer mcp releases; it is now declared via
+  `pypdf[crypto]`.
+- Declared minimum versions that did not work: `pikepdf` 8.0-8.11 cannot encrypt or open
+  RC4/AES-128 files, and `reportlab` 4.0.0-4.0.3 require building `pycairo`. Minimums are now
+  `pikepdf>=8.12` and `reportlab>=4.0.4`, and CI tests the lowest allowed versions.
 - **Security:** rotating, reordering, deleting, extracting, splitting, merging, optimizing,
   repairing, or setting metadata on a password-protected PDF wrote an *unprotected* output.
   Outputs now keep the input's protection (AES-256, same user password and permissions);

@@ -10,6 +10,7 @@ from ..config import Settings
 from ..errors import PdfUserError
 from ..results import CheckResult, InfoResult
 from .base import open_pdf, run_qpdf
+from .metadata import read_metadata
 
 # qpdf echoes the user password, even one it recovered from the owner password, and
 # the value may span lines; redact up to the next line qpdf always prints after it.
@@ -60,14 +61,10 @@ def pdf_info(path: Path, settings: Settings, password: str | None = None) -> Inf
         info["pages"] = len(pdf.pages)
         info["pdf_version"] = pdf.pdf_version
         info["linearized"] = bool(getattr(pdf, "is_linearized", False))
-        meta: dict[str, str] = {}
         try:
-            with pdf.open_metadata() as m:
-                for key in m:
-                    meta[str(key)] = str(m[key])
-        except Exception:
-            pass
-        info["metadata"] = meta
+            info["metadata"] = read_metadata(pdf)
+        except Exception:  # unreadable XMP must not hide the rest of the report
+            info["metadata"] = {}
         if len(pdf.pages):
             box = pdf.pages[0].mediabox
             info["first_page_size_pt"] = [float(box[2]) - float(box[0]),
