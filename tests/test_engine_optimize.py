@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import dataclasses
 import subprocess
+from pathlib import Path
 
 import pikepdf
 import pytest
@@ -147,7 +148,7 @@ def test_flatten_reports_warnings(doc, tmp_path, settings, monkeypatch):
     out = tmp_path / "f.pdf"
 
     def warn(cmd, **kwargs):
-        out.write_bytes(doc.read_bytes())  # qpdf wrote output but warned
+        Path(cmd[-1]).write_bytes(doc.read_bytes())  # qpdf wrote output but warned
         return subprocess.CompletedProcess(cmd, 3, b"", b"WARNING: something")
 
     monkeypatch.setattr(subprocess, "run", warn)
@@ -178,7 +179,7 @@ def test_flatten_removes_output_when_qpdf_fails(doc, tmp_path, settings, monkeyp
     out = tmp_path / "f.pdf"
 
     def half_written(cmd, **kwargs):
-        out.write_bytes(b"%PDF-1.4 partial")
+        Path(cmd[-1]).write_bytes(b"%PDF-1.4 partial")
         return subprocess.CompletedProcess(cmd, 2, b"", b"qpdf: something broke")
 
     monkeypatch.setattr(subprocess, "run", half_written)

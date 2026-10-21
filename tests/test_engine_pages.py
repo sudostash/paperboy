@@ -168,7 +168,7 @@ def test_merge_with_passwords(make_pdf, make_encrypted, tmp_path, settings):
     locked = make_encrypted("l.pdf", password="pw", pages=2)
     out = tmp_path / "m.pdf"
     E.merge_pdfs([make_pdf("a.pdf", 1), locked], out, settings, {str(locked): "pw"})
-    assert len(page_labels(out)) == 3
+    assert len(page_labels(out, "pw")) == 3  # protected by the encrypted input's password
 
 
 def test_merge_missing_password(make_pdf, make_encrypted, tmp_path, settings):
