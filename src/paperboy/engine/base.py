@@ -47,14 +47,15 @@ class Protection:
     user_password_changed: bool = False
 
     def report(self, result: dict) -> dict:
-        """Add what the caller needs to know about the output's protection."""
-        if self.encryption:
-            if self.encryption.user:
-                result["password_protected"] = True
-            else:  # opens without a password, but keeps its restrictions
-                result["permissions_restricted"] = True
-            if self.user_password_changed:
-                result["user_password_changed"] = True
+        """Add what the caller needs to know about the output's protection.
+
+        All three flags are always present (see :mod:`paperboy.results`).
+        """
+        encrypted = bool(self.encryption)
+        result["password_protected"] = encrypted and bool(self.encryption.user)
+        # Opens without a password, but keeps its restrictions.
+        result["permissions_restricted"] = encrypted and not self.encryption.user
+        result["user_password_changed"] = self.user_password_changed
         return result
 
 

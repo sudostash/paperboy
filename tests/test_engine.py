@@ -50,7 +50,7 @@ def test_info_on_encrypted_without_password(doc, settings, tmp_path):
     E.encrypt_pdf(doc, enc, "pw", settings)
     info = E.pdf_info(enc, settings)
     assert info["is_encrypted"] is True
-    assert "pages" not in info  # needs password
+    assert info["pages"] is None  # needs password
 
 
 def test_decrypt_roundtrip(doc, settings, tmp_path):

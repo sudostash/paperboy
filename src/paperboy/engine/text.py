@@ -9,6 +9,7 @@ from pypdf.errors import PdfReadError
 from ..config import Settings
 from ..errors import PdfUserError
 from ..pagespec import parse_pages
+from ..results import TextResult
 
 
 def extract_text(
@@ -17,7 +18,7 @@ def extract_text(
     pages: str | None = None,
     password: str | None = None,
     max_chars: int = 50000,
-) -> dict:
+) -> TextResult:
     """Extract text from all or selected pages. Returns text plus a truncation flag."""
     try:
         reader = PdfReader(str(path))

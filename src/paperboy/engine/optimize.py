@@ -7,6 +7,7 @@ import pikepdf
 
 from ..config import Settings
 from ..errors import DependencyError, PdfUserError
+from ..results import FlattenResult, OptimizeResult, RepairResult
 from .base import inherit_protection, open_pdf, run_qpdf
 
 
@@ -17,7 +18,7 @@ def optimize_pdf(
     linearize: bool = True,
     compress: bool = True,
     password: str | None = None,
-) -> dict:
+) -> OptimizeResult:
     """Linearize ("fast web view") and recompress object streams to shrink the file."""
     before = path.stat().st_size
     with open_pdf(path, settings, password) as pdf:
@@ -45,7 +46,9 @@ def optimize_pdf(
     })
 
 
-def repair_pdf(path: Path, out: Path, settings: Settings, password: str | None = None) -> dict:
+def repair_pdf(
+    path: Path, out: Path, settings: Settings, password: str | None = None
+) -> RepairResult:
     """Rebuild a damaged PDF's structure by reading and rewriting it with qpdf."""
     try:
         pdf = pikepdf.open(str(path), password=password or "")
@@ -67,7 +70,9 @@ def repair_pdf(path: Path, out: Path, settings: Settings, password: str | None =
     return protection.report({"output": str(out), "pages": pages})
 
 
-def flatten_pdf(path: Path, out: Path, settings: Settings, password: str | None = None) -> dict:
+def flatten_pdf(
+    path: Path, out: Path, settings: Settings, password: str | None = None
+) -> FlattenResult:
     """Flatten form fields and annotations into page content (requires the qpdf CLI)."""
     if not settings.qpdf_path:
         raise DependencyError(

@@ -12,7 +12,7 @@ from reportlab.pdfgen import canvas
 from paperboy import engine as E
 from paperboy.errors import DependencyError, PdfUserError
 
-from conftest import HAS_QPDF, page_labels
+from conftest import HAS_QPDF, UNPROTECTED, page_labels
 
 
 def _form_pdf(path):
@@ -82,7 +82,7 @@ def test_repair_rebuilds_broken_xref(doc, tmp_path, settings):
     damaged.write_bytes(doc.read_bytes().replace(b"xref", b"xxxx", 1))
     out = tmp_path / "fixed.pdf"
     res = E.repair_pdf(damaged, out, settings)
-    assert res == {"output": str(out), "pages": 5}
+    assert res == {"output": str(out), "pages": 5, **UNPROTECTED}
     assert page_labels(out) == page_labels(doc)
 
 

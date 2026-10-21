@@ -7,6 +7,7 @@ import pikepdf
 
 from ..config import Settings
 from ..errors import PdfUserError
+from ..results import DecryptResult, EncryptResult
 from .base import open_pdf
 
 # algorithm -> (revision R, use AES)
@@ -44,7 +45,7 @@ def encrypt_pdf(
     allow_copy: bool = True,
     allow_modify: bool = True,
     current_password: str | None = None,
-) -> dict:
+) -> EncryptResult:
     """Encrypt (password-protect) a PDF.
 
     ``user_password`` opens the file; ``owner_password`` (defaults to the user
@@ -71,7 +72,7 @@ def encrypt_pdf(
     return {"output": str(out), "algorithm": algorithm, "pages": pages}
 
 
-def decrypt_pdf(path: Path, out: Path, password: str, settings: Settings) -> dict:
+def decrypt_pdf(path: Path, out: Path, password: str, settings: Settings) -> DecryptResult:
     """Remove the password from a PDF you can open. Not a password cracker."""
     try:
         pdf = pikepdf.open(str(path), password=password or "")

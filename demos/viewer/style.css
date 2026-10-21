@@ -201,6 +201,30 @@ body {
 .kv dt { color: var(--muted); }
 .kv dd { margin: 0; font-family: var(--mono); font-size: 13px; }
 
+.schema-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.schema-table th {
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 0 12px 8px;
+  border-bottom: 1px solid var(--line);
+}
+.schema-table td {
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+.schema-table tr { animation: rise .25s ease-out both; }
+.schema-table .field { font-family: var(--mono); font-size: 13px; font-weight: 600; }
+.schema-table .type { font-family: var(--mono); font-size: 12px; color: var(--accent); }
+.schema-table .value { font-family: var(--mono); font-size: 13px; color: var(--ok); }
+.schema-table .value.null { color: var(--muted); }
+
 @keyframes rise {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: none; }

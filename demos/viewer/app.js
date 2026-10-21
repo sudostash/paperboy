@@ -104,6 +104,38 @@ async function showFiles(show) {
   }
 }
 
+function typeOf(prop) {
+  if (prop.anyOf) return prop.anyOf.map(typeOf).join(" | ");
+  if (prop.enum) return prop.enum.map((v) => JSON.stringify(v)).join(" | ");
+  if (prop.type === "array") return `${typeOf(prop.items || {})}[]`;
+  if (prop.type === "object") return "object";
+  return prop.type || "any";
+}
+
+function showSchema(step) {
+  clearStage();
+  const props = (step.schema && step.schema.properties) || {};
+  stage.append(el("h2", null, `Typed result · ${step.tool}`));
+  const table = el("table", "schema-table");
+  const head = el("tr");
+  head.append(el("th", null, "Field"), el("th", null, "Type"), el("th", null, "Value"));
+  table.append(head);
+  Object.entries(props).forEach(([name, prop], i) => {
+    const value = step.result[name];
+    const shown = JSON.stringify(value);
+    const row = el("tr");
+    row.style.animationDelay = `${i * 70}ms`;
+    row.append(
+      el("td", "field", name),
+      el("td", "type", typeOf(prop)),
+      el("td", value === null ? "value null" : "value",
+        shown.length > 46 ? `${shown.slice(0, 44)}…` : shown),
+    );
+    table.append(row);
+  });
+  stage.append(table);
+}
+
 async function approve(card, title) {
   const bar = el("div", "approve");
   bar.append(el("span", null, `Allow Paperboy to run “${title}”?`));
@@ -132,7 +164,12 @@ async function call(step) {
   await sleep(300);
   card.append(el("pre", "result", `✓ ${brief(step.result)}`));
   log.scrollTop = log.scrollHeight;
-  if (step.show) await showFiles(step.show);
+  if (step.showSchema) {
+    showSchema(step);
+    await sleep(2600);
+  } else if (step.show) {
+    await showFiles(step.show);
+  }
   await sleep(1800);
 }
 

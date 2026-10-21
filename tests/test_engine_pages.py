@@ -9,7 +9,7 @@ import pytest
 from paperboy import engine as E
 from paperboy.errors import PdfUserError
 
-from conftest import page_labels
+from conftest import UNPROTECTED, page_labels
 
 
 def _titled(doc, tmp_path, title="Kept Title"):
@@ -37,7 +37,7 @@ def _rotations(path):
 def test_rearrange_reorders_and_reports(doc, tmp_path, settings):
     out = tmp_path / "r.pdf"
     res = E.rearrange_pages(doc, out, "3,1,2", settings)
-    assert res == {"output": str(out), "pages": 3, "order": [3, 1, 2]}
+    assert res == {"output": str(out), "pages": 3, "order": [3, 1, 2], **UNPROTECTED}
     assert page_labels(out) == ["PAGE-3", "PAGE-1", "PAGE-2"]
 
 
@@ -76,7 +76,7 @@ def test_rearrange_encrypted_input(make_encrypted, tmp_path, settings):
 def test_delete_removes_pages_and_reports_them(doc, tmp_path, settings):
     out = tmp_path / "d.pdf"
     res = E.delete_pages(doc, out, "5,2,2", settings)
-    assert res == {"output": str(out), "pages": 3, "deleted": [2, 5]}
+    assert res == {"output": str(out), "pages": 3, "deleted": [2, 5], **UNPROTECTED}
     assert page_labels(out) == ["PAGE-1", "PAGE-3", "PAGE-4"]
 
 
@@ -95,7 +95,7 @@ def test_delete_keeps_metadata(doc, tmp_path, settings):
 def test_extract_keeps_requested_order_and_duplicates(doc, tmp_path, settings):
     out = tmp_path / "x.pdf"
     res = E.extract_pages(doc, out, "5,1,5", settings)
-    assert res == {"output": str(out), "pages": 3}
+    assert res == {"output": str(out), "pages": 3, **UNPROTECTED}
     assert page_labels(out) == ["PAGE-5", "PAGE-1", "PAGE-5"]
 
 
@@ -154,7 +154,7 @@ def test_merge_in_given_order(make_pdf, tmp_path, settings):
     a, b = make_pdf("a.pdf", 2), make_pdf("b.pdf", 1)
     out = tmp_path / "m.pdf"
     res = E.merge_pdfs([b, a], out, settings)
-    assert res == {"output": str(out), "pages": 3, "sources": 2}
+    assert res == {"output": str(out), "pages": 3, "sources": 2, **UNPROTECTED}
     assert page_labels(out) == ["PAGE-1", "PAGE-1", "PAGE-2"]
 
 
