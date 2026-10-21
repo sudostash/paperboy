@@ -19,7 +19,8 @@ def parse_pages(spec: str, total: int, *, dedupe: bool = False) -> list[int]:
             return total
         if tok in ("first",):
             return 1
-        if not tok.lstrip("-").isdigit() or tok.startswith("-"):
+        # isdigit() alone admits "²" (int() then crashes) and other scripts' digits.
+        if not (tok.isascii() and tok.isdigit()):
             raise PdfUserError(f"Invalid page token: {tok!r}")
         return int(tok)
 

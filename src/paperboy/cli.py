@@ -85,12 +85,19 @@ def main(argv: list[str] | None = None) -> None:
         return
 
     if args.cmd == "install":
-        if args.client in (None, "all"):
+        if args.client is None:
             print("Specify a client: claude-desktop | claude-code | cursor | windsurf | all",
                   file=sys.stderr)
             raise SystemExit(2)
+        if args.client == "all":
+            targets = [c["client"] for c in I.list_clients() if c["detected"]]
+            if not targets:
+                print("No MCP clients detected; name one explicitly.", file=sys.stderr)
+                raise SystemExit(1)
+        else:
+            targets = _targets(args.client)
         ok = True
-        for target in _targets(args.client):
+        for target in targets:
             try:
                 res = I.install(target, name=args.name, use_uvx=args.uvx,
                                 command=args.command, root=args.root, force=args.force)

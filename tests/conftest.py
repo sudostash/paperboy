@@ -40,6 +40,35 @@ def doc(make_pdf) -> Path:
     return make_pdf("doc.pdf", 5)
 
 
+@pytest.fixture
+def make_encrypted(make_pdf, tmp_path: Path):
+    """Build an AES-256 encrypted PDF whose user password is *password*."""
+    import pikepdf
+
+    def factory(name: str = "locked.pdf", password: str = "pw", pages: int = 3,
+                owner: str | None = None, allow: pikepdf.Permissions | None = None) -> Path:
+        plain = make_pdf(f"plain-{name}", pages)
+        out = tmp_path / name
+        with pikepdf.open(plain) as pdf:
+            pdf.save(out, encryption=pikepdf.Encryption(
+                user=password, owner=owner or password, R=6,
+                allow=allow or pikepdf.Permissions()))
+        return out
+    return factory
+
+
+@pytest.fixture
+def fake_binary(tmp_path: Path):
+    """Write an executable shell script standing in for an external tool."""
+    def factory(name: str, body: str) -> str:
+        path = tmp_path / "bin" / name
+        path.parent.mkdir(exist_ok=True)
+        path.write_text("#!/bin/sh\n" + body)
+        path.chmod(0o755)
+        return str(path)
+    return factory
+
+
 def page_labels(path, password=None) -> list[str]:
     from pypdf import PdfReader
     r = PdfReader(str(path))

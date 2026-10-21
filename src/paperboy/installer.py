@@ -82,9 +82,15 @@ def _read_json(path: Path) -> dict:
     if not path.exists():
         return {}
     try:
-        return json.loads(path.read_text(encoding="utf-8") or "{}")
+        data = json.loads(path.read_text(encoding="utf-8") or "{}")
     except json.JSONDecodeError as exc:
         raise RuntimeError(f"{path} contains invalid JSON; fix or move it first: {exc}") from exc
+    if not isinstance(data, dict) or not isinstance(data.get("mcpServers", {}), dict):
+        raise RuntimeError(
+            f"{path} is not an MCP config (expected an object with an \"mcpServers\" "
+            "object); fix or move it first"
+        )
+    return data
 
 
 def _backup(path: Path) -> Path | None:

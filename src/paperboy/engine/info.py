@@ -1,14 +1,29 @@
 """Inspection: page count, metadata, encryption status, validation."""
 from __future__ import annotations
 
-import subprocess
+import re
 from pathlib import Path
 
 import pikepdf
 
 from ..config import Settings
 from ..errors import PdfUserError
-from .base import open_pdf
+from .base import open_pdf, run_qpdf
+
+# qpdf echoes the user password, even one it recovered from the owner password, and
+# the value may span lines; redact up to the next line qpdf always prints after it.
+_PASSWORD_VALUE = re.compile(
+    r"(User password = ).*?"
+    r"(?=\n(?:Supplied password is|extract for|stream encryption|File is|No syntax)|\Z)",
+    re.DOTALL,
+)
+# Lines qpdf --check prints for every file; anything else is a warning or error.
+_INFO_LINE = re.compile(
+    r"checking |PDF Version:|R = |P = |User password = |Supplied password is|File is "
+    r"|No syntax or stream encoding errors|errors that qpdf cannot detect"
+    r"|qpdf: operation succeeded with warnings|(?:stream|string|file) encryption method:"
+    r"|(?:extract|print|modify) [^:]*: (?:allowed|not allowed)$"
+)
 
 
 def pdf_info(path: Path, settings: Settings, password: str | None = None) -> dict:
@@ -60,23 +75,15 @@ def check_pdf(path: Path, settings: Settings, password: str | None = None) -> di
     Uses the qpdf CLI's checker when available for a thorough report; otherwise
     falls back to attempting a full parse with pikepdf.
     """
-    problems: list[str] = []
     if settings.qpdf_path:
-        cmd = [settings.qpdf_path, "--check"]
-        if password:
-            cmd.append(f"--password={password}")
-        cmd.append(str(path))
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-        output = (proc.stdout + proc.stderr).strip()
+        proc = run_qpdf(settings, ["--check", str(path)], password)
+        output = _PASSWORD_VALUE.sub(r"\1[redacted]", (proc.stdout + proc.stderr).strip())
         # qpdf exit codes: 0 ok, 2 errors, 3 warnings.
-        healthy = proc.returncode == 0
-        for line in output.splitlines():
-            line = line.strip()
-            if line and not line.lower().startswith("checking"):
-                if "no syntax or stream encoding errors" in line.lower():
-                    continue
-                problems.append(line)
-        return {"path": str(path), "healthy": healthy, "checker": "qpdf",
+        problems = [
+            line.strip() for line in output.splitlines()
+            if line.strip() and not _INFO_LINE.match(line.strip())
+        ]
+        return {"path": str(path), "healthy": proc.returncode == 0, "checker": "qpdf",
                 "problems": problems, "raw": output[:4000]}
 
     # Fallback: a successful open + page walk means it parses.
