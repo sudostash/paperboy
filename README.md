@@ -172,6 +172,12 @@ All configuration is environment variables. Sensible defaults; nothing is requir
 - **File-size and page-count caps** keep a malicious or runaway PDF from exhausting memory.
 - **Subprocess timeouts** bound every LibreOffice and qpdf call.
 - **No silent overwrites** — a tool refuses to clobber an existing file unless you opt in.
+- **Tool annotations** tell clients what each tool does. The four inspection tools
+  (`pdf_info`, `get_metadata`, `check_pdf`, `extract_text`) are marked `readOnlyHint`, so clients
+  may run them without a prompt. Every tool that writes a file is marked `destructiveHint`
+  (`overwrite=true` can replace an existing file), so clients keep asking first. No tool
+  touches the network (`openWorldHint: false`). Hints are advisory; the server-side checks
+  above are what enforce safety.
 - **Passwords are tool arguments**, so they appear in the client's tool-call log. `decrypt_pdf` requires the real password; it does not crack anything.
 
 ## Architecture
@@ -199,6 +205,17 @@ ruff check .
 ```
 
 Tests that need LibreOffice or the qpdf CLI skip automatically when those binaries are absent.
+
+### Demo videos
+
+`demos/` records a short tutorial video for each feature. Every scenario runs against the real
+server over stdio, then a Playwright-driven viewer replays it (chat on the left, before/after
+PDF pages on the right). See [demos/README.md](demos/README.md).
+
+```bash
+pip install -e ".[demo]" && playwright install chromium
+python demos/record.py            # writes demos/out/videos/<scenario>.webm
+```
 
 ## Roadmap
 

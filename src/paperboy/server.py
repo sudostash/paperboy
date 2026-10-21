@@ -11,6 +11,8 @@ import logging
 import os
 from typing import Optional
 
+from mcp.types import ToolAnnotations
+
 from . import SERVER_NAME, __version__, engine
 from .config import Settings
 from .errors import PdfUserError
@@ -44,6 +46,26 @@ def _guard(fn):
     return wrapper
 
 
+def _reads(title: str) -> ToolAnnotations:
+    """Annotations for tools that only inspect a PDF; clients may run them unprompted."""
+    return ToolAnnotations.model_validate({
+        "title": title, "readOnlyHint": True, "idempotentHint": True, "openWorldHint": False,
+    })
+
+
+def _writes(title: str) -> ToolAnnotations:
+    """Annotations for tools that write a file.
+
+    Inputs are never modified, but ``overwrite=true`` can replace an existing
+    output, so these stay marked destructive and clients keep confirming them.
+    Validated by alias because mcp 1.x and 2.x name the fields differently.
+    """
+    return ToolAnnotations.model_validate({
+        "title": title, "readOnlyHint": False, "destructiveHint": True,
+        "idempotentHint": True, "openWorldHint": False,
+    })
+
+
 def _overwrite(flag: Optional[bool]) -> bool:
     return SETTINGS.default_overwrite if flag is None else flag
 
@@ -53,7 +75,7 @@ def _overwrite(flag: Optional[bool]) -> bool:
 # --------------------------------------------------------------------------- #
 
 
-@mcp.tool()
+@mcp.tool(annotations=_reads("PDF info"))
 @_guard
 def pdf_info(input_path: str, password: Optional[str] = None) -> dict:
     """Report page count, file size, PDF version, encryption status and metadata.
@@ -63,21 +85,21 @@ def pdf_info(input_path: str, password: Optional[str] = None) -> dict:
     return engine.pdf_info(require_input(input_path, SETTINGS), SETTINGS, password)
 
 
-@mcp.tool()
+@mcp.tool(annotations=_reads("Get metadata"))
 @_guard
 def get_metadata(input_path: str, password: Optional[str] = None) -> dict:
     """Read document metadata: title, author, subject, keywords, creator, producer."""
     return engine.get_metadata(require_input(input_path, SETTINGS), SETTINGS, password)
 
 
-@mcp.tool()
+@mcp.tool(annotations=_reads("Check PDF"))
 @_guard
 def check_pdf(input_path: str, password: Optional[str] = None) -> dict:
     """Validate structural integrity and report any problems found."""
     return engine.check_pdf(require_input(input_path, SETTINGS), SETTINGS, password)
 
 
-@mcp.tool()
+@mcp.tool(annotations=_reads("Extract text"))
 @_guard
 def extract_text(
     input_path: str,
@@ -96,7 +118,7 @@ def extract_text(
 # --------------------------------------------------------------------------- #
 
 
-@mcp.tool()
+@mcp.tool(annotations=_writes("Encrypt PDF"))
 @_guard
 def encrypt_pdf(
     input_path: str,
@@ -125,7 +147,7 @@ def encrypt_pdf(
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=_writes("Decrypt PDF"))
 @_guard
 def decrypt_pdf(
     input_path: str,
@@ -144,7 +166,7 @@ def decrypt_pdf(
 # --------------------------------------------------------------------------- #
 
 
-@mcp.tool()
+@mcp.tool(annotations=_writes("Rearrange pages"))
 @_guard
 def rearrange_pages(
     input_path: str,
@@ -163,7 +185,7 @@ def rearrange_pages(
     return engine.rearrange_pages(src, out, page_order, SETTINGS, append_unlisted, password)
 
 
-@mcp.tool()
+@mcp.tool(annotations=_writes("Delete pages"))
 @_guard
 def delete_pages(
     input_path: str,
@@ -178,7 +200,7 @@ def delete_pages(
     return engine.delete_pages(src, out, pages, SETTINGS, password)
 
 
-@mcp.tool()
+@mcp.tool(annotations=_writes("Extract pages"))
 @_guard
 def extract_pages(
     input_path: str,
@@ -193,7 +215,7 @@ def extract_pages(
     return engine.extract_pages(src, out, pages, SETTINGS, password)
 
 
-@mcp.tool()
+@mcp.tool(annotations=_writes("Rotate pages"))
 @_guard
 def rotate_pages(
     input_path: str,
@@ -209,7 +231,7 @@ def rotate_pages(
     return engine.rotate_pages(src, out, degrees, SETTINGS, pages, password)
 
 
-@mcp.tool()
+@mcp.tool(annotations=_writes("Merge PDFs"))
 @_guard
 def merge_pdfs(
     input_paths: list[str],
@@ -235,7 +257,7 @@ def merge_pdfs(
     return engine.merge_pdfs(srcs, out, SETTINGS, resolved_pw)
 
 
-@mcp.tool()
+@mcp.tool(annotations=_writes("Split PDF"))
 @_guard
 def split_pdf(
     input_path: str,
@@ -264,7 +286,7 @@ def split_pdf(
 # --------------------------------------------------------------------------- #
 
 
-@mcp.tool()
+@mcp.tool(annotations=_writes("Optimize PDF"))
 @_guard
 def optimize_pdf(
     input_path: str,
@@ -280,7 +302,7 @@ def optimize_pdf(
     return engine.optimize_pdf(src, out, SETTINGS, linearize, compress, password)
 
 
-@mcp.tool()
+@mcp.tool(annotations=_writes("Repair PDF"))
 @_guard
 def repair_pdf(
     input_path: str,
@@ -294,7 +316,7 @@ def repair_pdf(
     return engine.repair_pdf(src, out, SETTINGS, password)
 
 
-@mcp.tool()
+@mcp.tool(annotations=_writes("Flatten PDF"))
 @_guard
 def flatten_pdf(
     input_path: str,
@@ -313,7 +335,7 @@ def flatten_pdf(
 # --------------------------------------------------------------------------- #
 
 
-@mcp.tool()
+@mcp.tool(annotations=_writes("Set metadata"))
 @_guard
 def set_metadata(
     input_path: str,
@@ -335,7 +357,7 @@ def set_metadata(
 # --------------------------------------------------------------------------- #
 
 
-@mcp.tool()
+@mcp.tool(annotations=_writes("Convert to PDF"))
 @_guard
 def convert_to_pdf(
     input_path: str,
@@ -351,7 +373,7 @@ def convert_to_pdf(
     return engine.convert_to_pdf(src, out, SETTINGS)
 
 
-@mcp.tool()
+@mcp.tool(annotations=_writes("Images to PDF"))
 @_guard
 def images_to_pdf(
     input_paths: list[str],

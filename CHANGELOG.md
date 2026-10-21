@@ -4,6 +4,18 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- MCP tool annotations on every tool: a human-readable `title`, `readOnlyHint` on the four
+  inspection tools, `destructiveHint` on tools that write files, and `openWorldHint: false`
+  throughout, so clients can auto-run safe tools and keep confirming writes.
+- `demos/`: Playwright harness that records a tutorial video per feature from real tool
+  calls, plus a `demo` optional dependency group.
+
+### Changed
+- Minimum `mcp` version raised from 1.2 to 1.7, the first release with tool annotations.
+
 ## [0.1.0] - 2026-10-12
 
 ### Added

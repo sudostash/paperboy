@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Paperboy Demo</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="bar">
+    <div class="brand"><span aria-hidden="true">📰</span> Paperboy</div>
+    <div class="heading">
+      <h1 id="title"></h1>
+      <p id="subtitle"></p>
+    </div>
+  </header>
+  <main class="layout">
+    <section class="chat" aria-label="Conversation" aria-live="polite">
+      <div id="log" class="log"></div>
+    </section>
+    <section class="stage" aria-label="Result" id="stage">
+      <div class="placeholder">Results appear here</div>
+    </section>
+  </main>
+  <script>
+    // Browsers block module scripts and fetch() on file:// pages, so app.js
+    // never runs there; say why instead of showing an empty page.
+    if (location.protocol === "file:") {
+      document.getElementById("stage").innerHTML =
+        '<div class="placeholder"><p>This viewer must be served over HTTP, not opened as a file.</p>' +
+        "<code>python demos/record.py --preview tool-annotations</code></div>";
+    }
+  </script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
