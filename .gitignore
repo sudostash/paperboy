@@ -13,3 +13,4 @@ venv/
 *.pdf
 !tests/**/*.pdf
 .DS_Store
+demos/out/

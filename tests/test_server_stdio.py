@@ -63,6 +63,28 @@ async def test_lists_all_tools(server_env):
             assert {t.name for t in tools.tools} == EXPECTED_TOOLS
 
 
+READ_ONLY_TOOLS = {"pdf_info", "get_metadata", "check_pdf", "extract_text"}
+
+
+async def test_tool_annotations(server_env):
+    async with await _session(server_env) as (r, w):
+        async with ClientSession(r, w) as s:
+            await s.initialize()
+            tools = await s.list_tools()
+    for tool in tools.tools:
+        ann = tool.annotations.model_dump(by_alias=True, exclude_none=True)
+        assert ann.get("title"), tool.name
+        assert ann["openWorldHint"] is False, tool.name
+        assert ann["idempotentHint"] is True, tool.name
+        if tool.name in READ_ONLY_TOOLS:
+            assert ann["readOnlyHint"] is True, tool.name
+        else:
+            # Writers never modify their input, but can replace an existing
+            # output when overwrite=true, so clients should still confirm.
+            assert ann["readOnlyHint"] is False, tool.name
+            assert ann["destructiveHint"] is True, tool.name
+
+
 async def test_encrypt_then_info(server_env, tmp_path):
     src = tmp_path / "a.pdf"
     c = canvas.Canvas(str(src))
