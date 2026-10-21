@@ -4,7 +4,6 @@ The server owns policy (path confinement, size/page caps, overwrite rules) and
 error presentation; the engine owns PDF behavior. Keeping them separate means a
 future streamable-HTTP transport can import the same engine unchanged.
 """
-from __future__ import annotations
 
 import functools
 import logging
@@ -17,6 +16,26 @@ from . import SERVER_NAME, __version__, engine
 from .config import Settings
 from .errors import PdfUserError
 from .paths import prepare_output, prepare_output_dir, require_input, resolve, same_file
+from .results import (
+    CheckResult,
+    ConvertResult,
+    DecryptResult,
+    DeleteResult,
+    EncryptResult,
+    ExtractResult,
+    FlattenResult,
+    ImagesResult,
+    InfoResult,
+    MergeResult,
+    MetadataResult,
+    OptimizeResult,
+    RearrangeResult,
+    RepairResult,
+    RotateResult,
+    SetMetadataResult,
+    SplitResult,
+    TextResult,
+)
 
 try:  # mcp >= 2.0 renamed FastMCP to MCPServer
     from mcp.server.mcpserver import MCPServer as _Server
@@ -97,7 +116,7 @@ def _combined_output(output_path: str, inputs: list, overwrite: Optional[bool]):
 
 @mcp.tool(annotations=_reads("PDF info"))
 @_guard
-def pdf_info(input_path: str, password: Optional[str] = None) -> dict:
+def pdf_info(input_path: str, password: Optional[str] = None) -> InfoResult:
     """Report page count, file size, PDF version, encryption status and metadata.
 
     Works on an encrypted file without a password (returns is_encrypted only).
@@ -107,14 +126,14 @@ def pdf_info(input_path: str, password: Optional[str] = None) -> dict:
 
 @mcp.tool(annotations=_reads("Get metadata"))
 @_guard
-def get_metadata(input_path: str, password: Optional[str] = None) -> dict:
+def get_metadata(input_path: str, password: Optional[str] = None) -> MetadataResult:
     """Read document metadata: title, author, subject, keywords, creator, producer."""
     return engine.get_metadata(require_input(input_path, SETTINGS), SETTINGS, password)
 
 
 @mcp.tool(annotations=_reads("Check PDF"))
 @_guard
-def check_pdf(input_path: str, password: Optional[str] = None) -> dict:
+def check_pdf(input_path: str, password: Optional[str] = None) -> CheckResult:
     """Validate structural integrity and report any problems found."""
     return engine.check_pdf(require_input(input_path, SETTINGS), SETTINGS, password)
 
@@ -126,7 +145,7 @@ def extract_text(
     pages: Optional[str] = None,
     password: Optional[str] = None,
     max_chars: int = 50000,
-) -> dict:
+) -> TextResult:
     """Extract text from all pages or a page spec (e.g. "1-3,7"). Returns text + truncation flag."""
     return engine.extract_text(
         require_input(input_path, SETTINGS), SETTINGS, pages, password, max_chars
@@ -151,7 +170,7 @@ def encrypt_pdf(
     allow_modify: bool = True,
     current_password: Optional[str] = None,
     overwrite: Optional[bool] = None,
-) -> dict:
+) -> EncryptResult:
     """Add a password to a PDF.
 
     user_password opens the file; owner_password (defaults to it) controls
@@ -174,7 +193,7 @@ def decrypt_pdf(
     password: str,
     output_path: Optional[str] = None,
     overwrite: Optional[bool] = None,
-) -> dict:
+) -> DecryptResult:
     """Remove the password from a PDF, given its correct password. Not a cracker."""
     src = require_input(input_path, SETTINGS)
     out = prepare_output(src, output_path, "_decrypted", _overwrite(overwrite), SETTINGS)
@@ -195,7 +214,7 @@ def rearrange_pages(
     append_unlisted: bool = False,
     password: Optional[str] = None,
     overwrite: Optional[bool] = None,
-) -> dict:
+) -> RearrangeResult:
     """Reorder/duplicate/reverse pages. page_order e.g. "3,1,2", "5-1" (reverse), "last,1-4".
 
     Unlisted pages are dropped unless append_unlisted=true. Pages may repeat to duplicate.
@@ -213,7 +232,7 @@ def delete_pages(
     output_path: Optional[str] = None,
     password: Optional[str] = None,
     overwrite: Optional[bool] = None,
-) -> dict:
+) -> DeleteResult:
     """Delete pages, e.g. pages="2,5-7"."""
     src = require_input(input_path, SETTINGS)
     out = prepare_output(src, output_path, "_trimmed", _overwrite(overwrite), SETTINGS)
@@ -228,7 +247,7 @@ def extract_pages(
     output_path: Optional[str] = None,
     password: Optional[str] = None,
     overwrite: Optional[bool] = None,
-) -> dict:
+) -> ExtractResult:
     """Save only the given pages as a new PDF, e.g. pages="1-3,10"."""
     src = require_input(input_path, SETTINGS)
     out = prepare_output(src, output_path, "_extract", _overwrite(overwrite), SETTINGS)
@@ -244,7 +263,7 @@ def rotate_pages(
     output_path: Optional[str] = None,
     password: Optional[str] = None,
     overwrite: Optional[bool] = None,
-) -> dict:
+) -> RotateResult:
     """Rotate pages clockwise by 90/180/270 degrees (all pages if pages omitted)."""
     src = require_input(input_path, SETTINGS)
     out = prepare_output(src, output_path, "_rotated", _overwrite(overwrite), SETTINGS)
@@ -258,7 +277,7 @@ def merge_pdfs(
     output_path: str,
     passwords: Optional[dict[str, str]] = None,
     overwrite: Optional[bool] = None,
-) -> dict:
+) -> MergeResult:
     """Merge PDFs in the given order into output_path.
 
     passwords optionally maps an input path to its password for encrypted inputs.
@@ -282,7 +301,7 @@ def split_pdf(
     output_dir: Optional[str] = None,
     password: Optional[str] = None,
     overwrite: Optional[bool] = None,
-) -> dict:
+) -> SplitResult:
     """Split a PDF into several files.
 
     ranges: semicolon-separated page specs, one file each, e.g. "1-3;4-6;7-".
@@ -312,7 +331,7 @@ def optimize_pdf(
     compress: bool = True,
     password: Optional[str] = None,
     overwrite: Optional[bool] = None,
-) -> dict:
+) -> OptimizeResult:
     """Shrink a PDF: linearize ("fast web view") and recompress object streams."""
     src = require_input(input_path, SETTINGS)
     out = prepare_output(src, output_path, "_optimized", _overwrite(overwrite), SETTINGS)
@@ -326,7 +345,7 @@ def repair_pdf(
     output_path: Optional[str] = None,
     password: Optional[str] = None,
     overwrite: Optional[bool] = None,
-) -> dict:
+) -> RepairResult:
     """Rebuild a damaged PDF's structure by reading and rewriting it."""
     src = require_input(input_path, SETTINGS)
     out = prepare_output(src, output_path, "_repaired", _overwrite(overwrite), SETTINGS)
@@ -340,7 +359,7 @@ def flatten_pdf(
     output_path: Optional[str] = None,
     password: Optional[str] = None,
     overwrite: Optional[bool] = None,
-) -> dict:
+) -> FlattenResult:
     """Flatten form fields and annotations into page content (requires the qpdf CLI)."""
     src = require_input(input_path, SETTINGS)
     out = prepare_output(src, output_path, "_flattened", _overwrite(overwrite), SETTINGS)
@@ -360,7 +379,7 @@ def set_metadata(
     output_path: Optional[str] = None,
     password: Optional[str] = None,
     overwrite: Optional[bool] = None,
-) -> dict:
+) -> SetMetadataResult:
     """Set metadata. fields keys: title, author, subject, keywords, creator, producer."""
     if not fields:
         raise ToolError("Provide at least one metadata field to set")
@@ -380,7 +399,7 @@ def convert_to_pdf(
     input_path: str,
     output_path: Optional[str] = None,
     overwrite: Optional[bool] = None,
-) -> dict:
+) -> ConvertResult:
     """Create a PDF from an image, a text/markdown file, or an Office/HTML document.
 
     Office/HTML (docx, xlsx, pptx, odt, html, ...) requires LibreOffice installed.
@@ -396,7 +415,7 @@ def images_to_pdf(
     input_paths: list[str],
     output_path: str,
     overwrite: Optional[bool] = None,
-) -> dict:
+) -> ImagesResult:
     """Combine images into a single PDF, one image per page, in order."""
     if not isinstance(input_paths, list) or not input_paths:
         raise ToolError("Provide at least one image path")

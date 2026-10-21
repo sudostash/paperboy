@@ -8,6 +8,7 @@ import pikepdf
 
 from ..config import Settings
 from ..errors import PdfUserError
+from ..results import CheckResult, InfoResult
 from .base import open_pdf, run_qpdf
 
 # qpdf echoes the user password, even one it recovered from the owner password, and
@@ -26,7 +27,7 @@ _INFO_LINE = re.compile(
 )
 
 
-def pdf_info(path: Path, settings: Settings, password: str | None = None) -> dict:
+def pdf_info(path: Path, settings: Settings, password: str | None = None) -> InfoResult:
     """Page count, size, encryption status, and metadata.
 
     Reports ``is_encrypted`` without a password; page count and metadata need one.
@@ -34,6 +35,14 @@ def pdf_info(path: Path, settings: Settings, password: str | None = None) -> dic
     info: dict = {
         "path": str(path),
         "size_bytes": path.stat().st_size,
+        "is_encrypted": False,
+        "note": None,
+        "pages": None,
+        "pdf_version": None,
+        "linearized": None,
+        "metadata": None,
+        "first_page_size_pt": None,
+        "permissions": None,
     }
     try:
         pdf = pikepdf.open(str(path), password=password or "")
@@ -69,7 +78,7 @@ def pdf_info(path: Path, settings: Settings, password: str | None = None) -> dic
     return info
 
 
-def check_pdf(path: Path, settings: Settings, password: str | None = None) -> dict:
+def check_pdf(path: Path, settings: Settings, password: str | None = None) -> CheckResult:
     """Validate structural integrity.
 
     Uses the qpdf CLI's checker when available for a thorough report; otherwise
@@ -91,9 +100,10 @@ def check_pdf(path: Path, settings: Settings, password: str | None = None) -> di
         with open_pdf(path, settings, password) as pdf:
             for _ in pdf.pages:
                 pass
-        return {"path": str(path), "healthy": True, "checker": "pikepdf", "problems": []}
+        return {"path": str(path), "healthy": True, "checker": "pikepdf", "problems": [],
+                "raw": None}
     except PdfUserError:
         raise
     except Exception as exc:  # noqa: BLE001
         return {"path": str(path), "healthy": False, "checker": "pikepdf",
-                "problems": [str(exc)]}
+                "problems": [str(exc)], "raw": None}

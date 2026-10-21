@@ -25,13 +25,13 @@ def test_pdf_info_reports_document_facts(doc, settings):
     assert info["linearized"] is False
     assert info["first_page_size_pt"] == pytest.approx([595.3, 841.9], abs=0.5)  # A4
     assert isinstance(info["metadata"], dict)
-    assert "permissions" not in info
+    assert info["permissions"] is None
 
 
 def test_pdf_info_on_encrypted_without_password_needs_one(make_encrypted, settings):
     info = E.pdf_info(make_encrypted(), settings)
     assert info["is_encrypted"] is True
-    assert "pages" not in info
+    assert info["pages"] is None
     assert "Password required" in info["note"]
 
 
@@ -79,7 +79,7 @@ def test_pdf_info_enforces_nothing_beyond_reading(make_pdf, settings):
         pdf.save(src)
     info = E.pdf_info(src, settings)
     assert info["pages"] == 0
-    assert "first_page_size_pt" not in info
+    assert info["first_page_size_pt"] is None
 
 
 # --- check_pdf ---------------------------------------------------------------
@@ -87,7 +87,8 @@ def test_pdf_info_enforces_nothing_beyond_reading(make_pdf, settings):
 
 def test_check_pdf_fallback_on_healthy_file(doc, settings):
     res = E.check_pdf(doc, dataclasses.replace(settings, qpdf_path=None))
-    assert res == {"path": str(doc), "healthy": True, "checker": "pikepdf", "problems": []}
+    assert res == {"path": str(doc), "healthy": True, "checker": "pikepdf", "problems": [],
+                   "raw": None}
 
 
 def test_check_pdf_fallback_on_unreadable_file(tmp_path, settings):

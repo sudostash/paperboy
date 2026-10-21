@@ -77,5 +77,9 @@ def page_labels(path, password=None) -> list[str]:
     return [(r.pages[i].extract_text() or "").strip() for i in range(len(r.pages))]
 
 
+# Protection flags every writer result carries for an unprotected input.
+UNPROTECTED = {"password_protected": False, "permissions_restricted": False,
+               "user_password_changed": False}
+
 HAS_SOFFICE = bool(shutil.which("soffice") or shutil.which("libreoffice"))
 HAS_QPDF = bool(shutil.which("qpdf"))

@@ -101,6 +101,7 @@ async def run_scenario(slug: str, scenario: dict, out: Path = OUT) -> dict:
                 step["readOnly"] = bool(_hint(tool.annotations, "readOnlyHint",
                                               "read_only_hint"))
                 step["title"] = _hint(tool.annotations, "title", "title") or step["tool"]
+                step["schema"] = _field(tool, "output_schema", "outputSchema")
                 if step["isError"]:
                     failure = f"{slug}: {step['tool']} failed: {step['result']}"
             steps.append(step)

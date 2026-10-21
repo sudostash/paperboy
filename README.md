@@ -73,6 +73,11 @@ Output files are written back into your `--root` folder. Remove the server anyti
 | `convert_to_pdf` | Image / text / Office / HTML → PDF *(Office needs LibreOffice)* |
 | `images_to_pdf` | Combine images into one PDF |
 
+**Typed results.** Every tool publishes an MCP `outputSchema` and returns `structuredContent`,
+so assistants read exact fields (`pages`, `password_protected`, `files`...) instead of parsing
+text. Every field is always present; a value that doesn't apply is `null` (for example,
+`pdf_info` on an encrypted file without its password returns `"pages": null` and a `note`).
+
 **Page specs** are 1-based and accept ranges, `last`/`end`, open ranges (`4-`), and reversal (`5-1`):
 e.g. `"1,3,5-8"`, `"last,1-4"`, `"5-1"`. Existing files are never overwritten unless `overwrite=true`.
 

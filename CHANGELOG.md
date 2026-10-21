@@ -7,6 +7,8 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- Structured output: every tool declares an MCP `outputSchema` (from typed result shapes in
+  `paperboy.results`) and returns `structuredContent` alongside the JSON text.
 - MCP tool annotations on every tool: a human-readable `title`, `readOnlyHint` on the four
   inspection tools, `destructiveHint` on tools that write files, and `openWorldHint: false`
   throughout, so clients can auto-run safe tools and keep confirming writes.
@@ -16,6 +18,12 @@ All notable changes to this project are documented here. The format follows
   and a CI job that runs the suite against mcp 1.x.
 
 ### Changed
+- Tool results always contain every field: values that don't apply are `null` (e.g.
+  `pdf_info` fields that need a password, `check_pdf`'s `raw` without qpdf), and writer tools
+  always report `password_protected`, `permissions_restricted`, and `user_password_changed`.
+  Previously these keys were omitted, which made schemas impossible to honour on mcp 1.x.
+- Minimum `mcp` raised to 1.10 (first release with structured output) and
+  `typing-extensions` >= 4.11 is now declared (mcp 1.10 needs it but doesn't say so).
 - Minimum `mcp` version raised from 1.2 to 1.7, the first release with tool annotations.
 - `encrypt_pdf` with `allow_copy=false` no longer blocks screen readers (accessibility
   permission is always granted, per PDF 2.0).

@@ -7,6 +7,8 @@ import pytest
 from paperboy import engine as E
 from paperboy.errors import PdfUserError
 
+from conftest import UNPROTECTED
+
 ALL_FIELDS = {
     "title": "Annual Report",
     "author": "Ann Lee",
@@ -20,7 +22,7 @@ ALL_FIELDS = {
 def test_set_every_field_roundtrips(doc, tmp_path, settings):
     out = tmp_path / "m.pdf"
     res = E.set_metadata(doc, out, ALL_FIELDS, settings)
-    assert res == {"output": str(out), "updated": sorted(ALL_FIELDS)}
+    assert res == {"output": str(out), "updated": sorted(ALL_FIELDS), **UNPROTECTED}
     assert E.get_metadata(out, settings)["metadata"] == ALL_FIELDS
 
 

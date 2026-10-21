@@ -54,7 +54,7 @@ def test_output_keeps_user_password_and_permissions(tool, locked, tmp_path, sett
 def test_unprotected_input_gives_unprotected_output(tool, doc, tmp_path, settings):
     out = tmp_path / "out.pdf"
     res = SINGLE_INPUT_TOOLS[tool](doc, out, settings, None)
-    assert "password_protected" not in res
+    assert res["password_protected"] is False
     with pikepdf.open(out) as pdf:
         assert not pdf.is_encrypted
 
@@ -111,7 +111,7 @@ def test_merge_never_exposes_a_password_protected_input(make_pdf, locked, tmp_pa
 def test_merge_of_unprotected_inputs_is_unprotected(make_pdf, tmp_path, settings):
     out = tmp_path / "m.pdf"
     res = E.merge_pdfs([make_pdf("a.pdf", 1), make_pdf("b.pdf", 1)], out, settings)
-    assert "password_protected" not in res
+    assert res["password_protected"] is False
 
 
 @pytest.mark.skipif(not HAS_QPDF, reason="qpdf CLI not installed")
@@ -214,7 +214,7 @@ def test_owner_password_with_non_ascii_user_password_keeps_it_usable(make_pdf, t
     out = tmp_path / "rot.pdf"
     res = E.rotate_pages(src, out, 90, settings, password="ownerpw")
     assert res["password_protected"] is True
-    assert "user_password_changed" not in res
+    assert res["user_password_changed"] is False
     with pikepdf.open(out, password="café") as pdf:  # the original user password still works
         assert pdf.user_password_matched
 
@@ -248,7 +248,7 @@ def test_owner_only_input_reports_restrictions_not_a_password(make_pdf, tmp_path
                                                     allow=RESTRICTED))
     out = tmp_path / "rot.pdf"
     res = E.rotate_pages(src, out, 90, settings)
-    assert "password_protected" not in res
+    assert res["password_protected"] is False
     assert res["permissions_restricted"] is True
     with pikepdf.open(out) as pdf:  # still opens freely, still restricted
         assert pdf.allow == RESTRICTED._replace(accessibility=True)

@@ -4,6 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ..config import Settings
+from ..results import MetadataResult, SetMetadataResult
 from .base import inherit_protection, open_pdf
 
 # Friendly names mapped to XMP/docinfo keys pikepdf understands.
@@ -17,7 +18,7 @@ _FIELDS = {
 }
 
 
-def get_metadata(path: Path, settings: Settings, password: str | None = None) -> dict:
+def get_metadata(path: Path, settings: Settings, password: str | None = None) -> MetadataResult:
     with open_pdf(path, settings, password) as pdf:
         out: dict[str, str] = {}
         with pdf.open_metadata() as m:
@@ -34,7 +35,7 @@ def set_metadata(
     fields: dict[str, str],
     settings: Settings,
     password: str | None = None,
-) -> dict:
+) -> SetMetadataResult:
     """Set metadata fields. Valid keys: title, author, subject, keywords, creator, producer."""
     unknown = set(fields) - set(_FIELDS)
     if unknown:

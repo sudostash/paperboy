@@ -1,0 +1,136 @@
+"""Result shapes returned by the engine and advertised to MCP clients as outputSchema.
+
+Every key is always present (nullable where a value can be missing). The MCP SDK
+drops keys a schema doesn't declare and, on mcp 1.x, returns absent optional keys
+as null; keeping every key required and explicit avoids both.
+
+``typing_extensions.TypedDict`` is required: pydantic rejects ``typing.TypedDict``
+on Python < 3.12.
+"""
+from __future__ import annotations
+
+from typing import Literal
+
+from typing_extensions import TypedDict
+
+
+class Protected(TypedDict):
+    """Protection of an output derived from a password-protected input."""
+
+    password_protected: bool       # opening the output needs a password
+    permissions_restricted: bool   # opens freely but restricts printing/copying/editing
+    user_password_changed: bool    # the input's user password no longer opens it
+
+
+class InfoResult(TypedDict):
+    path: str
+    size_bytes: int
+    is_encrypted: bool
+    note: str | None                       # why details are missing, if they are
+    pages: int | None                      # None until the PDF can be opened
+    pdf_version: str | None
+    linearized: bool | None
+    metadata: dict[str, str] | None
+    first_page_size_pt: list[float] | None  # [width, height]; None for zero pages
+    permissions: dict[str, bool] | None    # only for encrypted files
+
+
+class CheckResult(TypedDict):
+    path: str
+    healthy: bool
+    checker: Literal["qpdf", "pikepdf"]
+    problems: list[str]
+    raw: str | None                        # qpdf's full report (passwords redacted)
+
+
+class TextResult(TypedDict):
+    path: str
+    pages_read: int
+    truncated: bool
+    text: str
+
+
+class MetadataResult(TypedDict):
+    path: str
+    metadata: dict[str, str]
+
+
+class EncryptResult(TypedDict):
+    output: str
+    algorithm: str
+    pages: int
+
+
+class DecryptResult(TypedDict):
+    output: str
+    pages: int
+
+
+class RearrangeResult(Protected):
+    output: str
+    pages: int
+    order: list[int]
+
+
+class DeleteResult(Protected):
+    output: str
+    pages: int
+    deleted: list[int]
+
+
+class ExtractResult(Protected):
+    output: str
+    pages: int
+
+
+class RotateResult(Protected):
+    output: str
+    rotated_pages: list[int]
+
+
+class MergeResult(Protected):
+    output: str
+    pages: int
+    sources: int
+
+
+class SplitResult(Protected):
+    output_dir: str
+    files: list[str]
+    count: int
+
+
+class OptimizeResult(Protected):
+    output: str
+    pages: int
+    size_before: int
+    size_after: int
+    saved_bytes: int
+    linearized: bool
+
+
+class RepairResult(Protected):
+    output: str
+    pages: int
+
+
+class FlattenResult(Protected):
+    output: str
+    pages: int
+    warnings: bool
+
+
+class SetMetadataResult(Protected):
+    output: str
+    updated: list[str]
+
+
+class ConvertResult(TypedDict):
+    output: str
+    pages: int
+    source_kind: Literal["image", "text", "office"]
+
+
+class ImagesResult(TypedDict):
+    output: str
+    pages: int

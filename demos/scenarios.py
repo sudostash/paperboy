@@ -8,7 +8,8 @@ Step types:
     {"type": "tools"}                      list the server's tools and their hints
     {"type": "say", "text": ...}           an assistant message
     {"type": "call", "tool": ..., "args": {...},
-     "show": {"before": file, "after": file}}  call a tool, optionally render PDFs
+     "show": {"before": file, "after": file},  call a tool, optionally render PDFs,
+     "showSchema": True}                       or show its typed result vs. its schema
 
 File names in ``args`` and ``show`` are relative to the scenario workspace,
 which is also the server's ``PAPERBOY_ROOT``.
@@ -34,6 +35,23 @@ SCENARIOS: dict[str, dict] = {
              "show": {"before": "report.pdf", "after": "report_rotated.pdf"}},
             {"type": "say", "text": "Done. The last page of report.pdf is rotated 90° in "
                                     "report_rotated.pdf, and the original is untouched."},
+        ],
+    },
+    "structured-output": {
+        "title": "Typed, predictable results",
+        "subtitle": "Every tool publishes an output schema, so assistants read exact fields "
+                    "instead of parsing text.",
+        "files": ["report.pdf"],
+        "prompt": "Check report.pdf, then split it into one file per page.",
+        "steps": [
+            {"type": "call", "tool": "pdf_info", "args": {"input_path": "report.pdf"},
+             "showSchema": True},
+            {"type": "say", "text": "report.pdf has 3 pages, is not encrypted, and its first "
+                                    "page is 612 × 792 pt (US Letter)."},
+            {"type": "call", "tool": "split_pdf", "args": {"input_path": "report.pdf"},
+             "showSchema": True},
+            {"type": "say", "text": "Split into 3 files in report_split/, report_part001.pdf "
+                                    "to report_part003.pdf. None of them needs a password."},
         ],
     },
 }

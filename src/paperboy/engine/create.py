@@ -11,6 +11,7 @@ from pypdf import PdfReader
 
 from ..config import Settings
 from ..errors import DependencyError, PdfUserError
+from ..results import ConvertResult, ImagesResult
 
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tif", ".tiff", ".webp"}
 TEXT_EXTS = {".txt", ".md", ".log", ".csv", ".json", ".xml", ".yaml", ".yml"}
@@ -129,7 +130,7 @@ def _office_to_pdf(src: Path, out: Path, settings: Settings) -> None:
         shutil.move(str(produced), str(out))
 
 
-def convert_to_pdf(path: Path, out: Path, settings: Settings) -> dict:
+def convert_to_pdf(path: Path, out: Path, settings: Settings) -> ConvertResult:
     """Create a PDF from an image, a text file, or an Office/HTML document."""
     ext = path.suffix.lower()
     if ext == ".pdf":
@@ -151,7 +152,7 @@ def convert_to_pdf(path: Path, out: Path, settings: Settings) -> dict:
     return {"output": str(out), "pages": _page_count(out), "source_kind": kind}
 
 
-def images_to_pdf(paths: list[Path], out: Path, settings: Settings) -> dict:
+def images_to_pdf(paths: list[Path], out: Path, settings: Settings) -> ImagesResult:
     """Combine images into a single PDF, one image per page, in order."""
     if not paths:
         raise PdfUserError("Provide at least one image")

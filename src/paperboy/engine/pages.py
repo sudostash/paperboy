@@ -8,6 +8,14 @@ import pikepdf
 from ..config import Settings
 from ..errors import PdfUserError
 from ..pagespec import parse_pages
+from ..results import (
+    DeleteResult,
+    ExtractResult,
+    MergeResult,
+    RearrangeResult,
+    RotateResult,
+    SplitResult,
+)
 from .base import combine_protections, copy_docinfo, inherit_protection, open_pdf
 
 
@@ -18,7 +26,7 @@ def rearrange_pages(
     settings: Settings,
     append_unlisted: bool = False,
     password: str | None = None,
-) -> dict:
+) -> RearrangeResult:
     """Reorder/duplicate/reverse pages. ``page_order`` is the new order, e.g. "3,1,2"."""
     with open_pdf(path, settings, password) as src:
         total = len(src.pages)
@@ -38,7 +46,7 @@ def rearrange_pages(
 
 def delete_pages(
     path: Path, out: Path, pages: str, settings: Settings, password: str | None = None
-) -> dict:
+) -> DeleteResult:
     with open_pdf(path, settings, password) as src:
         total = len(src.pages)
         drop = set(parse_pages(pages, total, dedupe=True))
@@ -57,7 +65,7 @@ def delete_pages(
 
 def extract_pages(
     path: Path, out: Path, pages: str, settings: Settings, password: str | None = None
-) -> dict:
+) -> ExtractResult:
     with open_pdf(path, settings, password) as src:
         idx = parse_pages(pages, len(src.pages))
         dst = pikepdf.new()
@@ -76,7 +84,7 @@ def rotate_pages(
     settings: Settings,
     pages: str | None = None,
     password: str | None = None,
-) -> dict:
+) -> RotateResult:
     """Rotate pages clockwise by a multiple of 90 degrees (all pages if ``pages`` omitted)."""
     if degrees % 90 != 0:
         raise PdfUserError("degrees must be a multiple of 90")
@@ -95,7 +103,7 @@ def merge_pdfs(
     out: Path,
     settings: Settings,
     passwords: dict[str, str] | None = None,
-) -> dict:
+) -> MergeResult:
     """Merge PDFs in order. ``passwords`` maps an input path to its password."""
     if len(inputs) < 2:
         raise PdfUserError("Provide at least two PDFs to merge")
@@ -128,7 +136,7 @@ def split_pdf(
     ranges: str | None = None,
     password: str | None = None,
     overwrite: bool = False,
-) -> dict:
+) -> SplitResult:
     """Split into one file per range (``"1-3;4-6;7-"``) or one file per page."""
     out_dir.mkdir(parents=True, exist_ok=True)
     with open_pdf(path, settings, password) as src:

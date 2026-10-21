@@ -1,0 +1,156 @@
+"""Structured output contract, over the real stdio protocol.
+
+Every tool declares an ``outputSchema`` and returns ``structuredContent`` that:
+  * validates against that schema (strict clients reject results that don't);
+  * equals the JSON text content (the SDK silently drops undeclared keys, and
+    fills absent optional keys with null, so a mismatch means a lossy schema).
+"""
+from __future__ import annotations
+
+import json
+import os
+import sys
+
+import jsonschema
+import pikepdf
+import pytest
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
+from PIL import Image
+from reportlab.pdfgen import canvas
+from test_server_stdio import EXPECTED_TOOLS
+
+from conftest import HAS_QPDF
+
+
+def _pdf(path, pages=3):
+    c = canvas.Canvas(str(path))
+    for n in range(pages):
+        c.drawString(72, 720, f"PAGE-{n + 1}")
+        c.showPage()
+    c.save()
+    return str(path)
+
+
+def _locked(path, user="pw", owner="owner"):
+    plain = _pdf(path.with_name("plain-" + path.name))
+    with pikepdf.open(plain) as pdf:
+        pdf.save(path, encryption=pikepdf.Encryption(
+            user=user, owner=owner, R=6, allow=pikepdf.Permissions(print_highres=False)))
+    return str(path)
+
+
+def _owner_only(path):
+    return _locked(path, user="", owner="boss")
+
+
+def _image(path):
+    Image.new("RGB", (20, 20), "red").save(path)
+    return str(path)
+
+
+def _text(path):
+    path.write_text("hello\n  indented\n")
+    return str(path)
+
+
+# (case id, tool, function of tmp_path returning the arguments)
+CASES = [
+    ("pdf_info", "pdf_info", lambda d: {"input_path": _pdf(d / "a.pdf")}),
+    ("pdf_info-locked-no-password", "pdf_info", lambda d: {"input_path": _locked(d / "l.pdf")}),
+    ("pdf_info-locked", "pdf_info",
+     lambda d: {"input_path": _locked(d / "l.pdf"), "password": "pw"}),
+    ("get_metadata", "get_metadata", lambda d: {"input_path": _pdf(d / "a.pdf")}),
+    ("check_pdf", "check_pdf", lambda d: {"input_path": _pdf(d / "a.pdf")}),
+    ("extract_text", "extract_text", lambda d: {"input_path": _pdf(d / "a.pdf"), "pages": "2"}),
+    ("encrypt_pdf", "encrypt_pdf",
+     lambda d: {"input_path": _pdf(d / "a.pdf"), "user_password": "x"}),
+    ("decrypt_pdf", "decrypt_pdf",
+     lambda d: {"input_path": _locked(d / "l.pdf"), "password": "pw"}),
+    ("rearrange_pages", "rearrange_pages",
+     lambda d: {"input_path": _pdf(d / "a.pdf"), "page_order": "3,1"}),
+    ("delete_pages", "delete_pages", lambda d: {"input_path": _pdf(d / "a.pdf"), "pages": "1"}),
+    ("extract_pages", "extract_pages", lambda d: {"input_path": _pdf(d / "a.pdf"), "pages": "2"}),
+    ("rotate_pages", "rotate_pages", lambda d: {"input_path": _pdf(d / "a.pdf"), "degrees": 90}),
+    ("rotate_pages-protected", "rotate_pages",
+     lambda d: {"input_path": _locked(d / "l.pdf"), "degrees": 90, "password": "pw"}),
+    ("rotate_pages-owner-password", "rotate_pages",
+     lambda d: {"input_path": _locked(d / "l.pdf"), "degrees": 90, "password": "owner"}),
+    ("rotate_pages-owner-only", "rotate_pages",
+     lambda d: {"input_path": _owner_only(d / "o.pdf"), "degrees": 90}),
+    ("merge_pdfs", "merge_pdfs",
+     lambda d: {"input_paths": [_pdf(d / "a.pdf"), _pdf(d / "b.pdf")],
+                "output_path": str(d / "m.pdf")}),
+    ("split_pdf", "split_pdf", lambda d: {"input_path": _pdf(d / "a.pdf"), "ranges": "1;2-"}),
+    ("optimize_pdf", "optimize_pdf", lambda d: {"input_path": _pdf(d / "a.pdf")}),
+    ("repair_pdf", "repair_pdf", lambda d: {"input_path": _pdf(d / "a.pdf")}),
+    ("set_metadata", "set_metadata",
+     lambda d: {"input_path": _pdf(d / "a.pdf"), "fields": {"title": "T"}}),
+    ("convert_to_pdf", "convert_to_pdf", lambda d: {"input_path": _text(d / "n.txt")}),
+    ("images_to_pdf", "images_to_pdf",
+     lambda d: {"input_paths": [_image(d / "i.png")], "output_path": str(d / "i.pdf")}),
+]
+if HAS_QPDF:
+    CASES.append(("flatten_pdf", "flatten_pdf", lambda d: {"input_path": _pdf(d / "a.pdf")}))
+    CASES.append(("check_pdf-qpdf-locked", "check_pdf",
+                  lambda d: {"input_path": _locked(d / "l.pdf"), "password": "pw"}))
+
+
+@pytest.fixture
+def server_env(tmp_path):
+    env = dict(os.environ, PAPERBOY_ROOT=str(tmp_path))
+    src = os.path.join(os.path.dirname(os.path.dirname(__file__)), "src")
+    env["PYTHONPATH"] = src + os.pathsep + env.get("PYTHONPATH", "")
+    if not HAS_QPDF:
+        env.pop("PAPERBOY_QPDF", None)
+    return env
+
+
+def _session(env):
+    return stdio_client(StdioServerParameters(command=sys.executable,
+                                              args=["-m", "paperboy"], env=env))
+
+
+def _field(obj, snake, camel):
+    return getattr(obj, snake, getattr(obj, camel, None))
+
+
+async def _tools(env) -> dict:
+    async with _session(env) as (r, w), ClientSession(r, w) as s:
+        await s.initialize()
+        return {t.name: t for t in (await s.list_tools()).tools}
+
+
+async def test_every_tool_declares_a_closed_output_schema(server_env):
+    tools = await _tools(server_env)
+    assert set(tools) == EXPECTED_TOOLS
+    for name, tool in tools.items():
+        schema = _field(tool, "output_schema", "outputSchema")
+        assert schema, f"{name} has no outputSchema"
+        assert schema["type"] == "object"
+        # No optional keys: an absent optional key comes back as null on mcp 1.x,
+        # which violates a non-nullable schema type.
+        assert set(schema["required"]) == set(schema["properties"]), name
+
+
+def test_every_tool_has_a_contract_case():
+    covered = {tool for _, tool, _ in CASES}
+    expected = EXPECTED_TOOLS if HAS_QPDF else EXPECTED_TOOLS - {"flatten_pdf"}
+    assert covered == expected
+
+
+@pytest.mark.parametrize(("tool", "make_args"), [(t, a) for _, t, a in CASES],
+                         ids=[c for c, _, _ in CASES])
+async def test_structured_result_is_valid_and_lossless(server_env, tmp_path, tool, make_args):
+    args = make_args(tmp_path)
+    async with _session(server_env) as (r, w), ClientSession(r, w) as s:
+        await s.initialize()
+        schema = _field(next(t for t in (await s.list_tools()).tools if t.name == tool),
+                        "output_schema", "outputSchema")
+        result = await s.call_tool(tool, args)
+
+    assert not _field(result, "is_error", "isError"), result.content
+    structured = _field(result, "structured_content", "structuredContent")
+    assert isinstance(structured, dict)
+    jsonschema.validate(structured, schema)
+    assert json.loads(result.content[0].text) == structured
