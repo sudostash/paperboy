@@ -57,6 +57,15 @@ def _blank_middle(path):
     return str(path)
 
 
+def _formpdf(path):
+    c = canvas.Canvas(str(path))
+    c.acroForm.textfield(name="name", x=72, y=700, width=200, height=20)
+    c.acroForm.checkbox(name="ok", x=72, y=660, checked=False)
+    c.showPage()
+    c.save()
+    return str(path)
+
+
 def _image(path):
     Image.new("RGB", (20, 20), "red").save(path)
     return str(path)
@@ -107,6 +116,13 @@ CASES = [
      lambda d: {"input_path": _locked(d / "l.pdf"), "password": "pw"}),
     ("render_pages", "render_pages", lambda d: {"input_path": _pdf(d / "a.pdf"), "dpi": 72}),
     ("find_blank_pages", "find_blank_pages", lambda d: {"input_path": _blank_middle(d / "b.pdf")}),
+    ("list_form_fields", "list_form_fields", lambda d: {"input_path": _formpdf(d / "f.pdf")}),
+    ("list_form_fields-none", "list_form_fields", lambda d: {"input_path": _pdf(d / "a.pdf")}),
+    ("fill_form", "fill_form",
+     lambda d: {"input_path": _formpdf(d / "f.pdf"), "values": {"name": "Ada", "ok": True}}),
+    ("fill_form-flatten", "fill_form",
+     lambda d: {"input_path": _formpdf(d / "f.pdf"), "values": {"name": "Ada"},
+                "flatten": True}),
     ("find_blank_pages-none", "find_blank_pages",
      lambda d: {"input_path": _pdf(d / "a.pdf"), "ink_threshold_percent": 0}),
     ("render_pages-jpeg", "render_pages",

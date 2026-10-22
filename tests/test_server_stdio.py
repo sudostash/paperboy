@@ -23,6 +23,7 @@ EXPECTED_TOOLS = {
     "optimize_pdf", "repair_pdf", "flatten_pdf", "set_metadata",
     "convert_to_pdf", "images_to_pdf",
     "view_pages", "render_pages", "find_blank_pages",
+    "list_form_fields", "fill_form",
 }
 
 
@@ -65,7 +66,7 @@ async def test_lists_all_tools(server_env):
 
 
 READ_ONLY_TOOLS = {"pdf_info", "get_metadata", "check_pdf", "extract_text", "view_pages",
-                   "find_blank_pages"}
+                   "find_blank_pages", "list_form_fields"}
 
 
 async def test_tool_annotations(server_env):

@@ -53,6 +53,7 @@ INPUT_TOOLS = {
     "split_pdf": {}, "optimize_pdf": {}, "repair_pdf": {}, "flatten_pdf": {},
     "set_metadata": {"fields": {"title": "x"}}, "convert_to_pdf": {},
     "view_pages": {}, "render_pages": {}, "find_blank_pages": {},
+    "list_form_fields": {}, "fill_form": {"values": {"x": "y"}},
 }
 
 
@@ -64,7 +65,7 @@ def test_every_tool_refuses_inputs_outside_root(tool, outside):
 
 @pytest.mark.parametrize("tool", sorted(t for t in INPUT_TOOLS if t not in {
     "pdf_info", "get_metadata", "check_pdf", "extract_text", "split_pdf",
-    "view_pages", "render_pages", "find_blank_pages"}))
+    "view_pages", "render_pages", "find_blank_pages", "list_form_fields"}))
 def test_every_writer_refuses_outputs_outside_root(tool, doc, outside):
     args = dict(INPUT_TOOLS[tool], input_path=str(doc), output_path=str(outside / "o.pdf"))
     with pytest.raises(S.ToolError, match="outside the allowed root"):
@@ -425,3 +426,33 @@ def test_find_blank_pages_then_delete_them(tmp_path):
 def test_find_blank_pages_errors_are_tool_errors(doc):
     with pytest.raises(S.ToolError, match="ink_threshold_percent must be between"):
         S.find_blank_pages(str(doc), ink_threshold_percent=10)
+
+
+
+def _server_form(tmp_path):
+    from reportlab.pdfgen import canvas
+    path = tmp_path / "form.pdf"
+    c = canvas.Canvas(str(path))
+    c.acroForm.textfield(name="name", x=72, y=700, width=200, height=20)
+    c.acroForm.checkbox(name="ok", x=72, y=660, checked=False)
+    c.showPage()
+    c.save()
+    return path
+
+
+def test_list_then_fill_a_form(tmp_path):
+    form = _server_form(tmp_path)
+    names = [f["name"] for f in S.list_form_fields(str(form))["fields"]]
+    assert names == ["name", "ok"]
+    res = S.fill_form(str(form), {"name": "Ada", "ok": True})
+    assert res["output"] == str(tmp_path / "form_filled.pdf")
+    filled = {f["name"]: f["value"] for f in S.list_form_fields(res["output"])["fields"]}
+    assert filled == {"name": "Ada", "ok": "Yes"}
+    with pytest.raises(S.ToolError, match="already exists"):
+        S.fill_form(str(form), {"name": "Ada"})
+
+
+def test_fill_form_errors_are_tool_errors(tmp_path):
+    form = _server_form(tmp_path)
+    with pytest.raises(S.ToolError, match="Unknown field"):
+        S.fill_form(str(form), {"nope": "x"})

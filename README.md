@@ -74,6 +74,8 @@ Output files are written back into your `--root` folder. Remove the server anyti
 | `images_to_pdf` | Combine images into one PDF |
 | `view_pages` | Show up to 5 pages to the assistant as images, so it can see layouts, scans, charts, and signatures *(read-only)* |
 | `find_blank_pages` | Find blank pages (no text, no ink) to pass to `delete_pages`, and *nearly* blank ones (dust, a stamp, initials) to look at with `view_pages` first *(read-only)* |
+| `list_form_fields` | List a form's fields: full name, type, value, allowed options, required/read-only *(read-only)* |
+| `fill_form` | Fill in form fields by name (text, checkboxes, radio buttons, drop-downs); every value is checked first, appearances are regenerated, optional flatten. Signed PDFs are refused |
 | `render_pages` | Save pages as PNG or JPEG files at 36-600 dpi (copy-protected PDFs need the owner password) |
 
 **Typed results.** Every tool publishes an MCP `outputSchema` and returns `structuredContent`,

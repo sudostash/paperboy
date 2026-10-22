@@ -10,7 +10,8 @@ Step types:
     {"type": "call", "tool": ..., "args": {...},
      "show": {"before": file, "after": file,   call a tool, optionally render PDFs
               "highlight": result_field,        (outlining pages listed in the result
-              "review": result_field},          in red, or amber for "look first"),
+              "review": result_field,           in red, or amber for "look first";
+              "layout": "side-by-side"},        before/after next to each other),
      "showSchema": True,                       or show its typed result vs. its schema,
      "showImages": True}                       or the images it returned / files it saved
 
@@ -94,6 +95,30 @@ SCENARIOS: dict[str, dict] = {
              "show": {"before": "scan.pdf", "after": "scan_trimmed.pdf"}},
             {"type": "say", "text": "Done. scan_trimmed.pdf has the 3 pages with content, "
                                     "and scan.pdf is unchanged."},
+        ],
+    },
+    "fill-form": {
+        "title": "Fill in PDF forms",
+        "subtitle": "List a form's fields, then fill them in. Every value is checked first.",
+        "files": ["delivery-form.pdf"],
+        "prompt": "Fill in delivery-form.pdf for Ada Lovelace, 12 Analytical Way, Leeds. "
+                  "Express, large parcel, Leeds depot.",
+        "steps": [
+            {"type": "call", "tool": "list_form_fields",
+             "args": {"input_path": "delivery-form.pdf"},
+             "show": {"after": "delivery-form.pdf"}},
+            {"type": "say", "text": "The form has five fields: name and address (text), express "
+                                    "(a checkbox), size (small, medium or large) and depot "
+                                    "(Leeds, Porto or Lyon). Filling them in."},
+            {"type": "call", "tool": "fill_form",
+             "args": {"input_path": "delivery-form.pdf",
+                      "values": {"name": "Ada Lovelace", "address": "12 Analytical Way, Leeds",
+                                 "express": True, "size": "large", "depot": "Leeds"}},
+             "show": {"before": "delivery-form.pdf", "after": "delivery-form_filled.pdf",
+                      "layout": "side-by-side"}},
+            {"type": "say", "text": "Done: delivery-form_filled.pdf has every field filled in, "
+                                    "and it's still editable. Ask me to flatten it if you want "
+                                    "it locked."},
         ],
     },
 }

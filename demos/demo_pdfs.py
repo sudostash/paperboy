@@ -113,7 +113,52 @@ def build_scan(path: Path) -> Path:
     return path
 
 
-BUILDERS = {"report.pdf": build_report, "scan.pdf": build_scan}
+def build_delivery_form(path: Path) -> Path:
+    """A one-page delivery request form: text fields, a checkbox, radio buttons, a drop-down."""
+    c = canvas.Canvas(str(path), pagesize=letter)
+    width, height = letter
+    form = c.acroForm
+    c.setFillColor(ACCENT)
+    c.rect(0, height - 14, width, 14, stroke=0, fill=1)
+    c.setFillColor(INK)
+    c.setFont("Helvetica-Bold", 26)
+    c.drawString(72, height - 100, "Delivery request")
+    c.setFont("Helvetica", 12)
+    c.setFillColor(MUTED)
+    c.drawString(72, height - 124, "Paperboy Demo Co. \u00b7 please complete every field")
+
+    def label(y, text):
+        c.setFillColor(INK)
+        c.setFont("Helvetica-Bold", 12)
+        c.drawString(72, y + 6, text)
+
+    common = {"x": 200, "width": 300, "height": 24, "fontSize": 12, "borderColor": RULE,
+              "fillColor": colors.white, "textColor": INK, "borderWidth": 1}
+    label(height - 190, "Full name")
+    form.textfield(name="name", y=height - 194, **common)
+    label(height - 240, "Address")
+    form.textfield(name="address", y=height - 244, **common)
+    label(height - 290, "Express")
+    form.checkbox(name="express", x=200, y=height - 294, size=20, buttonStyle="check",
+                  borderColor=RULE, fillColor=colors.white, textColor=ACCENT, checked=False)
+    label(height - 340, "Parcel size")
+    for i, size in enumerate(["small", "medium", "large"]):
+        form.radio(name="size", value=size, x=200 + i * 100, y=height - 344, size=20,
+                   borderColor=RULE, fillColor=colors.white, textColor=ACCENT, selected=False)
+        c.setFillColor(MUTED)
+        c.setFont("Helvetica", 11)
+        c.drawString(226 + i * 100, height - 338, size)
+    label(height - 390, "Depot")
+    form.choice(name="depot", value="Choose...",
+                options=["Choose...", "Leeds", "Porto", "Lyon"],
+                **{**common, "y": height - 394, "width": 160})
+    c.showPage()
+    c.save()
+    return path
+
+
+BUILDERS = {"report.pdf": build_report, "scan.pdf": build_scan,
+            "delivery-form.pdf": build_delivery_form}
 
 
 def build(names: list[str], workspace: Path) -> None:
