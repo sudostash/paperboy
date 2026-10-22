@@ -55,6 +55,7 @@ INPUT_TOOLS = {
     "view_pages": {}, "render_pages": {}, "find_blank_pages": {},
     "list_form_fields": {}, "fill_form": {"values": {"x": "y"}},
     "add_watermark": {"text": "X"}, "add_page_numbers": {},
+    "inspect_hidden_data": {}, "sanitize_pdf": {},
 }
 
 
@@ -66,7 +67,8 @@ def test_every_tool_refuses_inputs_outside_root(tool, outside):
 
 @pytest.mark.parametrize("tool", sorted(t for t in INPUT_TOOLS if t not in {
     "pdf_info", "get_metadata", "check_pdf", "extract_text", "split_pdf",
-    "view_pages", "render_pages", "find_blank_pages", "list_form_fields"}))
+    "view_pages", "render_pages", "find_blank_pages", "list_form_fields",
+    "inspect_hidden_data"}))
 def test_every_writer_refuses_outputs_outside_root(tool, doc, outside):
     args = dict(INPUT_TOOLS[tool], input_path=str(doc), output_path=str(outside / "o.pdf"))
     with pytest.raises(S.ToolError, match="outside the allowed root"):
@@ -478,3 +480,12 @@ def test_watermark_image_outside_root_is_refused(doc, outside):
 def test_stamp_errors_are_tool_errors(doc):
     with pytest.raises(S.ToolError, match="format can only use"):
         S.add_page_numbers(str(doc), format="{x}")
+
+
+
+def test_inspect_then_sanitize(doc):
+    found = S.inspect_hidden_data(str(doc))["found"]
+    assert found["metadata_fields"]  # reportlab writes author, producer, ...
+    res = S.sanitize_pdf(str(doc))
+    assert res["output"] == str(doc.with_name("doc_sanitized.pdf"))
+    assert S.inspect_hidden_data(res["output"])["clean"] is True

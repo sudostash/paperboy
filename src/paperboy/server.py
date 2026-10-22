@@ -29,6 +29,7 @@ from .results import (
     FillFormResult,
     FlattenResult,
     FormFieldsResult,
+    HiddenDataResult,
     ImagesResult,
     InfoResult,
     MergeResult,
@@ -39,6 +40,7 @@ from .results import (
     RenderResult,
     RepairResult,
     RotateResult,
+    SanitizeResult,
     SetMetadataResult,
     SplitResult,
     TextResult,
@@ -473,6 +475,49 @@ def fill_form(
     src = require_input(input_path, SETTINGS)
     out = prepare_output(src, output_path, "_filled", _overwrite(overwrite), SETTINGS)
     return engine.fill_form(src, out, values, SETTINGS, password, flatten)
+
+
+# --------------------------------------------------------------------------- #
+# Hidden data
+# --------------------------------------------------------------------------- #
+
+
+@mcp.tool(annotations=_reads("Inspect hidden data"))
+@_guard
+def inspect_hidden_data(input_path: str, password: Optional[str] = None) -> HiddenDataResult:
+    """Report hidden data a PDF carries before sharing it: metadata (author, software),
+    scripts and risky actions, attachments, comments, application data, thumbnails,
+    and earlier saved versions still inside the file. Changes nothing.
+    """
+    src = require_input(input_path, SETTINGS)
+    return engine.inspect_hidden_data(src, SETTINGS, password)
+
+
+@mcp.tool(annotations=_writes("Sanitize PDF"))
+@_guard
+def sanitize_pdf(
+    input_path: str,
+    output_path: Optional[str] = None,
+    remove_metadata: bool = True,
+    remove_scripts: bool = True,
+    remove_attachments: bool = True,
+    remove_comments: bool = False,
+    password: Optional[str] = None,
+    overwrite: Optional[bool] = None,
+) -> SanitizeResult:
+    """Write a copy without hidden data: metadata (incl. comment authors and camera data
+    in images), scripts and risky actions, and attachments (comments too if
+    remove_comments=true), plus application data, thumbnails, earlier saved versions and
+    unused resources; gives it a new random ID. Links, bookmarks, form fields and
+    accessibility structure are kept. Not removed: hidden layers, text hidden by colour or
+    position, form field values, and the second half of an encrypted copy's ID (set by
+    the PDF library from the time). removed is measured on the result; if anything asked
+    for can't be removed, nothing is written. Signed PDFs are refused.
+    """
+    src = require_input(input_path, SETTINGS)
+    out = prepare_output(src, output_path, "_sanitized", _overwrite(overwrite), SETTINGS)
+    return engine.sanitize_pdf(src, out, SETTINGS, remove_metadata, remove_scripts,
+                               remove_attachments, remove_comments, password)
 
 
 # --------------------------------------------------------------------------- #

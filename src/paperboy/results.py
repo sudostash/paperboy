@@ -212,3 +212,30 @@ class PageNumbersResult(Protected):
     pages: list[int]                       # 1-based pages that were numbered
     first_label: str | None                # e.g. "Page 1 of 12" or "ACME-000041"
     last_label: str | None
+
+
+class HiddenData(TypedDict):
+    metadata_fields: list[str]             # e.g. ["author", "producer", "title"]
+    xmp_metadata: bool                     # XMP anywhere: document, pages, images
+    comment_authors: int                   # comments/attachments naming who wrote them
+    image_metadata: int                    # JPEGs carrying EXIF/XMP/IPTC (camera, GPS)
+    javascript: int                        # scripts, incl. chained ones and XFA forms
+    risky_actions: int                     # launch a program, submit data, open remote files
+    embedded_files: int                    # attachments
+    comments: int                          # sticky notes, highlights, ... (with authors)
+    private_app_data: int                  # data editors keep for themselves (/PieceInfo)
+    thumbnails: int
+    previous_revisions: int                # earlier saved versions still in the file
+    reader_usage_rights: bool
+
+
+class HiddenDataResult(TypedDict):
+    path: str
+    found: HiddenData
+    clean: bool
+
+
+class SanitizeResult(Protected):
+    output: str
+    removed: HiddenData
+    document_id_reset: bool

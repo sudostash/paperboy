@@ -157,8 +157,72 @@ def build_delivery_form(path: Path) -> Path:
     return path
 
 
+def build_proposal(path: Path) -> Path:
+    """A client proposal still carrying what it shouldn't: an author and software in
+    its metadata, a script that runs on open, an internal attachment, a reviewer's
+    comment, and an earlier saved version with a revealing title."""
+    import re
+
+    import pikepdf
+
+    c = canvas.Canvas(str(path), pagesize=letter)
+    c.setTitle("Delivery services proposal")
+    c.setAuthor("Jane Smith (Sales)")
+    c.setCreator("Microsoft Word for Mac")
+    width, height = letter
+    for heading, line in [("Delivery services proposal", "Prepared for Northwind Traders"),
+                          ("Pricing", "Fixed monthly fee, see schedule A.")]:
+        c.setFillColor(ACCENT)
+        c.rect(0, height - 14, width, 14, stroke=0, fill=1)
+        c.setFillColor(INK)
+        c.setFont("Helvetica-Bold", 26)
+        c.drawString(72, height - 110, heading)
+        c.setFont("Helvetica", 14)
+        c.setFillColor(MUTED)
+        c.drawString(72, height - 140, line)
+        c.showPage()
+    c.save()
+    with pikepdf.open(path, allow_overwriting_input=True) as pdf:
+        page = pdf.pages[0]
+        pdf.Root.OpenAction = pdf.make_indirect(pikepdf.Dictionary(
+            Type=pikepdf.Name.Action, S=pikepdf.Name.JavaScript,
+            JS=pikepdf.String("app.alert('Tracking open');")))
+        spreadsheet = pdf.make_indirect(pikepdf.Stream(pdf, b"cost,margin\n100,40%"))
+        filespec = pdf.make_indirect(pikepdf.Dictionary(
+            Type=pikepdf.Name.Filespec, F=pikepdf.String("pricing-internal.xlsx"),
+            EF=pikepdf.Dictionary(F=spreadsheet)))
+        pdf.Root.Names = pikepdf.Dictionary(EmbeddedFiles=pikepdf.Dictionary(
+            Names=pikepdf.Array([pikepdf.String("pricing-internal.xlsx"), filespec])))
+        page.obj.Annots = pdf.make_indirect(pikepdf.Array([pdf.make_indirect(
+            pikepdf.Dictionary(Type=pikepdf.Name.Annot, Subtype=pikepdf.Name.Text,
+                               Rect=pikepdf.Array([500, 700, 520, 720]),
+                               T=pikepdf.String("Jane Smith"),
+                               Contents=pikepdf.String("Don't mention the 40% margin")))]))
+        pdf.save(path)
+    # Make the first save's title revealing, then append an incremental update with
+    # the final metadata: the revealing title stays in the file as an earlier version.
+    with pikepdf.open(path, allow_overwriting_input=True) as pdf:
+        final = {k: v for k, v in pdf.trailer.Info.items()}
+        pdf.trailer.Info = pdf.make_indirect(pikepdf.Dictionary(
+            Title=pikepdf.String("Proposal v1 - internal margin 40%")))
+        pdf.save(path, object_stream_mode=pikepdf.ObjectStreamMode.disable,
+                 compress_streams=False)
+    data = path.read_bytes()
+    with pikepdf.open(path) as pdf:
+        root, size = pdf.Root.objgen[0], int(pdf.trailer.Size)
+        info = pikepdf.Dictionary(final).unparse()
+    prev = int(re.findall(rb"startxref\s+(\d+)", data)[-1])
+    body = b"\n%d 0 obj\n%s\nendobj\n" % (size, info)
+    xref_at = len(data) + len(body)
+    path.write_bytes(data + body + (
+        b"xref\n%d 1\n%010d 00000 n \ntrailer\n<< /Size %d /Root %d 0 R /Info %d 0 R "
+        b"/Prev %d >>\nstartxref\n%d\n%%%%EOF\n" % (size, len(data) + 1, size + 1, root, size,
+                                                     prev, xref_at)))
+    return path
+
+
 BUILDERS = {"report.pdf": build_report, "scan.pdf": build_scan,
-            "delivery-form.pdf": build_delivery_form}
+            "delivery-form.pdf": build_delivery_form, "proposal.pdf": build_proposal}
 
 
 def build(names: list[str], workspace: Path) -> None:

@@ -237,12 +237,15 @@ def test_get_metadata_encrypted(make_encrypted, settings):
     assert E.get_metadata(make_encrypted("b.pdf", password="x"), settings, "x")["path"]
 
 
-def test_pdf_info_survives_unreadable_metadata(doc, settings, monkeypatch):
+def test_pdf_info_survives_unreadable_metadata(doc, tmp_path, settings, monkeypatch):
+    with_xmp = tmp_path / "xmp.pdf"
+    E.set_metadata(doc, with_xmp, {"title": "T"}, settings)  # so XMP is actually read
+
     def broken(self, *a, **k):
         raise RuntimeError("bad XMP")
 
     monkeypatch.setattr(pikepdf.Pdf, "open_metadata", broken)
-    info = E.pdf_info(doc, settings)
+    info = E.pdf_info(with_xmp, settings)
     assert info["metadata"] == {}
     assert info["pages"] == 5
 
@@ -403,3 +406,14 @@ def test_extract_text_reports_pypdf_read_failures(doc, settings, monkeypatch):
     monkeypatch.setattr(text_module, "PdfReader", unreadable)
     with pytest.raises(PdfUserError, match="Could not read PDF: unexpected structure"):
         E.extract_text(doc, settings)
+
+
+def test_reading_metadata_never_changes_the_document(doc, settings):
+    from paperboy.engine.metadata import read_metadata
+    with pikepdf.open(doc) as pdf:
+        if "/Metadata" in pdf.Root:
+            del pdf.Root.Metadata
+        if "/Info" in pdf.trailer:
+            del pdf.trailer.Info
+        read_metadata(pdf)
+        assert "/Metadata" not in pdf.Root and "/Info" not in pdf.trailer

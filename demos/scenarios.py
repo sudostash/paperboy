@@ -13,7 +13,8 @@ Step types:
               "review": result_field,           in red, or amber for "look first";
               "layout": "side-by-side"},        before/after next to each other),
      "showSchema": True,                       or show its typed result vs. its schema,
-     "showImages": True}                       or the images it returned / files it saved
+     "showImages": True,                       or the images it returned / files it saved,
+     "showTable": result_field}                or a result object as a findings table
 
 File names in ``args`` and ``show`` are relative to the scenario workspace,
 which is also the server's ``PAPERBOY_ROOT``.
@@ -140,6 +141,28 @@ SCENARIOS: dict[str, dict] = {
              "show": {"after": "report_watermarked_numbered.pdf"}},
             {"type": "say", "text": "Done: report_watermarked_numbered.pdf has the watermark "
                                     "and Bates numbers Q3-0001 to Q3-0003 in the top right."},
+        ],
+    },
+    "sanitize": {
+        "title": "Remove hidden data before sharing",
+        "subtitle": "Find what a PDF carries besides its pages, then send a clean copy.",
+        "files": ["proposal.pdf"],
+        "prompt": "I'm about to send proposal.pdf to a client. Is anything hidden in it? "
+                  "If so, clean it up.",
+        "steps": [
+            {"type": "call", "tool": "inspect_hidden_data",
+             "args": {"input_path": "proposal.pdf"}, "showTable": "found"},
+            {"type": "say", "text": "Yes: the author's name and editing software, a script "
+                                    "that runs when it opens, an attached internal pricing "
+                                    "spreadsheet, a reviewer's comment, and an earlier saved "
+                                    "version. Removing all of it, comments included."},
+            {"type": "call", "tool": "sanitize_pdf",
+             "args": {"input_path": "proposal.pdf", "remove_comments": True},
+             "showTable": "removed"},
+            {"type": "call", "tool": "inspect_hidden_data",
+             "args": {"input_path": "proposal_sanitized.pdf"}, "showTable": "found"},
+            {"type": "say", "text": "Done. proposal_sanitized.pdf has nothing hidden left and "
+                                    "its pages are unchanged; proposal.pdf is untouched."},
         ],
     },
 }

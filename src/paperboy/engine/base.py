@@ -149,6 +149,56 @@ def combine_protections(protections: list[Protection]) -> Protection:
     )
 
 
+def signature_state(pdf: pikepdf.Pdf) -> tuple[bool, bool]:
+    """(digitally signed, has Adobe Reader usage rights).
+
+    Any signature dictionary counts, wherever it is in the file, as does a
+    certification (DocMDP) entry. Usage rights (UR3) are a signature too, but one
+    that only grants Reader features; callers drop it rather than refuse.
+    """
+    perms = pdf.Root.get("/Perms")
+    perms = perms if isinstance(perms, pikepdf.Dictionary) else None
+    ur3 = perms.get("/UR3") if perms is not None else None
+    ur3_id = ur3.objgen if isinstance(ur3, pikepdf.Dictionary) and ur3.is_indirect else None
+    signed = perms is not None and "/DocMDP" in perms or _signed_field(pdf)
+    for obj in pdf.objects:
+        if isinstance(obj, pikepdf.Dictionary) and "/ByteRange" in obj and obj.objgen != ur3_id:
+            signed = True
+            break
+    return signed, ur3 is not None
+
+
+def _signed_field(pdf: pikepdf.Pdf) -> bool:
+    """A signature field with a value, even one stored inline (not as its own object)."""
+    acro = pdf.Root.get("/AcroForm")
+    fields = acro.get("/Fields") if isinstance(acro, pikepdf.Dictionary) else None
+    stack = list(fields) if isinstance(fields, pikepdf.Array) else []
+    seen: set[tuple[int, int]] = set()
+    while stack and len(seen) < 100_000:
+        field = stack.pop()
+        if not isinstance(field, pikepdf.Dictionary):
+            continue
+        if field.is_indirect:
+            if field.objgen in seen:
+                continue
+            seen.add(field.objgen)
+        if field.get("/FT") == pikepdf.Name.Sig and isinstance(field.get("/V"),
+                                                               pikepdf.Dictionary):
+            return True
+        kids = field.get("/Kids")
+        if isinstance(kids, pikepdf.Array):
+            stack.extend(kids)
+    return False
+
+
+def require_modify_permission(pdf: pikepdf.Pdf) -> None:
+    """Refuse changing page content when the PDF forbids it, unless opened as owner."""
+    if pdf.is_encrypted and not pdf.owner_password_matched and not pdf.allow.modify_other:
+        raise PdfUserError(
+            "This PDF does not allow changing its pages; that needs its owner password"
+        )
+
+
 def is_encrypted(path: Path) -> bool:
     """True if the PDF is encrypted, without needing its password."""
     try:
