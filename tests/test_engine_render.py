@@ -435,14 +435,14 @@ def test_the_checked_bytes_are_the_rendered_bytes(marked, tmp_path, settings, mo
     # Review finding S2: the file is read once; swapping it after the permission check
     # must not change what gets rendered.
     swapped = _marked_pdf(tmp_path / "swap.pdf", pages=1)
-    real_count = render._page_count
+    real_check = render._plain_copy
 
     def swap_after_check(*args, **kwargs):
-        n = real_count(*args, **kwargs)
+        checked = real_check(*args, **kwargs)
         marked.write_bytes(swapped.read_bytes())
-        return n
+        return checked
 
-    monkeypatch.setattr(render, "_page_count", swap_after_check)
+    monkeypatch.setattr(render, "_plain_copy", swap_after_check)
     res = E.render_pages(marked, tmp_path / "p", settings, dpi=72)
     assert len(res["files"]) == 3  # the original three pages, not the swapped file
 

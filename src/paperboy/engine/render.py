@@ -14,7 +14,7 @@ from ..errors import PdfUserError
 from ..pagespec import parse_pages
 from ..paths import same_file
 from ..results import RenderResult, ViewResult
-from .base import open_pdf
+from .base import open_pdf, require_copy_permission
 
 DPI_RANGE = (36, 600)
 MAX_PIXELS = 40_000_000         # per image, about 6300 x 6300; bounds memory per page
@@ -30,25 +30,30 @@ FORMATS = {"png": ("png", "PNG", ".png"), "jpeg": ("jpeg", "JPEG", ".jpg"),
 _PDFIUM_LOCK = threading.Lock()
 
 
-def _page_count(data: bytes, settings: Settings, password: str | None, *,
-                exporting: bool) -> int:
-    """Check the password, page cap and, when exporting, the copy permission."""
+def _plain_copy(data: bytes, settings: Settings, password: str | None, *,
+                exporting: bool) -> tuple[bytes, int]:
+    """Check the password, page cap and, when exporting, the copy permission.
+
+    Returns the document decrypted (unchanged if it wasn't encrypted) and its page
+    count, so PDFium never handles passwords: it rejects some non-ASCII ones that
+    pikepdf accepts, and every tool should decide passwords the same way.
+    """
     with open_pdf(data, settings, password) as pdf:
-        if (exporting and pdf.is_encrypted and not pdf.owner_password_matched
-                and not pdf.allow.extract):
-            raise PdfUserError(
-                "This PDF does not allow copying its content; exporting pages as images "
-                "needs its owner password"
-            )
-        return len(pdf.pages)
+        if exporting:
+            require_copy_permission(pdf, "exporting pages as images")
+        if not pdf.is_encrypted:
+            return data, len(pdf.pages)
+        plain = io.BytesIO()
+        pdf.save(plain)  # without encryption=, the copy is decrypted
+        return plain.getvalue(), len(pdf.pages)
 
 
-def _open(data: bytes, password: str | None) -> pdfium.PdfDocument:
-    # The same bytes pikepdf checked, never a second read of the path, so the file
-    # can't be swapped between the permission check and rendering.
+def _open(data: bytes) -> pdfium.PdfDocument:
+    # Bytes pikepdf checked (and decrypted), never a second read of the path, so the
+    # file can't be swapped between the permission check and rendering.
     with _PDFIUM_LOCK:
         try:
-            return pdfium.PdfDocument(data, password=password or None)
+            return pdfium.PdfDocument(data)
         except pdfium.PdfiumError as exc:
             raise PdfUserError(f"Could not open PDF: {exc}") from exc
 
@@ -132,8 +137,7 @@ def render_pages(
     if out_dir.exists() and not out_dir.is_dir():
         raise PdfUserError(f"{out_dir} exists and is not a folder")
     name, pil_format, ext = FORMATS[fmt.lower()]
-    data = path.read_bytes()
-    total = _page_count(data, settings, password, exporting=True)
+    data, total = _plain_copy(path.read_bytes(), settings, password, exporting=True)
     if total == 0:
         raise PdfUserError("Document has no pages to render")
     targets = parse_pages(pages, total, dedupe=True) if pages else list(range(total))
@@ -142,7 +146,7 @@ def render_pages(
         _check_target(f, path, overwrite)
     scale = dpi / 72
     written: list[Path] = []
-    doc = _open(data, password)
+    doc = _open(data)
     try:
         budget = 0
         for i in targets:  # refuse oversized work before writing anything
@@ -188,13 +192,12 @@ def view_pages(
         raise PdfUserError(
             f"max_side_px must be between {VIEW_SIDE_RANGE[0]} and {VIEW_SIDE_RANGE[1]}"
         )
-    data = path.read_bytes()
-    total = _page_count(data, settings, password, exporting=False)
+    data, total = _plain_copy(path.read_bytes(), settings, password, exporting=False)
     targets = parse_pages(pages or "1", total, dedupe=True)
     if len(targets) > VIEW_MAX_PAGES:
         raise PdfUserError(f"View at most {VIEW_MAX_PAGES} pages per call")
     viewed, images = [], []
-    doc = _open(data, password)
+    doc = _open(data)
     try:
         for i in targets:
             # Render a little large, then shrink so the long side is exactly max_side_px.
