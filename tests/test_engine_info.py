@@ -223,8 +223,12 @@ def test_get_metadata_returns_known_fields_only(doc, tmp_path, settings):
     assert res["metadata"]["keywords"] == "a b"
 
 
-def test_get_metadata_empty(doc, settings):
-    assert E.get_metadata(doc, settings)["metadata"].keys() <= {"producer", "creator"}
+def test_get_metadata_reads_reportlab_defaults_from_docinfo(doc, settings):
+    # The fixture has no XMP; its fields live only in the classic Info dictionary.
+    meta = E.get_metadata(doc, settings)["metadata"]
+    assert meta["title"] == "untitled"
+    assert meta["author"] == "anonymous"
+    assert "keywords" not in meta  # empty values are skipped
 
 
 def test_get_metadata_encrypted(make_encrypted, settings):
@@ -316,3 +320,73 @@ def test_check_pdf_with_owner_password_hides_recovered_user_password(make_encryp
     res = E.check_pdf(rc4, settings, "boss")
     assert "er2" not in str(res)
     assert "User password = [redacted]" in res["raw"]
+
+
+# --- metadata from the classic Info dictionary (no XMP) --------------------------
+
+
+def _docinfo_only(tmp_path, **fields):
+    from reportlab.pdfgen import canvas
+    path = tmp_path / "docinfo.pdf"
+    c = canvas.Canvas(str(path))
+    c.setTitle(fields.get("title", ""))
+    c.setAuthor(fields.get("author", ""))
+    c.setSubject(fields.get("subject", ""))
+    c.setKeywords(fields.get("keywords", ""))
+    c.setCreator(fields.get("creator", ""))
+    c.drawString(72, 720, "x")
+    c.showPage()
+    c.save()
+    with pikepdf.open(path) as pdf:
+        assert "/Metadata" not in pdf.Root  # really no XMP
+    return path
+
+
+def test_get_metadata_falls_back_to_docinfo(tmp_path, settings):
+    path = _docinfo_only(tmp_path, title="Q3 Report", author="Ann Lee", subject="Sales",
+                         keywords="q3, sales", creator="Writer")
+    meta = E.get_metadata(path, settings)["metadata"]
+    assert meta.pop("producer").startswith("ReportLab")  # set by reportlab itself
+    assert meta == {"title": "Q3 Report", "author": "Ann Lee", "subject": "Sales",
+                    "keywords": "q3, sales", "creator": "Writer"}
+
+
+def test_docinfo_unicode_is_decoded(tmp_path, settings):
+    path = _docinfo_only(tmp_path, title="Résumé — 履歴書")
+    assert E.get_metadata(path, settings)["metadata"]["title"] == "Résumé — 履歴書"
+
+
+def test_xmp_wins_over_docinfo(tmp_path, settings):
+    path = _docinfo_only(tmp_path, title="Old title", author="Old author")
+    with pikepdf.open(path, allow_overwriting_input=True) as pdf:
+        with pdf.open_metadata(set_pikepdf_as_editor=False, update_docinfo=False) as m:
+            m["dc:title"] = "New title"
+        pdf.save(path)
+    meta = E.get_metadata(path, settings)["metadata"]
+    assert meta["title"] == "New title"     # from XMP
+    assert meta["author"] == "Old author"   # only in DocInfo
+
+
+def test_pdf_info_reports_the_same_metadata_as_get_metadata(tmp_path, settings):
+    path = _docinfo_only(tmp_path, title="Q3 Report", author="Ann Lee")
+    assert E.pdf_info(path, settings)["metadata"] == E.get_metadata(path, settings)["metadata"]
+
+
+def test_metadata_reading_does_not_modify_the_file(tmp_path, settings):
+    path = _docinfo_only(tmp_path, title="Keep")
+    before = path.read_bytes()
+    E.get_metadata(path, settings)
+    E.pdf_info(path, settings)
+    assert path.read_bytes() == before
+
+
+def test_empty_xmp_value_does_not_hide_docinfo(tmp_path, settings):
+    path = _docinfo_only(tmp_path)
+    with pikepdf.open(path, allow_overwriting_input=True) as pdf:
+        with pdf.open_metadata(set_pikepdf_as_editor=False, update_docinfo=False) as m:
+            m["dc:title"] = ""
+        pdf.docinfo["/Title"] = "From DocInfo"
+        pdf.save(path)
+    meta = E.get_metadata(path, settings)["metadata"]
+    assert meta["title"] == "From DocInfo"
+    assert "None" not in meta.values()
