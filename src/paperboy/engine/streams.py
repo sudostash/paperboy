@@ -107,27 +107,33 @@ def _inflated_size(data: bytes, cap: int) -> int:
     return total
 
 
-def within(stream, cap: int) -> bool:
-    """Whether decoding the stream's general filters (not image codecs, and not
-    predictors, which callers check separately) stays within *cap* bytes.
-
-    Anything this can't measure is refused: damaged data (another decoder may read
-    more of it than Python's), a layer cut at the cap (the next would see too little),
-    and LZW or run-length anywhere but last."""
+def decoded_size(stream, cap: int) -> int | None:
+    """How many bytes the stream's general filters (not image codecs, and not
+    predictors, which callers check separately) decode to, counted no further than
+    just past *cap*: a result over *cap* means "too big". None if it can't be measured:
+    damaged data (another decoder may read more of it than Python's), a layer cut at
+    the cap (the next would see too little), and LZW or run-length anywhere but last."""
     general = [f for f in filters_of(stream) if f not in IMAGE_FILTERS]
     data = stream.read_raw_bytes()
     if len(general) > 4:
-        return False
+        return None
     try:
         for i, name in enumerate(general):
             last = i == len(general) - 1
             if name in _RATIO:  # decoded whole by pikepdf: bound it by its worst case
-                return last and len(data) * _RATIO[name] <= cap
+                return len(data) * _RATIO[name] if last else None
             if last and name == "/FlateDecode":
-                return _inflated_size(data, cap) <= cap
+                return _inflated_size(data, cap)
             data = _stage(name, data, cap + 1, strict=False)
             if data is None or len(data) > cap:
-                return False
+                return None
     except _DAMAGED:
-        return False
-    return len(data) <= cap
+        return None
+    return len(data)
+
+
+def within(stream, cap: int) -> bool:
+    """Whether decoding the stream's general filters stays within *cap* bytes; anything
+    that can't be measured is refused (see decoded_size)."""
+    size = decoded_size(stream, cap)
+    return size is not None and size <= cap

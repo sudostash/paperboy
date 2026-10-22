@@ -59,6 +59,7 @@ Output files are written back into your `--root` folder. Remove the server anyti
 | `pdf_info` | Page count, size, version, encryption status, metadata |
 | `get_metadata` / `set_metadata` | Read / write title, author, subject, keywords, creator, producer |
 | `extract_text` | Pull text from all or selected pages |
+| `search_text` | Find a word or phrase (literal, optional case and whole-word matching): each match's page, a snippet around it, and its rectangles on the page; lists pages with no text layer *(read-only)* |
 | `check_pdf` | Validate structural integrity and report problems |
 | `encrypt_pdf` | Add a password — AES-256 (default), AES-128, RC4 — with print/copy/modify restrictions |
 | `decrypt_pdf` | Remove a password you know (not a cracker) |
@@ -210,9 +211,9 @@ All configuration is environment variables. Sensible defaults; nothing is requir
     the strictest permissions of all its inputs.
 - **Copy restrictions are enforced.** A protected PDF has a user ("open") password and an
   owner password that lifts its restrictions. When a PDF forbids copying, getting its content
-  out (`extract_text`, `render_pages`, `extract_attachments`, `extract_images`, `decrypt_pdf`,
-  re-encrypting with `encrypt_pdf`) needs
-  the **owner** password; the open password is enough when copying is allowed. `view_pages`
+  out (`extract_text`, `search_text`, `render_pages`, `extract_attachments`, `extract_images`,
+  `decrypt_pdf`, re-encrypting with `encrypt_pdf`) needs the **owner** password; the open
+  password is enough when copying is allowed. `view_pages`
   (display) works with the open password, and tools whose output keeps the input's protection
   (rotate, merge, split, ...) keep the restriction on their output too.
 - **Non-ASCII passwords work with every encryption scheme.** RC4/AES-128 files store passwords

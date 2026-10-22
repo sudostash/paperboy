@@ -27,6 +27,7 @@ EXPECTED_TOOLS = {
     "inspect_hidden_data", "sanitize_pdf", "scan_pdf",
     "get_outline", "set_outline",
     "list_attachments", "extract_attachments", "extract_images",
+    "search_text",
 }
 
 
@@ -71,7 +72,7 @@ async def test_lists_all_tools(server_env):
 READ_ONLY_TOOLS = {"pdf_info", "get_metadata", "check_pdf", "extract_text", "view_pages",
                    "find_blank_pages", "list_form_fields", "inspect_hidden_data",
                    "scan_pdf", "get_outline",
-                   "list_attachments"}
+                   "list_attachments", "search_text"}
 
 
 async def test_tool_annotations(server_env):

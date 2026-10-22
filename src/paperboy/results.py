@@ -360,3 +360,25 @@ class ExtractImagesResult(TypedDict):
     images: list[ExtractedImage]
     skipped: list[SkippedImage]
     truncated: bool                        # only the first 2,000 distinct images were read
+
+
+class SearchMatch(TypedDict):
+    page: int                              # 1-based
+    text: str                              # the matched text (whitespace collapsed)
+    context: str                           # the match with about 60 characters each side
+    # [left, bottom, right, top] in PDF points, in the page's own coordinates (before
+    # /Rotate, not shifted to the MediaBox origin); one or more per line of the match.
+    rects: list[list[float]]
+    rects_truncated: bool                  # more than 20 rectangles; the first 20 are given
+
+
+class SearchResult(TypedDict):
+    path: str
+    query: str
+    pages_searched: int
+    complete: bool                         # false: the time limit stopped it early
+    match_count: int                       # matches returned
+    matches: list[SearchMatch]             # in page order
+    truncated: bool                        # stopped at max_results; there are more
+    pages_without_text: list[int]          # no extractable text, e.g. scans (first 1,000)
+    pages_skipped: list[int]               # too much content to search safely (first 1,000)
