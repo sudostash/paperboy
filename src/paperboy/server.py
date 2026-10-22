@@ -23,6 +23,7 @@ from .results import (
     Bookmark,
     CheckResult,
     ConvertResult,
+    CropResult,
     DecryptResult,
     DeleteResult,
     EncryptResult,
@@ -35,14 +36,18 @@ from .results import (
     HiddenDataResult,
     ImagesResult,
     InfoResult,
+    InsertBlankResult,
+    InterleaveResult,
     MergeResult,
     MetadataResult,
+    NUpResult,
     OptimizeResult,
     OutlineResult,
     PageNumbersResult,
     RearrangeResult,
     RenderResult,
     RepairResult,
+    ResizeResult,
     RotateResult,
     SanitizeResult,
     ScanResult,
@@ -340,6 +345,124 @@ def merge_pdfs(
             resolved_pw[str(resolved)] = passwords[original]
     out = _combined_output(output_path, srcs, overwrite)
     return engine.merge_pdfs(srcs, out, SETTINGS, resolved_pw)
+
+
+@mcp.tool(annotations=_writes("Crop pages"))
+@_guard
+def crop_pages(
+    input_path: str,
+    margins: list[float] | None = None,
+    unit: str = "pt",
+    pages: str | None = None,
+    reset: bool = False,
+    output_path: str | None = None,
+    password: str | None = None,
+    overwrite: bool | None = None,
+) -> CropResult:
+    """Crop pages by margins [top, right, bottom, left], measured on the page as it is
+    seen (rotation applied), in unit "pt" (points), "in" or "mm"; all pages or a page
+    spec. reset=true instead shows the whole page again. Cropping only hides the
+    margins: the content stays in the file (use sanitize or redaction to remove it).
+    """
+    src = require_input(input_path, SETTINGS)
+    out = prepare_output(src, output_path, "_cropped", _overwrite(overwrite), SETTINGS)
+    return engine.crop_pages(src, out, SETTINGS, margins, unit, pages, reset, password)
+
+
+@mcp.tool(annotations=_writes("Resize pages"))
+@_guard
+def resize_pages(
+    input_path: str,
+    size: str | None = None,
+    width: float | None = None,
+    height: float | None = None,
+    unit: str = "pt",
+    orientation: str = "auto",
+    pages: str | None = None,
+    output_path: str | None = None,
+    password: str | None = None,
+    overwrite: bool | None = None,
+) -> ResizeResult:
+    """Change pages to a paper size (a3, a4, a5, letter, legal, tabloid) or a custom
+    width and height in unit "pt", "in" or "mm", scaling each page's content to fit
+    (proportions kept, centred). orientation "auto" keeps each page's own (landscape
+    pages get a landscape sheet), or force "portrait"/"landscape". Links, form fields
+    and comments move with the content (ones outside a crop stay hidden); scroll
+    positions of bookmarks and links that point into resized pages are not adjusted.
+    Needs the owner password if the PDF forbids changes.
+    """
+    src = require_input(input_path, SETTINGS)
+    out = prepare_output(src, output_path, "_resized", _overwrite(overwrite), SETTINGS)
+    return engine.resize_pages(src, out, SETTINGS, size, width, height, unit, orientation,
+                               pages, password)
+
+
+@mcp.tool(annotations=_writes("N-up"))
+@_guard
+def n_up(
+    input_path: str,
+    per_sheet: int = 2,
+    size: str | None = None,
+    pages: str | None = None,
+    output_path: str | None = None,
+    password: str | None = None,
+    overwrite: bool | None = None,
+) -> NUpResult:
+    """Put 2 pages side by side on landscape sheets, or 4 in a 2 x 2 grid, in reading
+    order (handouts, saving paper). Sheets are a paper size (a3, a4, a5, letter, legal,
+    tabloid) or by default the first page's size. pages picks and orders the pages.
+    The result is for printing and reading: only page content is placed, so links,
+    comments, stamps, form fields (and their filled-in values) and visible signatures
+    don't appear; use flatten_pdf first to keep them. Document info is copied, bookmarks
+    are not. Needs the owner password if the PDF forbids changes.
+    """
+    src = require_input(input_path, SETTINGS)
+    out = prepare_output(src, output_path, f"_{per_sheet}up", _overwrite(overwrite), SETTINGS)
+    return engine.n_up(src, out, SETTINGS, per_sheet, size, pages, password)
+
+
+@mcp.tool(annotations=_writes("Insert blank pages"))
+@_guard
+def insert_blank_pages(
+    input_path: str,
+    after: list[int],
+    count: int = 1,
+    output_path: str | None = None,
+    password: str | None = None,
+    overwrite: bool | None = None,
+) -> InsertBlankResult:
+    """Insert count blank pages (1-100) after each page number in after; 0 inserts
+    before the first page. E.g. after=[3, 7] adds a blank page after pages 3 and 7.
+    Each blank page is the size of the page before it. inserted lists the new pages'
+    numbers in the output.
+    """
+    src = require_input(input_path, SETTINGS)
+    out = prepare_output(src, output_path, "_blanks", _overwrite(overwrite), SETTINGS)
+    return engine.insert_blank_pages(src, out, SETTINGS, after, count, password)
+
+
+@mcp.tool(annotations=_writes("Interleave PDFs"))
+@_guard
+def interleave_pdfs(
+    front_path: str,
+    back_path: str,
+    output_path: str,
+    reverse_backs: bool = True,
+    front_password: str | None = None,
+    back_password: str | None = None,
+    overwrite: bool | None = None,
+) -> InterleaveResult:
+    """Combine the fronts and backs of a double-sided document scanned on a single-sided
+    scanner into one PDF: front 1, back 1, front 2, back 2, ... Turning the stack over
+    to scan the backs puts them last page first, so they are reversed; pass
+    reverse_backs=false if they were scanned in order. The backs must have as many
+    pages as the fronts, or one fewer.
+    """
+    fronts = require_input(front_path, SETTINGS)
+    backs = require_input(back_path, SETTINGS)
+    out = _combined_output(output_path, [fronts, backs], overwrite)
+    return engine.interleave_pdfs(fronts, backs, out, SETTINGS, reverse_backs,
+                                  front_password, back_password)
 
 
 @mcp.tool(annotations=_writes("Split PDF"))

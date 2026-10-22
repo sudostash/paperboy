@@ -28,6 +28,7 @@ EXPECTED_TOOLS = {
     "get_outline", "set_outline",
     "list_attachments", "extract_attachments", "extract_images",
     "search_text",
+    "crop_pages", "resize_pages", "n_up", "insert_blank_pages", "interleave_pdfs",
 }
 
 

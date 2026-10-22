@@ -322,9 +322,50 @@ def build_brochure(path: Path) -> Path:
     return path
 
 
+def _lease_page(c: canvas.Canvas, n: int, back: bool) -> None:
+    """One side of a two-page-per-sheet lease, as an off-white scan."""
+    width, height = letter
+    c.setFillColor(colors.HexColor("#fbfaf6"))
+    c.rect(0, 0, width, height, stroke=0, fill=1)
+    c.setFillColor(INK)
+    c.setFont("Helvetica-Bold", 22)
+    c.drawString(72, height - 100, "Lease agreement")
+    c.setFont("Helvetica", 14)
+    c.setFillColor(MUTED)
+    c.drawString(72, height - 130, f"Section {n}: " + ("terms continued" if back else "terms"))
+    c.setFont("Helvetica-Bold", 60)
+    c.setFillColor(ACCENT)
+    c.drawCentredString(width / 2, height / 2, f"Page {n}")
+    c.setFont("Helvetica", 11)
+    c.setFillColor(MUTED)
+    c.drawCentredString(width / 2, 40, ("back of sheet" if back else "front of sheet")
+                        + f" · page {n} of 6")
+
+
+def build_fronts(path: Path) -> Path:
+    """The fronts of a 3-sheet lease scanned on a single-sided scanner: pages 1, 3, 5."""
+    c = canvas.Canvas(str(path), pagesize=letter)
+    for n in (1, 3, 5):
+        _lease_page(c, n, back=False)
+        c.showPage()
+    c.save()
+    return path
+
+
+def build_backs(path: Path) -> Path:
+    """The backs, scanned by turning the stack over: pages 6, 4, 2 (last first)."""
+    c = canvas.Canvas(str(path), pagesize=letter)
+    for n in (6, 4, 2):
+        _lease_page(c, n, back=True)
+        c.showPage()
+    c.save()
+    return path
+
+
 BUILDERS = {"report.pdf": build_report, "scan.pdf": build_scan,
             "delivery-form.pdf": build_delivery_form, "proposal.pdf": build_proposal,
-            "invoice.pdf": build_invoice, "brochure.pdf": build_brochure}
+            "invoice.pdf": build_invoice, "brochure.pdf": build_brochure,
+            "fronts.pdf": build_fronts, "backs.pdf": build_backs}
 
 
 def build(names: list[str], workspace: Path) -> None:

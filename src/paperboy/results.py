@@ -382,3 +382,38 @@ class SearchResult(TypedDict):
     truncated: bool                        # stopped at max_results; there are more
     pages_without_text: list[int]          # no extractable text, e.g. scans (first 1,000)
     pages_skipped: list[int]               # too much content to search safely (first 1,000)
+
+
+class CropResult(Protected):
+    output: str
+    pages: list[int]                       # 1-based pages cropped (or reset)
+    sizes: list[list[float]]               # each one's size as seen afterwards, in points
+
+
+class ResizeResult(Protected):
+    output: str
+    pages: list[int]                       # 1-based pages resized
+    width: float                           # the paper size, portrait, in points
+    height: float
+    scales: list[float]                    # how much each page's content was scaled
+
+
+class NUpResult(Protected):
+    output: str
+    sheets: int
+    pages_placed: int
+    sheet_width: float                     # points
+    sheet_height: float
+
+
+class InsertBlankResult(Protected):
+    output: str
+    pages: int                             # pages in the output
+    inserted: list[int]                    # 1-based numbers of the blank pages in the output
+
+
+class InterleaveResult(Protected):
+    output: str
+    pages: int
+    fronts: int
+    backs: int

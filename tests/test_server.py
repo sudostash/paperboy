@@ -59,6 +59,8 @@ INPUT_TOOLS = {
     "get_outline": {}, "set_outline": {"entries": [{"title": "A", "page": 1}]},
     "list_attachments": {}, "extract_attachments": {}, "extract_images": {},
     "search_text": {"query": "x"},
+    "crop_pages": {"margins": [1, 1, 1, 1]}, "resize_pages": {"size": "a4"},
+    "n_up": {}, "insert_blank_pages": {"after": [1]},
 }
 
 
@@ -112,6 +114,10 @@ def test_split_refuses_output_dir_outside_root(doc, outside):
     ("repair_pdf", {}, "_repaired"),
     ("set_metadata", {"fields": {"title": "T"}}, "_meta"),
     ("set_outline", {"entries": [{"title": "Start", "page": 1}]}, "_bookmarked"),
+    ("crop_pages", {"margins": [10, 10, 10, 10]}, "_cropped"),
+    ("resize_pages", {"size": "a4"}, "_resized"),
+    ("n_up", {"per_sheet": 4}, "_4up"),
+    ("insert_blank_pages", {"after": [0]}, "_blanks"),
 ])
 def test_writers_default_to_a_suffixed_name_and_never_overwrite(tool, args, suffix, doc):
     res = getattr(S, tool)(input_path=str(doc), **args)
@@ -552,3 +558,16 @@ def test_search_text_through_the_tool(doc):
     assert res["match_count"] == 2 and res["truncated"] is True
     with pytest.raises(S.ToolError, match="query must be"):
         S.search_text(str(doc), " ")
+
+
+
+def test_interleave_is_confined_and_combines(doc, outside, make_pdf):
+    backs = make_pdf("backs.pdf", 5)
+    with pytest.raises(S.ToolError, match="outside the allowed root"):
+        S.interleave_pdfs(str(doc), str(outside / "b.pdf"), str(doc.with_name("i.pdf")))
+    with pytest.raises(S.ToolError, match="outside the allowed root"):
+        S.interleave_pdfs(str(doc), str(backs), str(outside / "i.pdf"))
+    with pytest.raises(S.ToolError, match="same as an input"):
+        S.interleave_pdfs(str(doc), str(backs), str(doc), overwrite=True)
+    res = S.interleave_pdfs(str(doc), str(backs), str(doc.with_name("i.pdf")))
+    assert res["pages"] == 10
