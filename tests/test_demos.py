@@ -81,7 +81,7 @@ def test_scenario_is_well_formed(slug):
             assert step["tool"] in EXPECTED_TOOLS
             assert isinstance(step["args"], dict)
             assert set(step.get("show", {})) <= {"before", "after", "password", "highlight",
-                                                 "review"}
+                                                 "review", "layout"}
             views = [k for k in ("show", "showSchema", "showImages") if step.get(k)]
             assert len(views) <= 1, f"pick one stage view, not {views}"
         if step["type"] == "say":

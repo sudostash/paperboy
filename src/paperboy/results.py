@@ -171,3 +171,32 @@ class BlankPagesResult(TypedDict):
     nearly_blank_pages: list[int]          # a little ink: look (view_pages) before deleting
     details: list[BlankPage]               # measurements for both lists
     ink_threshold_percent: float
+
+
+class FormField(TypedDict):
+    name: str                              # fully qualified, e.g. "address.city"
+    type: Literal["text", "checkbox", "radio", "choice", "signature", "button", "other"]
+    value: str | None                      # checkbox/radio: the state name, e.g. "Yes", "Off"
+    options: list[str]                     # values to fill: choices, or "on" states
+    option_labels: list[str]               # what the form shows for each option
+    required: bool
+    read_only: bool
+    max_length: int | None
+    page: int | None
+
+
+class FormFieldsResult(TypedDict):
+    path: str
+    has_form: bool
+    values_hidden: bool                    # copying forbidden: values need the owner password
+    fields: list[FormField]
+    count: int
+
+
+class FillFormResult(Protected):
+    output: str
+    filled: list[str]
+    flattened: bool
+    unrenderable_fields: list[str]         # values the form's font can't draw (shown as ?)
+    xfa_removed: bool                      # XFA data dropped so viewers show the filled fields
+    usage_rights_removed: bool             # Reader extensions dropped (they break on change)

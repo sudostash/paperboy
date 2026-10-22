@@ -69,13 +69,13 @@ function showTools(tools) {
   stage.append(grid);
 }
 
-async function renderStrip(file, maxHeight, password) {
+async function renderStrip(file, maxHeight, password, maxWidth = stage.clientWidth - 44) {
   const doc = await pdfjs.getDocument({ url: `${base}/files/${file}`, password }).promise;
   const pages = [];
   for (let n = 1; n <= doc.numPages; n++) pages.push(await doc.getPage(n));
   const views = pages.map((p) => p.getViewport({ scale: 1 }));
   const gap = 14;
-  const width = stage.clientWidth - 44 - gap * (views.length - 1);
+  const width = maxWidth - gap * (views.length - 1);
   const scale = Math.min(maxHeight / Math.max(...views.map((v) => v.height)),
     width / views.reduce((s, v) => s + v.width, 0));
   const strip = el("div", "strip");
@@ -92,8 +92,24 @@ async function renderStrip(file, maxHeight, password) {
   return strip;
 }
 
+async function showSideBySide(show) {
+  // One page each, before and after: full height, next to each other.
+  const row = el("div", "pair");
+  stage.append(row);
+  const height = stage.clientHeight - 90;
+  const width = (stage.clientWidth - 44 - 24) / 2;
+  for (const [label, file] of [["Before", show.before], ["After", show.after]]) {
+    const col = el("div", "pair-col");
+    col.append(el("div", "strip-label", `${label} · ${file}`),
+      await renderStrip(file, height, show.password, width));
+    row.append(col);
+    await sleep(700);
+  }
+}
+
 async function showFiles(show, result) {
   clearStage();
+  if (show.layout === "side-by-side") return showSideBySide(show);
   const both = show.before && show.after;
   const height = (stage.clientHeight - 44 - (both ? 90 : 40)) / (both ? 2 : 1);
   // show.highlight / show.review name result fields listing 1-based pages to outline.

@@ -26,7 +26,9 @@ from .results import (
     DeleteResult,
     EncryptResult,
     ExtractResult,
+    FillFormResult,
     FlattenResult,
+    FormFieldsResult,
     ImagesResult,
     InfoResult,
     MergeResult,
@@ -427,6 +429,48 @@ def images_to_pdf(
     srcs = [require_input(p, SETTINGS) for p in input_paths]
     out = _combined_output(output_path, srcs, overwrite)
     return engine.images_to_pdf(srcs, out, SETTINGS)
+
+
+# --------------------------------------------------------------------------- #
+# Forms
+# --------------------------------------------------------------------------- #
+
+
+@mcp.tool(annotations=_reads("List form fields"))
+@_guard
+def list_form_fields(input_path: str, password: Optional[str] = None) -> FormFieldsResult:
+    """List a PDF form's fields: full name, type, current value, allowed options, flags, page.
+
+    Use the names with fill_form. If copying is forbidden and only the open password
+    is given, values are withheld (values_hidden) but the fields are still listed.
+    """
+    src = require_input(input_path, SETTINGS)
+    return engine.list_form_fields(src, SETTINGS, password)
+
+
+@mcp.tool(annotations=_writes("Fill form"))
+@_guard
+def fill_form(
+    input_path: str,
+    values: dict[str, str | bool],
+    output_path: Optional[str] = None,
+    flatten: bool = False,
+    password: Optional[str] = None,
+    overwrite: Optional[bool] = None,
+) -> FillFormResult:
+    """Fill in form fields: values maps each field's full name to its value.
+
+    Text and choice fields take text; checkboxes take true/false; radio groups take one
+    of their options, or "Off" to clear (see list_form_fields). Multi-select list boxes
+    take a single value. Every value is checked first and nothing is written if any is
+    invalid. If unrenderable_fields is not empty, the form's font can't draw those values:
+    they are stored, and most viewers redraw them correctly. flatten=true makes the result
+    static (no longer editable). Signed PDFs are refused because filling would break the
+    signature.
+    """
+    src = require_input(input_path, SETTINGS)
+    out = prepare_output(src, output_path, "_filled", _overwrite(overwrite), SETTINGS)
+    return engine.fill_form(src, out, values, SETTINGS, password, flatten)
 
 
 # --------------------------------------------------------------------------- #

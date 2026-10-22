@@ -178,6 +178,9 @@ body {
 
 .legend { display: flex; gap: 14px; font-size: 13px; color: var(--muted); }
 
+.pair { display: flex; gap: 24px; min-height: 0; }
+.pair-col { display: flex; flex-direction: column; gap: 10px; flex: 1; min-width: 0; }
+
 .strip-label { font-size: 13px; color: var(--muted); font-weight: 600; }
 .strip {
   display: flex;

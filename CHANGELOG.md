@@ -7,6 +7,17 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `list_form_fields` (read-only) and `fill_form`: list a form's fields (full dotted names,
+  type, value, options, required/read-only, max length, page) and fill them by name. Every
+  value is validated before anything is written; appearances are regenerated so every viewer
+  shows the values; optional `flatten`. Honors the PDF's "no form filling" permission, keeps
+  protected PDFs protected, refuses digitally signed PDFs, and drops XFA data so viewers use
+  the filled fields. Values are withheld (`values_hidden`) when copying is forbidden and the
+  owner password wasn't given. Only filled fields are redrawn (others keep their original
+  appearance); values the form's font can't draw are reported (`unrenderable_fields`), left
+  for viewers to redraw, and never flattened as "?". Any signature in the file (including
+  certification signatures) is refused; Adobe Reader usage rights are removed and reported.
+  `flatten` also needs permission to modify annotations, and is capped at 2000 widgets.
 - `find_blank_pages` (read-only): a page with any text object is content; otherwise it is
   rendered small and measured against its own background (so off-white paper is fine).
   `blank_pages` (at most `ink_threshold_percent`, default 0.005%) can go straight to
