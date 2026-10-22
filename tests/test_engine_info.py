@@ -196,12 +196,12 @@ def test_extract_text_encrypted(make_encrypted, settings):
 def test_extract_text_rejects_non_pdf(tmp_path, settings):
     junk = tmp_path / "junk.pdf"
     junk.write_text("garbage")
-    with pytest.raises(PdfUserError, match="Could not read PDF"):
+    with pytest.raises(PdfUserError, match="Could not open PDF"):  # same wording as all tools
         E.extract_text(junk, settings)
 
 
 def test_extract_text_enforces_page_cap(doc, settings):
-    with pytest.raises(PdfUserError, match="over the 2 limit"):
+    with pytest.raises(PdfUserError, match="over the 2 page limit"):
         E.extract_text(doc, dataclasses.replace(settings, max_pages=2))
 
 
@@ -390,3 +390,16 @@ def test_empty_xmp_value_does_not_hide_docinfo(tmp_path, settings):
     meta = E.get_metadata(path, settings)["metadata"]
     assert meta["title"] == "From DocInfo"
     assert "None" not in meta.values()
+
+
+def test_extract_text_reports_pypdf_read_failures(doc, settings, monkeypatch):
+    from pypdf.errors import PdfReadError
+
+    from paperboy.engine import text as text_module
+
+    def unreadable(*args, **kwargs):
+        raise PdfReadError("unexpected structure")
+
+    monkeypatch.setattr(text_module, "PdfReader", unreadable)
+    with pytest.raises(PdfUserError, match="Could not read PDF: unexpected structure"):
+        E.extract_text(doc, settings)

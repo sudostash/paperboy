@@ -12,7 +12,6 @@ This project is MIT-licensed and builds on these libraries, which carry their ow
 | [mcp](https://github.com/modelcontextprotocol/python-sdk) | MIT | MCP server SDK |
 | [pypdfium2](https://github.com/pypdfium2-team/pypdfium2) | BSD-3-Clause / Apache-2.0 | Page rendering (`view_pages`, `render_pages`) |
 | [PDFium](https://pdfium.googlesource.com/pdfium/) (bundled in pypdfium2 wheels, with its permissively licensed dependencies: FreeType, libjpeg-turbo, libpng, OpenJPEG, zlib, ICU, lcms2) | BSD-3-Clause and others | PDF rasterization |
-| [cryptography](https://github.com/pyca/cryptography) (via `pypdf[crypto]`) | Apache-2.0 OR BSD-3-Clause | Reading AES-encrypted PDFs |
 | [typing-extensions](https://github.com/python/typing_extensions) | PSF-2.0 | Typed result shapes |
 
 Optional runtime binaries (not bundled, invoked if present on PATH):

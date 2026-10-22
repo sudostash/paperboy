@@ -9,7 +9,7 @@ import pikepdf
 from ..config import Settings
 from ..errors import PdfUserError
 from ..results import CheckResult, InfoResult
-from .base import open_pdf, run_qpdf
+from .base import open_pdf, open_with_password, run_qpdf
 from .metadata import read_metadata
 
 # qpdf echoes the user password, even one it recovered from the owner password, and
@@ -46,7 +46,7 @@ def pdf_info(path: Path, settings: Settings, password: str | None = None) -> Inf
         "permissions": None,
     }
     try:
-        pdf = pikepdf.open(str(path), password=password or "")
+        pdf = open_with_password(str(path), password)
     except pikepdf.PasswordError:
         info["is_encrypted"] = True
         if not password:

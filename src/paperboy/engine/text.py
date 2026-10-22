@@ -1,6 +1,7 @@
 """Text extraction, via pypdf (stronger text layer than pikepdf)."""
 from __future__ import annotations
 
+import io
 from pathlib import Path
 
 from pypdf import PdfReader
@@ -10,6 +11,7 @@ from ..config import Settings
 from ..errors import PdfUserError
 from ..pagespec import parse_pages
 from ..results import TextResult
+from .base import open_pdf, require_copy_permission
 
 
 def extract_text(
@@ -19,20 +21,23 @@ def extract_text(
     password: str | None = None,
     max_chars: int = 50000,
 ) -> TextResult:
-    """Extract text from all or selected pages. Returns text plus a truncation flag."""
+    """Extract text from all or selected pages. Returns text plus a truncation flag.
+
+    pikepdf opens the file (passwords, the copy permission and limits are decided
+    the same way for every tool) and pypdf reads a plain, decrypted copy. pypdf's
+    own decryption needs the cryptography package and mishandles non-ASCII
+    passwords.
+    """
+    plain = io.BytesIO()
+    with open_pdf(path.read_bytes(), settings, password) as pdf:
+        require_copy_permission(pdf, "extracting its text")
+        pdf.save(plain)  # without encryption=, the copy is decrypted
+    plain.seek(0)
     try:
-        reader = PdfReader(str(path))
-        if reader.is_encrypted:
-            if not password:
-                raise PdfUserError("This PDF is password protected; supply its password")
-            if reader.decrypt(password) == 0:
-                raise PdfUserError("Incorrect password")
+        reader = PdfReader(plain)
+        total = len(reader.pages)
     except PdfReadError as exc:
         raise PdfUserError(f"Could not read PDF: {exc}") from exc
-
-    total = len(reader.pages)
-    if total > settings.max_pages:
-        raise PdfUserError(f"Document has {total} pages, over the {settings.max_pages} limit")
     idx = parse_pages(pages, total) if pages else range(total)
     parts = [f"--- Page {i + 1} ---\n{reader.pages[i].extract_text() or ''}" for i in idx]
     text = "\n\n".join(parts)

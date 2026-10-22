@@ -192,9 +192,15 @@ All configuration is environment variables. Sensible defaults; nothing is requir
   - **Merging** protected files: they must share one password (otherwise the merge is refused,
     so no input's pages become readable with another input's password), and the output gets
     the strictest permissions of all its inputs.
-- **Copy restrictions are only partly enforced.** `render_pages` refuses to export a PDF whose
-  permissions forbid copying unless you give its owner password. `extract_text` and
-  `view_pages` do not check that permission today, so treat copy restrictions as advisory.
+- **Copy restrictions are enforced.** A protected PDF has a user ("open") password and an
+  owner password that lifts its restrictions. When a PDF forbids copying, getting its content
+  out (`extract_text`, `render_pages`, `decrypt_pdf`, re-encrypting with `encrypt_pdf`) needs
+  the **owner** password; the open password is enough when copying is allowed. `view_pages`
+  (display) works with the open password, and tools whose output keeps the input's protection
+  (rotate, merge, split, ...) keep the restriction on their output too.
+- **Non-ASCII passwords work with every encryption scheme.** RC4/AES-128 files store passwords
+  in PDFDocEncoding and AES-256 in UTF-8; every tool opens files the same way (through pikepdf)
+  and tries the right encoding, so `café` or `p€ss` work everywhere.
 - **Rendering is bounded.** Each image is capped at 40 megapixels and each `render_pages`
   call at 400 megapixels in total. PDFium calls are serialized (it is not thread-safe), and
   files are written via a temporary file and an atomic rename, never through a link.

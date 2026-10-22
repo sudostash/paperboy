@@ -70,10 +70,15 @@ def fake_binary(tmp_path: Path):
 
 
 def page_labels(path, password=None) -> list[str]:
+    """Each page's text. Encrypted files are decrypted with pikepdf, like the server does."""
+    import io
+
+    import pikepdf
     from pypdf import PdfReader
-    r = PdfReader(str(path))
-    if r.is_encrypted:
-        r.decrypt(password or "")
+    with pikepdf.open(path, password=password or "") as pdf:
+        buf = io.BytesIO()
+        pdf.save(buf)
+    r = PdfReader(buf)
     return [(r.pages[i].extract_text() or "").strip() for i in range(len(r.pages))]
 
 

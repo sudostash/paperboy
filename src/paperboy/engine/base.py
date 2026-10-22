@@ -15,6 +15,43 @@ from ..config import Settings
 from ..errors import PdfUserError
 
 
+def open_with_password(source: str | io.BytesIO, password: str | None) -> pikepdf.Pdf:
+    """``pikepdf.open`` that also accepts non-ASCII passwords for RC4/AES-128 files.
+
+    Revisions 2-4 store passwords in PDFDocEncoding, but pikepdf sends a str as
+    UTF-8, which only matches AES-256 (revision 6). On a mismatch, retry with the
+    PDFDocEncoding bytes. Raises pikepdf.PasswordError if neither form opens it.
+    """
+    try:
+        return pikepdf.open(source, password=password or "")
+    except pikepdf.PasswordError:
+        if not password or password.isascii():
+            raise
+        try:
+            legacy = password.encode("pdfdoc")
+        except UnicodeEncodeError:  # not expressible in PDFDocEncoding at all
+            raise pikepdf.PasswordError("invalid password") from None
+        if isinstance(source, io.BytesIO):
+            source.seek(0)
+        pdf = pikepdf.open(source, password=legacy)
+        if pdf.encryption.R >= 5:  # AES-256 uses UTF-8; don't accept a mis-encoded alias
+            pdf.close()
+            raise pikepdf.PasswordError("invalid password") from None
+        return pdf
+
+
+def require_copy_permission(pdf: pikepdf.Pdf, action: str) -> None:
+    """Refuse *action* (getting content out) when the PDF forbids copying.
+
+    Only the owner password lifts that restriction; the user ("open") password,
+    or no password for an owner-only file, is not enough.
+    """
+    if pdf.is_encrypted and not pdf.owner_password_matched and not pdf.allow.extract:
+        raise PdfUserError(
+            f"This PDF does not allow copying its content; {action} needs its owner password"
+        )
+
+
 @contextmanager
 def open_pdf(path: Path | bytes, settings: Settings, password: str | None = None):
     """Open a PDF (a path, or its bytes) with pikepdf, enforcing the page-count cap.
@@ -23,7 +60,7 @@ def open_pdf(path: Path | bytes, settings: Settings, password: str | None = None
     """
     source = io.BytesIO(path) if isinstance(path, bytes) else str(path)
     try:
-        pdf = pikepdf.open(source, password=password or "")
+        pdf = open_with_password(source, password)
     except pikepdf.PasswordError:
         if password:
             raise PdfUserError("Incorrect password") from None

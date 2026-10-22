@@ -8,7 +8,7 @@ import pikepdf
 from ..config import Settings
 from ..errors import DependencyError, PdfUserError
 from ..results import FlattenResult, OptimizeResult, RepairResult
-from .base import inherit_protection, open_pdf, run_qpdf
+from .base import inherit_protection, open_pdf, open_with_password, run_qpdf
 
 
 def optimize_pdf(
@@ -51,7 +51,7 @@ def repair_pdf(
 ) -> RepairResult:
     """Rebuild a damaged PDF's structure by reading and rewriting it with qpdf."""
     try:
-        pdf = pikepdf.open(str(path), password=password or "")
+        pdf = open_with_password(str(path), password)
     except pikepdf.PasswordError:
         raise PdfUserError(
             "This PDF is password protected; supply its password" if not password

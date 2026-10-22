@@ -26,6 +26,14 @@ All notable changes to this project are documented here. The format follows
   and a CI job that runs the suite against mcp 1.x.
 
 ### Changed
+- Copy-restricted PDFs: `extract_text`, `decrypt_pdf`, and `encrypt_pdf` with
+  `current_password` now need the owner password when the PDF forbids copying (as
+  `render_pages` already did); the open password is enough when copying is allowed.
+  `extract_text` also opens owner-only files (no open password) instead of asking for one.
+- `extract_text` reports unreadable files and the page limit with the same wording as every
+  other tool ("Could not open PDF", "... page limit").
+- `pypdf[crypto]` is no longer required: pypdf only ever reads decrypted copies, so the
+  `cryptography` dependency is gone.
 - Minimum `mcp` raised to 1.22, the first release where a tool can return images alongside
   schema-checked structured content.
 - `pdf_info`'s `metadata` now holds the same friendly fields as `get_metadata` (`title`,
@@ -41,6 +49,11 @@ All notable changes to this project are documented here. The format follows
   permission is always granted, per PDF 2.0).
 
 ### Fixed
+- Non-ASCII passwords (`café`, `p€ss“`) never worked on RC4/AES-128 files: pikepdf sent them as
+  UTF-8, but those schemes store PDFDocEncoding. Every tool now retries with PDFDocEncoding
+  (AES-256 still requires the exact UTF-8 password). `extract_text`, `view_pages` and
+  `render_pages` had the same problem through pypdf and PDFium; they now receive a copy
+  decrypted by pikepdf, so passwords are decided the same way for every tool.
 - `prepare_output_dir` (used by `split_pdf`'s `output_dir`) reported an existing regular file
   at that path as an internal error; it is now a clear error.
 - `pdf_info` and `get_metadata` reported no metadata for PDFs that store it only in the
