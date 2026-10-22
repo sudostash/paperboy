@@ -24,7 +24,7 @@ from ..config import Settings
 from ..errors import PdfUserError
 from ..pagespec import parse_pages
 from ..results import PageNumbersResult, WatermarkResult
-from .base import inherit_protection, open_pdf
+from .base import inherit_protection, open_pdf, require_modify_permission
 from .create import _open_image
 
 POSITIONS = ("center", "top-left", "top-center", "top-right",
@@ -176,13 +176,6 @@ def _own_resources(page: pikepdf.Page) -> None:
     page.obj.Resources = copy
 
 
-def _check_permission(pdf: pikepdf.Pdf) -> None:
-    if pdf.is_encrypted and not pdf.owner_password_matched and not pdf.allow.modify_other:
-        raise PdfUserError(
-            "This PDF does not allow changing its pages; that needs its owner password"
-        )
-
-
 def _stamp_pages(
     pdf: pikepdf.Pdf,
     targets: list[int],
@@ -261,7 +254,7 @@ def add_page_numbers(
     _range("margin", margin, 0, 144)
     ink = _color(color)
     with open_pdf(path, settings, password) as pdf:
-        _check_permission(pdf)
+        require_modify_permission(pdf)
         total = len(pdf.pages)
         targets = parse_pages(pages, total, dedupe=True) if pages else list(range(total))
         last = total + start - 1
@@ -367,7 +360,7 @@ def add_watermark(
 
 
     with open_pdf(path, settings, password) as pdf:
-        _check_permission(pdf)
+        require_modify_permission(pdf)
         total = len(pdf.pages)
         targets = parse_pages(pages, total, dedupe=True) if pages else list(range(total))
         overlay = _stamp_pages(pdf, targets, draw, under=layer == "under", shared=True)

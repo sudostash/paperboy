@@ -7,6 +7,16 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `inspect_hidden_data` (read-only) and `sanitize_pdf`: find and remove what a PDF carries
+  besides its pages: metadata (Info and XMP), JavaScript and risky actions (launch, submit,
+  import, remote go-to, ...) including those hidden in action chains and XFA, automatic
+  triggers, attachments, comments (optional), application data, thumbnails, earlier saved
+  versions (the file is rewritten), unused resources, Reader usage rights, and the document
+  ID. Links, destinations, outlines and structure are kept. Signed PDFs are refused.
+  Also removes comment authors and dates, and camera data (EXIF, XMP, IPTC) inside JPEG
+  images, losslessly. What it reports as removed is measured by re-scanning the result; if
+  anything it was asked to remove remains, it refuses and writes nothing. Not covered:
+  hidden layers, text hidden by colour or position, and form field values.
 - `add_watermark`: text or image watermarks and corner stamps (position, size, colour,
   opacity, rotation, over or under the content). `add_page_numbers`: page or Bates numbers
   from a safe template (`{n}`, `{total}`, `{n:06}`), with a start number and page selection.
@@ -79,6 +89,8 @@ All notable changes to this project are documented here. The format follows
   permission is always granted, per PDF 2.0).
 
 ### Fixed
+- Reading metadata (`get_metadata`, `pdf_info`) no longer creates empty XMP or Info
+  structures in the document being read.
 - Images (`convert_to_pdf`, `images_to_pdf`, watermark images) are only opened as PNG, JPEG,
   GIF, BMP, TIFF or WebP; Pillow's other loaders include EPS, which runs Ghostscript.
 - Non-ASCII passwords (`café`, `p€ss“`) never worked on RC4/AES-128 files: pikepdf sent them as

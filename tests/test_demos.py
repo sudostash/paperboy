@@ -82,7 +82,8 @@ def test_scenario_is_well_formed(slug):
             assert isinstance(step["args"], dict)
             assert set(step.get("show", {})) <= {"before", "after", "password", "highlight",
                                                  "review", "layout"}
-            views = [k for k in ("show", "showSchema", "showImages") if step.get(k)]
+            views = [k for k in ("show", "showSchema", "showImages", "showTable")
+                     if step.get(k)]
             assert len(views) <= 1, f"pick one stage view, not {views}"
         if step["type"] == "say":
             assert step["text"].strip()
@@ -425,6 +426,9 @@ async def test_viewer_plays_scenario_to_completion(browser, tmp_path, slug):
             assert await imgs.count() == expected
             assert all(w > 0 for w in await imgs.evaluate_all(
                 "els => els.map(e => e.naturalWidth)"))  # every image actually loaded
+        if calls and calls[-1].get("showTable"):
+            table = calls[-1]["result"][calls[-1]["showTable"]]
+            assert await page.locator(".schema-table tr").count() == len(table)
         if calls and calls[-1].get("showSchema"):
             fields = calls[-1]["schema"]["properties"]
             rows = page.locator(".schema-table tr td.field")

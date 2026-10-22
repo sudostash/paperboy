@@ -15,7 +15,7 @@ import pikepdf
 from ..config import Settings
 from ..errors import PdfUserError
 from ..results import FillFormResult, FormFieldsResult
-from .base import inherit_protection, open_pdf
+from .base import inherit_protection, open_pdf, signature_state
 
 # Field flags, PDF 32000-1:2008 sections 12.7.3.1 and 12.7.4.
 _READ_ONLY = 1
@@ -245,19 +245,6 @@ def _apply(field: _Field, value: str) -> None:
             del field.node.I
 
 
-def _signatures(pdf: pikepdf.Pdf) -> tuple[bool, bool]:
-    """(signed, has Reader usage rights). Any signature dictionary counts, wherever it is."""
-    perms = pdf.Root.get("/Perms")
-    ur3 = perms.get("/UR3") if _is_dict(perms) else None
-    ur3_id = ur3.objgen if _is_dict(ur3) and ur3.is_indirect else None
-    signed = _is_dict(perms) and "/DocMDP" in perms
-    for obj in pdf.objects:
-        if _is_dict(obj) and "/ByteRange" in obj and obj.objgen != ur3_id:
-            signed = True
-            break
-    return signed, ur3 is not None
-
-
 def _copy_appearance(pdf: pikepdf.Pdf, obj, depth: int = 0):
     """Deep-copy an appearance (/AP and its streams): qpdf redraws in place."""
     if isinstance(obj, pikepdf.Stream):
@@ -302,7 +289,7 @@ def fill_form(
                 "This PDF does not allow flattening its form (only filling it in); that "
                 "needs its owner password"
             )
-        signed, usage_rights = _signatures(pdf)
+        signed, usage_rights = signature_state(pdf)
         if signed or any(f.kind == "signature" and f.get("/V") is not None for f in fields):
             raise PdfUserError(
                 "This PDF is digitally signed; filling it would invalidate the signature"

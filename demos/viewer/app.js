@@ -189,6 +189,24 @@ async function showImages(step) {
   await Promise.all([...row.querySelectorAll("img")].map((img) => img.decode()));
 }
 
+function showTable(step) {
+  // A result object (e.g. what inspect_hidden_data found) as a findings table.
+  clearStage();
+  const data = step.result[step.showTable];
+  stage.append(el("h2", null, `${step.title} · ${step.showTable}`));
+  const table = el("table", "schema-table");
+  Object.entries(data).forEach(([name, value], i) => {
+    const hit = Array.isArray(value) ? value.length > 0 : Boolean(value);
+    const row = el("tr");
+    row.style.animationDelay = `${i * 70}ms`;
+    const shown = Array.isArray(value) ? (value.join(", ") || "none") : String(value);
+    row.append(el("td", "field", name.replaceAll("_", " ")),
+      el("td", hit ? "value hit" : "value null", shown));
+    table.append(row);
+  });
+  stage.append(table);
+}
+
 async function approve(card, title) {
   const bar = el("div", "approve");
   bar.append(el("span", null, `Allow Paperboy to run “${title}”?`));
@@ -219,6 +237,9 @@ async function call(step) {
   log.scrollTop = log.scrollHeight;
   if (step.showSchema) {
     showSchema(step);
+    await sleep(2600);
+  } else if (step.showTable) {
+    showTable(step);
     await sleep(2600);
   } else if (step.showImages) {
     await showImages(step);

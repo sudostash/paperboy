@@ -32,23 +32,29 @@ _DOCINFO = {
 
 
 def read_metadata(pdf: pikepdf.Pdf) -> dict[str, str]:
-    """The friendly metadata fields that have a value.
+    """The friendly metadata fields that have a value. Never changes *pdf*.
 
     Each comes from XMP when present (authoritative per PDF 2.0), else from the
     classic Info dictionary, which many PDFs use exclusively.
     """
+    xmp_values = {}
+    # Opening XMP on a file without it would create it; a non-stream can't be parsed.
+    if isinstance(pdf.Root.get("/Metadata"), pikepdf.Stream):
+        with pdf.open_metadata(set_pikepdf_as_editor=False, update_docinfo=False) as xmp:
+            xmp_values = {key: xmp.get(key) for key in _FIELDS.values() if key in xmp}
     out: dict[str, str] = {}
-    with pdf.open_metadata(set_pikepdf_as_editor=False, update_docinfo=False) as m:
-        for friendly, key in _FIELDS.items():
-            val = m.get(key)
-            if val is None:  # pikepdf returns None for an empty XMP value
-                continue
-            val = ", ".join(val) if isinstance(val, list) else str(val)
-            if val.strip():  # an empty XMP value must not hide the Info dictionary's
-                out[friendly] = val
-    for friendly, key in _DOCINFO.items():
-        if friendly not in out and key in pdf.docinfo:
-            out[friendly] = str(pdf.docinfo[key])
+    for friendly, key in _FIELDS.items():
+        val = xmp_values.get(key)
+        if val is None:  # pikepdf returns None for an empty XMP value
+            continue
+        val = ", ".join(val) if isinstance(val, list) else str(val)
+        if val.strip():  # an empty XMP value must not hide the Info dictionary's
+            out[friendly] = val
+    info = pdf.trailer.get("/Info")  # not pdf.docinfo, which creates one if missing
+    if isinstance(info, pikepdf.Dictionary):
+        for friendly, key in _DOCINFO.items():
+            if friendly not in out and key in info:
+                out[friendly] = str(info[key])
     return {k: v for k, v in out.items() if v.strip()}
 
 
