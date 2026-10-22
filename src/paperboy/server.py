@@ -5,12 +5,14 @@ error presentation; the engine owns PDF behavior. Keeping them separate means a
 future streamable-HTTP transport can import the same engine unchanged.
 """
 
+import base64
 import functools
+import json
 import logging
 import os
 from typing import Optional
 
-from mcp.types import ToolAnnotations
+from mcp.types import CallToolResult, ImageContent, TextContent, ToolAnnotations
 
 from . import SERVER_NAME, __version__, engine
 from .config import Settings
@@ -30,11 +32,13 @@ from .results import (
     MetadataResult,
     OptimizeResult,
     RearrangeResult,
+    RenderResult,
     RepairResult,
     RotateResult,
     SetMetadataResult,
     SplitResult,
     TextResult,
+    ViewResult,
 )
 
 try:  # mcp >= 2.0 renamed FastMCP to MCPServer
@@ -422,6 +426,67 @@ def images_to_pdf(
     srcs = [require_input(p, SETTINGS) for p in input_paths]
     out = _combined_output(output_path, srcs, overwrite)
     return engine.images_to_pdf(srcs, out, SETTINGS)
+
+
+# --------------------------------------------------------------------------- #
+# Rendering
+# --------------------------------------------------------------------------- #
+
+
+@mcp.tool(annotations=_reads("View pages"))
+@_guard
+def view_pages(
+    input_path: str,
+    pages: Optional[str] = None,
+    max_side_px: int = 1568,
+    password: Optional[str] = None,
+) -> ViewResult:
+    """Look at pages as images: layout, scans, charts, signatures, handwriting.
+
+    pages: up to 5 pages, e.g. "1" (the default) or "2-4". max_side_px (200-2000,
+    default 1568) is the long side of each image. Nothing is written to disk.
+    """
+    src = require_input(input_path, SETTINGS)
+    result, images = engine.view_pages(src, SETTINGS, pages, max_side_px, password)
+    # Images can't live in structured content, so return a full result: the JSON
+    # summary as text (as for every tool), then one image per page.
+    return CallToolResult(
+        content=[
+            TextContent(type="text", text=json.dumps(result, indent=2)),
+            *(ImageContent(type="image", data=base64.b64encode(png).decode("ascii"),
+                           mimeType="image/png") for png in images),
+        ],
+        structuredContent=result,
+    )
+
+
+@mcp.tool(annotations=_writes("Render pages to images"))
+@_guard
+def render_pages(
+    input_path: str,
+    pages: Optional[str] = None,
+    dpi: int = 150,
+    format: str = "png",
+    output_dir: Optional[str] = None,
+    password: Optional[str] = None,
+    overwrite: Optional[bool] = None,
+) -> RenderResult:
+    """Save pages as PNG or JPEG image files, one per page (all pages if pages omitted).
+
+    dpi: 36-600 (default 150). format: "png" (default) or "jpeg". Files are named
+    <name>_p001.png in output_dir (default: a <name>_pages folder next to the PDF).
+    Copy-protected PDFs need their owner password.
+    """
+    src = require_input(input_path, SETTINGS)
+    # The default folder goes through resolve() too: a symlinked <name>_pages must not
+    # lead outside the root.
+    out_dir = (
+        prepare_output_dir(output_dir, SETTINGS)
+        if output_dir
+        else resolve(str(src.parent / f"{src.stem}_pages"), SETTINGS)
+    )
+    return engine.render_pages(src, out_dir, SETTINGS, pages, dpi, format, password,
+                               _overwrite(overwrite))
 
 
 # --------------------------------------------------------------------------- #

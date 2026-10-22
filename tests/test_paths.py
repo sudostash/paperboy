@@ -216,3 +216,9 @@ def test_output_case_variant_of_input_is_refused_on_case_insensitive_fs(doc, set
         pytest.skip("case-sensitive filesystem: DOC.PDF is a different file")
     with pytest.raises(PdfUserError, match="same as the input"):
         prepare_output(doc, str(upper), "_x", True, settings)
+
+
+def test_prepare_output_dir_refuses_an_existing_file(settings, tmp_path):
+    (tmp_path / "taken").write_text("x")
+    with pytest.raises(PdfUserError, match="not a folder"):
+        prepare_output_dir(str(tmp_path / "taken"), settings)

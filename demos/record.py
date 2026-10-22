@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import base64
 import functools
 import json
 import os
@@ -102,6 +103,14 @@ async def run_scenario(slug: str, scenario: dict, out: Path = OUT) -> dict:
                                               "read_only_hint"))
                 step["title"] = _hint(tool.annotations, "title", "title") or step["tool"]
                 step["schema"] = _field(tool, "output_schema", "outputSchema")
+                # Images the tool returned (view_pages): saved so the viewer can show
+                # exactly what the assistant received.
+                step["images"] = []
+                for k, item in enumerate(c for c in result.content if c.type == "image"):
+                    name = f"images/step{len(steps)}-{k + 1}.png"
+                    (out / slug / name).parent.mkdir(exist_ok=True)
+                    (out / slug / name).write_bytes(base64.b64decode(item.data))
+                    step["images"].append(name)
                 if step["isError"]:
                     failure = f"{slug}: {step['tool']} failed: {step['result']}"
             steps.append(step)

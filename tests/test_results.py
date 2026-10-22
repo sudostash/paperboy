@@ -22,7 +22,9 @@ def test_every_key_is_required(typ):
 
 
 def _result_type(fn):
-    return typing.get_type_hints(inspect.unwrap(fn))["return"]
+    hint = typing.get_type_hints(inspect.unwrap(fn))["return"]
+    # view_pages' engine function returns (result, images); the result is the contract.
+    return typing.get_args(hint)[0] if typing.get_origin(hint) is tuple else hint
 
 
 @pytest.mark.parametrize("name", engine.__all__)

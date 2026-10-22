@@ -1,6 +1,7 @@
 """Shared engine helpers: opening, limit enforcement, metadata copy."""
 from __future__ import annotations
 
+import io
 import secrets
 import subprocess
 from contextlib import contextmanager
@@ -15,13 +16,14 @@ from ..errors import PdfUserError
 
 
 @contextmanager
-def open_pdf(path: Path, settings: Settings, password: str | None = None):
-    """Open a PDF with pikepdf, enforcing the page-count cap.
+def open_pdf(path: Path | bytes, settings: Settings, password: str | None = None):
+    """Open a PDF (a path, or its bytes) with pikepdf, enforcing the page-count cap.
 
     Raises PdfUserError for a missing/incorrect password or an oversized document.
     """
+    source = io.BytesIO(path) if isinstance(path, bytes) else str(path)
     try:
-        pdf = pikepdf.open(str(path), password=password or "")
+        pdf = pikepdf.open(source, password=password or "")
     except pikepdf.PasswordError:
         if password:
             raise PdfUserError("Incorrect password") from None

@@ -7,6 +7,8 @@ Every tool declares an ``outputSchema`` and returns ``structuredContent`` that:
 """
 from __future__ import annotations
 
+import base64
+import io
 import json
 import os
 import sys
@@ -89,6 +91,12 @@ CASES = [
     ("convert_to_pdf", "convert_to_pdf", lambda d: {"input_path": _text(d / "n.txt")}),
     ("images_to_pdf", "images_to_pdf",
      lambda d: {"input_paths": [_image(d / "i.png")], "output_path": str(d / "i.pdf")}),
+    ("view_pages", "view_pages", lambda d: {"input_path": _pdf(d / "a.pdf"), "pages": "1-2"}),
+    ("view_pages-locked", "view_pages",
+     lambda d: {"input_path": _locked(d / "l.pdf"), "password": "pw"}),
+    ("render_pages", "render_pages", lambda d: {"input_path": _pdf(d / "a.pdf"), "dpi": 72}),
+    ("render_pages-jpeg", "render_pages",
+     lambda d: {"input_path": _pdf(d / "a.pdf"), "pages": "2", "format": "jpeg"}),
 ]
 if HAS_QPDF:
     CASES.append(("flatten_pdf", "flatten_pdf", lambda d: {"input_path": _pdf(d / "a.pdf")}))
@@ -154,3 +162,12 @@ async def test_structured_result_is_valid_and_lossless(server_env, tmp_path, too
     assert isinstance(structured, dict)
     jsonschema.validate(structured, schema)
     assert json.loads(result.content[0].text) == structured
+    images = [c for c in result.content if c.type == "image"]
+    if tool == "view_pages":  # one PNG per page listed in the result
+        assert len(images) == len(structured["pages"])
+        for item, page in zip(images, structured["pages"], strict=True):
+            assert _field(item, "mime_type", "mimeType") == "image/png"
+            with Image.open(io.BytesIO(base64.b64decode(item.data))) as im:
+                assert im.size == (page["width_px"], page["height_px"])
+    else:
+        assert images == []

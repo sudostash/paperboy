@@ -15,6 +15,7 @@ from types import SimpleNamespace
 
 import pytest
 from mcp.types import ToolAnnotations
+from PIL import Image
 from pypdf import PdfReader
 
 DEMOS = Path(__file__).resolve().parent.parent / "demos"
@@ -80,7 +81,8 @@ def test_scenario_is_well_formed(slug):
             assert step["tool"] in EXPECTED_TOOLS
             assert isinstance(step["args"], dict)
             assert set(step.get("show", {})) <= {"before", "after", "password"}
-            assert not (step.get("show") and step.get("showSchema")), "pick one stage view"
+            views = [k for k in ("show", "showSchema", "showImages") if step.get(k)]
+            assert len(views) <= 1, f"pick one stage view, not {views}"
         if step["type"] == "say":
             assert step["text"].strip()
 
@@ -133,6 +135,11 @@ async def test_scenario_runs_against_real_server(slug, tmp_path):
             assert step["title"]
             assert step["schema"]["type"] == "object"  # every tool publishes outputSchema
             assert set(step["result"]) == set(step["schema"]["properties"])
+            for name in step["images"]:  # saved exactly as the tool returned them
+                with Image.open(tmp_path / slug / name) as im:
+                    assert im.format == "PNG"
+            if step.get("showImages"):
+                assert step["images"] or step["result"].get("files")
             for key in ("before", "after"):
                 if key in step.get("show", {}):
                     assert (files / step["show"][key]).is_file()
@@ -398,6 +405,13 @@ async def test_viewer_plays_scenario_to_completion(browser, tmp_path, slug):
         assert approvals == [f"Allow Paperboy to run “{t}”?" for t in writes]
         if calls and calls[-1].get("show"):
             assert await page.locator("#stage canvas").count() > 0
+        if calls and calls[-1].get("showImages"):
+            last = calls[-1]
+            expected = len(last["images"]) or len(last["result"]["files"])
+            imgs = page.locator("#stage img")
+            assert await imgs.count() == expected
+            assert all(w > 0 for w in await imgs.evaluate_all(
+                "els => els.map(e => e.naturalWidth)"))  # every image actually loaded
         if calls and calls[-1].get("showSchema"):
             fields = calls[-1]["schema"]["properties"]
             rows = page.locator(".schema-table tr td.field")

@@ -134,3 +134,23 @@ class ConvertResult(TypedDict):
 class ImagesResult(TypedDict):
     output: str
     pages: int
+
+
+class RenderResult(TypedDict):
+    output_dir: str
+    files: list[str]
+    pages: list[int]                       # 1-based, in the order rendered
+    dpi: int
+    format: Literal["png", "jpeg"]
+
+
+class ViewedPage(TypedDict):
+    page: int
+    width_px: int
+    height_px: int
+
+
+class ViewResult(TypedDict):
+    path: str
+    total_pages: int
+    pages: list[ViewedPage]                # one image per entry follows in the content

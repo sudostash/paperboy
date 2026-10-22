@@ -9,7 +9,8 @@ Step types:
     {"type": "say", "text": ...}           an assistant message
     {"type": "call", "tool": ..., "args": {...},
      "show": {"before": file, "after": file},  call a tool, optionally render PDFs,
-     "showSchema": True}                       or show its typed result vs. its schema
+     "showSchema": True,                       or show its typed result vs. its schema,
+     "showImages": True}                       or the images it returned / files it saved
 
 File names in ``args`` and ``show`` are relative to the scenario workspace,
 which is also the server's ``PAPERBOY_ROOT``.
@@ -52,6 +53,23 @@ SCENARIOS: dict[str, dict] = {
              "showSchema": True},
             {"type": "say", "text": "Split into 3 files in report_split/, report_part001.pdf "
                                     "to report_part003.pdf. None of them needs a password."},
+        ],
+    },
+    "render-pages": {
+        "title": "See and export pages as images",
+        "subtitle": "The assistant can look at a page, and save pages as PNG or JPEG.",
+        "files": ["report.pdf"],
+        "prompt": "What's on page 2 of report.pdf? Then save every page as a PNG.",
+        "steps": [
+            {"type": "call", "tool": "view_pages",
+             "args": {"input_path": "report.pdf", "pages": "2"}, "showImages": True},
+            {"type": "say", "text": "Page 2 is the Regional Breakdown: North 12,400 deliveries "
+                                    "(98.1% on time), South 10,950, East 8,210 and West 9,775, "
+                                    "with a bar chart underneath."},
+            {"type": "call", "tool": "render_pages", "args": {"input_path": "report.pdf"},
+             "showImages": True},
+            {"type": "say", "text": "Saved 3 PNGs at 150 dpi in report_pages/: report_p001.png "
+                                    "to report_p003.png."},
         ],
     },
 }

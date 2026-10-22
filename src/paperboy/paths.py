@@ -81,5 +81,7 @@ def prepare_output(
 def prepare_output_dir(path: str, settings: Settings) -> Path:
     """Resolve and create an output directory under the configured root."""
     d = resolve(path, settings)
+    if d.exists() and not d.is_dir():
+        raise PdfUserError(f"{d} exists and is not a folder")
     d.mkdir(parents=True, exist_ok=True)
     return d
