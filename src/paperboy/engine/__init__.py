@@ -12,6 +12,7 @@ from .forms import fill_form, list_form_fields
 from .info import check_pdf, pdf_info
 from .metadata import get_metadata, set_metadata
 from .optimize import flatten_pdf, optimize_pdf, repair_pdf
+from .outline import get_outline, set_outline
 from .pages import (
     delete_pages,
     extract_pages,
@@ -38,4 +39,5 @@ __all__ = [
     "list_form_fields", "fill_form",
     "add_watermark", "add_page_numbers",
     "inspect_hidden_data", "sanitize_pdf", "scan_pdf",
+    "get_outline", "set_outline",
 ]

@@ -56,6 +56,7 @@ INPUT_TOOLS = {
     "list_form_fields": {}, "fill_form": {"values": {"x": "y"}},
     "add_watermark": {"text": "X"}, "add_page_numbers": {},
     "inspect_hidden_data": {}, "sanitize_pdf": {}, "scan_pdf": {},
+    "get_outline": {}, "set_outline": {"entries": [{"title": "A", "page": 1}]},
 }
 
 
@@ -68,7 +69,7 @@ def test_every_tool_refuses_inputs_outside_root(tool, outside):
 @pytest.mark.parametrize("tool", sorted(t for t in INPUT_TOOLS if t not in {
     "pdf_info", "get_metadata", "check_pdf", "extract_text", "split_pdf",
     "view_pages", "render_pages", "find_blank_pages", "list_form_fields",
-    "inspect_hidden_data", "scan_pdf"}))
+    "inspect_hidden_data", "scan_pdf", "get_outline"}))
 def test_every_writer_refuses_outputs_outside_root(tool, doc, outside):
     args = dict(INPUT_TOOLS[tool], input_path=str(doc), output_path=str(outside / "o.pdf"))
     with pytest.raises(S.ToolError, match="outside the allowed root"):
@@ -107,6 +108,7 @@ def test_split_refuses_output_dir_outside_root(doc, outside):
     ("optimize_pdf", {}, "_optimized"),
     ("repair_pdf", {}, "_repaired"),
     ("set_metadata", {"fields": {"title": "T"}}, "_meta"),
+    ("set_outline", {"entries": [{"title": "Start", "page": 1}]}, "_bookmarked"),
 ])
 def test_writers_default_to_a_suffixed_name_and_never_overwrite(tool, args, suffix, doc):
     res = getattr(S, tool)(input_path=str(doc), **args)
@@ -496,3 +498,16 @@ def test_scan_pdf_reports_a_verdict(doc):
     res = S.scan_pdf(str(doc), antivirus=False)
     assert res["verdict"] == "no_active_content_found"
     assert res["antivirus"]["available"] is False
+
+
+def test_bookmarks_round_trip_through_the_tools(doc):
+    S.set_outline(str(doc), [{"title": "Intro", "page": 1},
+                             {"title": "Detail", "page": 2, "level": 2}])
+    res = S.get_outline(str(doc.with_name("doc_bookmarked.pdf")))
+    assert [(e["level"], e["title"], e["page"]) for e in res["entries"]] == \
+        [(1, "Intro", 1), (2, "Detail", 2)]
+
+
+def test_bad_bookmarks_are_a_tool_error(doc):
+    with pytest.raises(S.ToolError, match="page must be 1 to"):
+        S.set_outline(str(doc), [{"title": "Nowhere", "page": 99}])

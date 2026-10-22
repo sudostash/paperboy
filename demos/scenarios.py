@@ -191,4 +191,34 @@ SCENARIOS: dict[str, dict] = {
                                     "the sender as suspect: a scan can't prove a file is safe."},
         ],
     },
+    "bookmarks": {
+        "title": "Add bookmarks to a PDF",
+        "subtitle": "Read the section headings, then give the file a clickable outline.",
+        "files": ["report.pdf"],
+        "prompt": "report.pdf has no bookmarks, so it's hard to navigate. Add one for each "
+                  "section.",
+        "steps": [
+            {"type": "call", "tool": "get_outline", "args": {"input_path": "report.pdf"}},
+            {"type": "say", "text": "No bookmarks yet. Reading the headings on each page."},
+            {"type": "call", "tool": "extract_text", "args": {"input_path": "report.pdf"}},
+            {"type": "say", "text": "Three sections, one per page, each with a subheading. "
+                                    "Adding them as bookmarks, with the subheadings nested."},
+            {"type": "call", "tool": "set_outline", "args": {
+                "input_path": "report.pdf",
+                "entries": [
+                    {"title": "Q3 Field Report", "page": 1},
+                    {"title": "Summary", "page": 1, "level": 2},
+                    {"title": "Regional Breakdown", "page": 2},
+                    {"title": "North, South, East, West", "page": 2, "level": 2},
+                    {"title": "Next Quarter", "page": 3},
+                    {"title": "Priorities", "page": 3, "level": 2},
+                ]},
+             "show": {"after": "report_bookmarked.pdf"}},
+            {"type": "call", "tool": "get_outline",
+             "args": {"input_path": "report_bookmarked.pdf"},
+             "showTable": "entries", "columns": ["title", "page"], "indent": "level"},
+            {"type": "say", "text": "Done. report_bookmarked.pdf opens with the bookmarks "
+                                    "panel showing; report.pdf is unchanged."},
+        ],
+    },
 }
