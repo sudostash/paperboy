@@ -7,6 +7,17 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `add_watermark`: text or image watermarks and corner stamps (position, size, colour,
+  opacity, rotation, over or under the content). `add_page_numbers`: page or Bates numbers
+  from a safe template (`{n}`, `{total}`, `{n:06}`), with a start number and page selection.
+  Marks are drawn upright and inside the visible area on rotated pages (including rotation
+  inherited from the page tree) and offset crop boxes, and the page's own graphics state
+  can't move them. Both need permission to change pages (or the owner password) and keep
+  protected PDFs protected. Text is Latin characters only (built-in fonts). Marks stay inside
+  the area viewers actually show (a CropBox larger than the page is clipped), survive page
+  content that over-restores its graphics state, don't leak into shared resources, and
+  auto-sized text fits its rotated box; large images are downscaled and palette PNG
+  transparency is kept.
 - `list_form_fields` (read-only) and `fill_form`: list a form's fields (full dotted names,
   type, value, options, required/read-only, max length, page) and fill them by name. Every
   value is validated before anything is written; appearances are regenerated so every viewer
@@ -68,6 +79,8 @@ All notable changes to this project are documented here. The format follows
   permission is always granted, per PDF 2.0).
 
 ### Fixed
+- Images (`convert_to_pdf`, `images_to_pdf`, watermark images) are only opened as PNG, JPEG,
+  GIF, BMP, TIFF or WebP; Pillow's other loaders include EPS, which runs Ghostscript.
 - Non-ASCII passwords (`café`, `p€ss“`) never worked on RC4/AES-128 files: pikepdf sent them as
   UTF-8, but those schemes store PDFDocEncoding. Every tool now retries with PDFDocEncoding
   (AES-256 still requires the exact UTF-8 password). `extract_text`, `view_pages` and

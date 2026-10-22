@@ -76,6 +76,8 @@ Output files are written back into your `--root` folder. Remove the server anyti
 | `find_blank_pages` | Find blank pages (no text, no ink) to pass to `delete_pages`, and *nearly* blank ones (dust, a stamp, initials) to look at with `view_pages` first *(read-only)* |
 | `list_form_fields` | List a form's fields: full name, type, value, allowed options, required/read-only *(read-only)* |
 | `fill_form` | Fill in form fields by name (text, checkboxes, radio buttons, drop-downs); every value is checked first, appearances are regenerated, optional flatten. Signed PDFs are refused |
+| `add_watermark` | Text ("CONFIDENTIAL", "DRAFT") or image watermark, or a corner stamp ("APPROVED"): position, size, colour, opacity, rotation, over or under the content |
+| `add_page_numbers` | Page numbers ("Page {n} of {total}") or Bates numbers ("ACME-{n:06}"), any corner or edge, with a start number and page selection |
 | `render_pages` | Save pages as PNG or JPEG files at 36-600 dpi (copy-protected PDFs need the owner password) |
 
 **Typed results.** Every tool publishes an MCP `outputSchema` and returns `structuredContent`,
@@ -266,7 +268,6 @@ python demos/record.py            # writes demos/out/videos/<scenario>.webm
 ## Roadmap
 
 - Streamable-HTTP transport with OAuth + per-session file isolation (hosted mode)
-- Watermarks, page numbering, and stamping
 - PDF/A conversion
 - OCR for scanned documents
 

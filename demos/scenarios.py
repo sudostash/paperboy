@@ -121,4 +121,25 @@ SCENARIOS: dict[str, dict] = {
                                     "it locked."},
         ],
     },
+    "watermark-numbers": {
+        "title": "Watermarks, stamps and page numbers",
+        "subtitle": "Mark a document CONFIDENTIAL and number its pages, on any page layout.",
+        "files": ["report.pdf"],
+        "prompt": "Mark report.pdf as confidential, then Bates-number it Q3-0001 onwards "
+                  "in the top right corner.",
+        "steps": [
+            {"type": "call", "tool": "add_watermark",
+             "args": {"input_path": "report.pdf", "text": "CONFIDENTIAL", "color": "red",
+                      "opacity": 0.15},
+             "show": {"before": "report.pdf", "after": "report_watermarked.pdf"}},
+            {"type": "say", "text": "Added a faint diagonal CONFIDENTIAL across every page. "
+                                    "Now the Bates numbers."},
+            {"type": "call", "tool": "add_page_numbers",
+             "args": {"input_path": "report_watermarked.pdf", "format": "Q3-{n:04}",
+                      "position": "top-right", "margin": 30, "font_size": 11},
+             "show": {"after": "report_watermarked_numbered.pdf"}},
+            {"type": "say", "text": "Done: report_watermarked_numbered.pdf has the watermark "
+                                    "and Bates numbers Q3-0001 to Q3-0003 in the top right."},
+        ],
+    },
 }

@@ -22,6 +22,7 @@ from .pages import (
 )
 from .render import find_blank_pages, render_pages, view_pages
 from .security import decrypt_pdf, encrypt_pdf
+from .stamp import add_page_numbers, add_watermark
 from .text import extract_text
 
 __all__ = [
@@ -33,4 +34,5 @@ __all__ = [
     "convert_to_pdf", "images_to_pdf",
     "render_pages", "view_pages", "find_blank_pages",
     "list_form_fields", "fill_form",
+    "add_watermark", "add_page_numbers",
 ]
