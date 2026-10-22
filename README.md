@@ -78,6 +78,9 @@ Output files are written back into your `--root` folder. Remove the server anyti
 | `fill_form` | Fill in form fields by name (text, checkboxes, radio buttons, drop-downs); every value is checked first, appearances are regenerated, optional flatten. Signed PDFs are refused |
 | `get_outline` | List the bookmarks (outline) in reading order: level, title, target page, and any link or other action *(read-only)* |
 | `set_outline` | Replace the bookmarks from a list of title, page and level (nesting); an empty list removes them. Refuses signed PDFs |
+| `list_attachments` | List embedded files (document or page attachments): name, description, declared and detected type, and whether it can run on a computer *(read-only)* |
+| `extract_attachments` | Save embedded files to a folder under safe names; programs and scripts are skipped unless `allow_executables` |
+| `extract_images` | Save the pictures drawn on pages (and in their forms) as image files, usually photos as the original JPEG, once each, optionally by page and minimum size; inline, annotation, pattern and Type 3 images are not extracted |
 | `inspect_hidden_data` | Report what a PDF carries besides its pages: metadata (author, software), scripts and risky actions, attachments, comments, application data, earlier saved versions *(read-only)* |
 | `scan_pdf` | Risk report for a PDF you didn't make: scripts (especially ones that run on open), actions that run without a click, program-launching actions, attachments that are programs or disguise their type (attached PDFs are scanned too), disguised names, data hidden around the file, and known malware if ClamAV is installed. Verdict: no active content found / active content / suspicious, never "safe" *(read-only)* |
 | `sanitize_pdf` | Write a copy safe to share without that hidden data (comments optional); links, bookmarks and accessibility structure are kept |
@@ -207,7 +210,8 @@ All configuration is environment variables. Sensible defaults; nothing is requir
     the strictest permissions of all its inputs.
 - **Copy restrictions are enforced.** A protected PDF has a user ("open") password and an
   owner password that lifts its restrictions. When a PDF forbids copying, getting its content
-  out (`extract_text`, `render_pages`, `decrypt_pdf`, re-encrypting with `encrypt_pdf`) needs
+  out (`extract_text`, `render_pages`, `extract_attachments`, `extract_images`, `decrypt_pdf`,
+  re-encrypting with `encrypt_pdf`) needs
   the **owner** password; the open password is enough when copying is allowed. `view_pages`
   (display) works with the open password, and tools whose output keeps the input's protection
   (rotate, merge, split, ...) keep the restriction on their output too.
@@ -217,6 +221,13 @@ All configuration is environment variables. Sensible defaults; nothing is requir
 - **Rendering is bounded.** Each image is capped at 40 megapixels and each `render_pages`
   call at 400 megapixels in total. PDFium calls are serialized (it is not thread-safe), and
   files are written via a temporary file and an atomic rename, never through a link.
+- **Extraction is bounded and careful with names.** `extract_attachments` and
+  `extract_images` decode with byte budgets and refuse data they can't measure (decompression
+  bombs, predictor or JPEG headers that disagree with the image's size); each call has a total
+  limit (4x the file-size cap, and 400 megapixels of images). Attachment names become safe
+  file names (no folders, reserved or invisible characters); programs and scripts are skipped
+  unless asked for; outputs never replace links, folders or the input; and a failed run
+  removes what it wrote. Extracted files are not password-protected, even when the PDF is.
 - **Tool annotations** tell clients what each tool does. The four inspection tools
   (`pdf_info`, `get_metadata`, `check_pdf`, `extract_text`) are marked `readOnlyHint`, so clients
   may run them without a prompt. Every tool that writes a file is marked `destructiveHint`

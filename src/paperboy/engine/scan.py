@@ -7,13 +7,10 @@ signatures.
 """
 from __future__ import annotations
 
-import base64
-import binascii
 import math
 import re
 import subprocess
 import tempfile
-import zlib
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -24,6 +21,7 @@ from ..errors import PdfUserError
 from ..results import ScanResult
 from .base import open_pdf
 from .sanitize import RISKY, _action_kind, _dictionaries, _is_annotation, _subtype, _threat
+from .streams import decode as _decode
 
 LIMITS = (
     "A scan reports what it finds; it can't prove a file is safe. Attacks on PDF viewers "
@@ -73,7 +71,12 @@ RUNNABLE_EXTENSIONS = {"exe", "dll", "scr", "com", "bat", "cmd", "ps1", "vbs", "
                        "jse", "wsf", "wsh", "hta", "msi", "jar", "lnk", "sh", "app", "apk",
                        "pif", "cpl", "reg", "iso", "img", "vhd", "vhdx", "xll", "one", "chm",
                        "url", "svg", "html", "htm", "msc", "appx", "msix", "docm", "dotm",
-                       "xlsm", "xltm", "xlam", "pptm", "potm", "ppam"}
+                       "xlsm", "xltm", "xlam", "pptm", "potm", "ppam", "command", "tool",
+                       "terminal", "workflow", "py", "pyw", "pyc", "pl", "rb", "psm1", "psd1",
+                       "scf", "inf", "ins", "isp", "sct", "shb", "shs", "ws", "wsc", "gadget",
+                       "desktop", "run", "appimage", "deb", "rpm", "pkg", "mpkg", "dmg",
+                       "msp", "mst", "application", "appref-ms", "settingcontent-ms",
+                       "library-ms", "search-ms", "mht", "mhtml", "xhtml", "svgz", "webloc"}
 DOCUMENT_EXTENSIONS = {"pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "rtf",
                        "jpg", "jpeg", "png", "gif", "csv", "zip"}
 
@@ -86,38 +89,6 @@ def _verdict(indicators: list[dict]) -> str:
     severities = {i["severity"] for i in indicators}
     return ("suspicious" if "high" in severities
             else "active_content" if "warning" in severities else "no_active_content_found")
-
-
-# --- decoding, bounded ---------------------------------------------------------------------
-
-
-def _decode(stream, limit: int) -> bytes | None:
-    """A stream's data through its general filters, cut at *limit* bytes so a small
-    compressed stream can't expand into gigabytes. None if it can't be decoded here
-    (image filters, predictors, damaged data)."""
-    filters = stream.get("/Filter")
-    filters = list(filters) if isinstance(filters, pikepdf.Array) else \
-        ([] if filters is None else [filters])
-    parms = stream.get("/DecodeParms")
-    parms = list(parms) if isinstance(parms, pikepdf.Array) else [parms]
-    if len(filters) > 4 or any(isinstance(p, pikepdf.Dictionary) and p.get("/Predictor", 1) != 1
-                               for p in parms):
-        return None
-    data = stream.read_raw_bytes()
-    try:
-        for name in (str(f) for f in filters):
-            if name == "/FlateDecode":
-                data = zlib.decompressobj().decompress(data, limit)
-            elif name == "/ASCIIHexDecode":
-                digits = re.sub(rb"[^0-9A-Fa-f]", b"", data.split(b">")[0])[:2 * limit]
-                data = binascii.unhexlify(digits + b"0" * (len(digits) % 2))
-            elif name == "/ASCII85Decode":
-                data = base64.a85decode(data.strip().removesuffix(b"~>"), adobe=False)
-            else:
-                return None
-    except (zlib.error, binascii.Error, ValueError):
-        return None
-    return data[:limit]
 
 
 # --- attachments -------------------------------------------------------------------------

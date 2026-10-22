@@ -221,4 +221,26 @@ SCENARIOS: dict[str, dict] = {
                                     "panel showing; report.pdf is unchanged."},
         ],
     },
+    "extract": {
+        "title": "Get attachments and pictures out of a PDF",
+        "subtitle": "List what's embedded, save the files, and pull out the product photos.",
+        "files": ["brochure.pdf"],
+        "prompt": "brochure.pdf has some files attached and product photos I need for our "
+                  "website. Can you get them out?",
+        "steps": [
+            {"type": "call", "tool": "list_attachments", "args": {"input_path": "brochure.pdf"},
+             "showTable": "attachments", "columns": ["name", "description", "detected_type"]},
+            {"type": "say", "text": "Two attached files, both plain text: a spec sheet and a "
+                                    "price list. Saving them."},
+            {"type": "call", "tool": "extract_attachments",
+             "args": {"input_path": "brochure.pdf"},
+             "showTable": "files", "columns": ["name", "size"]},
+            {"type": "say", "text": "Now the photos, leaving out the small logo."},
+            {"type": "call", "tool": "extract_images",
+             "args": {"input_path": "brochure.pdf", "min_size": 100}, "showImages": True},
+            {"type": "say", "text": "Done. The two files are in brochure_attachments and the "
+                                    "two product photos (saved as the original JPEGs) are in "
+                                    "brochure_images."},
+        ],
+    },
 }

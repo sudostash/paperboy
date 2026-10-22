@@ -303,3 +303,60 @@ class SetOutlineResult(Protected):
     output: str
     entries: int                           # bookmarks written
     replaced: int                          # bookmarks the input had (up to 10,000)
+
+
+class AttachmentInfo(TypedDict):
+    name: str                              # as stored in the PDF
+    description: str | None
+    mime_type: str | None                  # as declared, e.g. "application/pdf"
+    size: int | None                       # bytes, as declared
+    detected_type: str                     # from the file's own bytes, not its name
+    executable: bool                       # can run on a computer if opened
+    extension_mismatch: bool               # its name hides what it really is
+    page: int | None                       # attached to this page; None: to the document
+
+
+class AttachmentsResult(TypedDict):
+    path: str
+    attachments: list[AttachmentInfo]
+    truncated: bool                        # cut at 1,000 attachments
+
+
+class ExtractedFile(TypedDict):
+    name: str                              # attachment name in the PDF
+    file: str                              # where it was saved (a safe file name)
+    size: int
+    executable: bool
+
+
+class SkippedAttachment(TypedDict):
+    name: str
+    reason: str
+
+
+class ExtractAttachmentsResult(TypedDict):
+    output_dir: str
+    files: list[ExtractedFile]
+    skipped: list[SkippedAttachment]
+    truncated: bool                        # only the first 1,000 attachments were read
+
+
+class ExtractedImage(TypedDict):
+    file: str
+    page: int                              # first page it appears on (1-based)
+    pages: list[int]                       # every page (of those searched) it appears on
+    width: int                             # pixels
+    height: int
+    format: str                            # file type written, e.g. "png", "jpg"
+
+
+class SkippedImage(TypedDict):
+    page: int
+    reason: str
+
+
+class ExtractImagesResult(TypedDict):
+    output_dir: str
+    images: list[ExtractedImage]
+    skipped: list[SkippedImage]
+    truncated: bool                        # only the first 2,000 distinct images were read

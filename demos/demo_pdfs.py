@@ -265,9 +265,66 @@ def build_invoice(path: Path) -> Path:
     return path
 
 
+def _photo(color: str, accent: str, size=(480, 320)) -> bytes:
+    """A simple product "photo": a backdrop, a shape and a floor shadow."""
+    import io
+
+    from PIL import Image, ImageDraw
+
+    img = Image.new("RGB", size, color)
+    draw = ImageDraw.Draw(img)
+    w, h = size
+    draw.ellipse([w * 0.25, h * 0.78, w * 0.75, h * 0.9], fill="#c9d1db")
+    draw.rounded_rectangle([w * 0.3, h * 0.2, w * 0.7, h * 0.8], radius=30, fill=accent)
+    buf = io.BytesIO()
+    img.save(buf, "JPEG", quality=88)
+    return buf.getvalue()
+
+
+def build_brochure(path: Path) -> Path:
+    """A two-page product brochure with two photos, a small logo, and two attached
+    files: a spec sheet and a price list."""
+    import io
+
+    import pikepdf
+    from reportlab.lib.utils import ImageReader
+
+    c = canvas.Canvas(str(path), pagesize=letter)
+    c.setTitle("Courier bags 2026")
+    width, height = letter
+    logo = io.BytesIO()
+    from PIL import Image
+    Image.new("RGB", (24, 24), "#2f6fde").save(logo, "PNG")
+    for heading, line, photo in [
+        ("Metro courier bag", "Waterproof, 28 L, reflective strap.", _photo("#eef2f7", "#2f6fde")),
+        ("Cargo messenger", "Expands to 40 L for bulk rounds.", _photo("#f7f1ea", "#d9822b")),
+    ]:
+        c.setFillColor(ACCENT)
+        c.rect(0, height - 14, width, 14, stroke=0, fill=1)
+        c.drawImage(ImageReader(io.BytesIO(logo.getvalue())), width - 96, height - 70, 24, 24)
+        c.setFillColor(INK)
+        c.setFont("Helvetica-Bold", 26)
+        c.drawString(72, height - 110, heading)
+        c.setFont("Helvetica", 14)
+        c.setFillColor(MUTED)
+        c.drawString(72, height - 140, line)
+        c.drawImage(ImageReader(io.BytesIO(photo)), 72, height - 480, 360, 240)
+        c.showPage()
+    c.save()
+    with pikepdf.open(path, allow_overwriting_input=True) as pdf:
+        pdf.attachments["spec-sheet.csv"] = pikepdf.AttachedFileSpec(
+            pdf, b"model,volume_l,weight_kg\nMetro,28,1.1\nCargo,40,1.6\n",
+            description="Technical specifications", mime_type="text/csv")
+        pdf.attachments["price-list.txt"] = pikepdf.AttachedFileSpec(
+            pdf, b"Metro courier bag  EUR 129\nCargo messenger   EUR 159\n",
+            description="2026 prices", mime_type="text/plain")
+        pdf.save(path)
+    return path
+
+
 BUILDERS = {"report.pdf": build_report, "scan.pdf": build_scan,
             "delivery-form.pdf": build_delivery_form, "proposal.pdf": build_proposal,
-            "invoice.pdf": build_invoice}
+            "invoice.pdf": build_invoice, "brochure.pdf": build_brochure}
 
 
 def build(names: list[str], workspace: Path) -> None:

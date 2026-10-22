@@ -7,6 +7,19 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `list_attachments` (read-only), `extract_attachments` and `extract_images`: list the
+  files embedded in a PDF (document and page attachments, typed from their bytes) and
+  save them, or save its pictures (usually photos as the original JPEG, others as PNG;
+  each image once, also from inside forms; by page and minimum size; inline, annotation,
+  pattern and Type 3 images are not extracted). Attachment names are made safe as file
+  names (NFC, no folders, reserved or invisible characters, bounded length); programs
+  and scripts are skipped unless asked for, judged also by the name on disk. Decoding
+  is bounded: data that can't be measured, or that is larger than an image's size
+  calls for (including predictor and JPEG headers that disagree with it, and masks), is
+  skipped, and each call has a total limit. Outputs never replace links, folders or the
+  input, nothing is written if any output exists without `overwrite`, the folder is
+  only created when something is written, and a failed run removes what it wrote. Both
+  need the owner password when the PDF forbids copying.
 - `get_outline` (read-only) and `set_outline`: read a PDF's bookmarks as a flat list
   (level, title, 1-based page, plus any link or other action), and replace them from the
   same shape, so an outline can be read, edited and written back (titles, nesting, pages

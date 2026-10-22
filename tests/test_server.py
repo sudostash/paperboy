@@ -57,6 +57,7 @@ INPUT_TOOLS = {
     "add_watermark": {"text": "X"}, "add_page_numbers": {},
     "inspect_hidden_data": {}, "sanitize_pdf": {}, "scan_pdf": {},
     "get_outline": {}, "set_outline": {"entries": [{"title": "A", "page": 1}]},
+    "list_attachments": {}, "extract_attachments": {}, "extract_images": {},
 }
 
 
@@ -69,7 +70,8 @@ def test_every_tool_refuses_inputs_outside_root(tool, outside):
 @pytest.mark.parametrize("tool", sorted(t for t in INPUT_TOOLS if t not in {
     "pdf_info", "get_metadata", "check_pdf", "extract_text", "split_pdf",
     "view_pages", "render_pages", "find_blank_pages", "list_form_fields",
-    "inspect_hidden_data", "scan_pdf", "get_outline"}))
+    "inspect_hidden_data", "scan_pdf", "get_outline",
+    "list_attachments", "extract_attachments", "extract_images"}))
 def test_every_writer_refuses_outputs_outside_root(tool, doc, outside):
     args = dict(INPUT_TOOLS[tool], input_path=str(doc), output_path=str(outside / "o.pdf"))
     with pytest.raises(S.ToolError, match="outside the allowed root"):
@@ -511,3 +513,33 @@ def test_bookmarks_round_trip_through_the_tools(doc):
 def test_bad_bookmarks_are_a_tool_error(doc):
     with pytest.raises(S.ToolError, match="page must be 1 to"):
         S.set_outline(str(doc), [{"title": "Nowhere", "page": 99}])
+
+
+
+@pytest.mark.parametrize("tool", ["extract_attachments", "extract_images"])
+def test_extractors_refuse_output_folders_outside_root(tool, doc, outside):
+    with pytest.raises(S.ToolError, match="outside the allowed root"):
+        getattr(S, tool)(input_path=str(doc), output_dir=str(outside / "files"))
+    assert not (outside / "files").exists()
+
+
+def test_extractors_default_to_a_folder_next_to_the_input(doc, sandbox):
+    res = S.extract_images(str(doc))
+    assert res["output_dir"] == str(doc.with_name("doc_images"))
+    with pytest.raises(S.ToolError, match="no attachments"):
+        S.extract_attachments(str(doc))
+    assert not doc.with_name("doc_attachments").exists()   # made only when writing
+    assert not doc.with_name("doc_images").exists()        # no pictures: nothing written
+
+
+def test_a_planted_link_cannot_redirect_the_default_folder(doc, outside):
+    doc.with_name("doc_images").symlink_to(outside, target_is_directory=True)
+    with pytest.raises(S.ToolError, match="outside the allowed root"):
+        S.extract_images(str(doc))
+
+
+
+def test_an_output_folder_that_is_a_file_is_refused(doc):
+    doc.with_name("taken").write_bytes(b"x")
+    with pytest.raises(S.ToolError, match="not a folder"):
+        S.extract_images(str(doc), output_dir=str(doc.with_name("taken")))
