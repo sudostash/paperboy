@@ -42,6 +42,8 @@ class Settings:
     soffice_path: str | None = None
     qpdf_path: str | None = None
     default_overwrite: bool = False
+    clamscan_path: str | None = None
+    clamscan_timeout: int = 300
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -56,4 +58,6 @@ class Settings:
             or shutil.which("libreoffice"),
             qpdf_path=os.environ.get("PAPERBOY_QPDF") or shutil.which("qpdf"),
             default_overwrite=_bool_env("PAPERBOY_ALLOW_OVERWRITE", False),
+            clamscan_path=os.environ.get("PAPERBOY_CLAMSCAN") or shutil.which("clamscan"),
+            clamscan_timeout=_int_env("PAPERBOY_CLAMSCAN_TIMEOUT", 300),
         )

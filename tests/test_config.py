@@ -10,7 +10,7 @@ from paperboy.config import Settings
 ENV_VARS = [
     "PAPERBOY_ROOT", "PAPERBOY_MAX_FILE_MB", "PAPERBOY_MAX_PAGES",
     "PAPERBOY_SOFFICE_TIMEOUT", "PAPERBOY_SOFFICE", "PAPERBOY_QPDF",
-    "PAPERBOY_ALLOW_OVERWRITE",
+    "PAPERBOY_ALLOW_OVERWRITE", "PAPERBOY_CLAMSCAN", "PAPERBOY_CLAMSCAN_TIMEOUT",
 ]
 
 
@@ -31,6 +31,16 @@ def test_defaults_without_environment(clean_env):
     assert s.soffice_path is None
     assert s.qpdf_path is None
     assert s.default_overwrite is False
+    assert s.clamscan_path is None and s.clamscan_timeout == 300
+
+
+def test_clamav_settings(clean_env):
+    clean_env.setattr("shutil.which", lambda name: f"/usr/bin/{name}")
+    assert Settings.from_env().clamscan_path == "/usr/bin/clamscan"
+    clean_env.setenv("PAPERBOY_CLAMSCAN", "/opt/clamav/clamscan")
+    clean_env.setenv("PAPERBOY_CLAMSCAN_TIMEOUT", "60")
+    s = Settings.from_env()
+    assert (s.clamscan_path, s.clamscan_timeout) == ("/opt/clamav/clamscan", 60)
 
 
 def test_root_is_expanded_and_resolved(clean_env, tmp_path):

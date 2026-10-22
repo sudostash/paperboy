@@ -221,8 +221,53 @@ def build_proposal(path: Path) -> Path:
     return path
 
 
+def build_invoice(path: Path) -> Path:
+    """An "invoice" from an unknown sender that does what phishing PDFs do: runs a
+    script as soon as it opens, carries a program disguised as a PDF attachment, and
+    links out to a look-alike payment site. The attachment is a harmless stub that
+    only starts like a Windows program; nothing here can run."""
+    import pikepdf
+
+    c = canvas.Canvas(str(path), pagesize=letter)
+    c.setTitle("Invoice 20931")
+    width, height = letter
+    c.setFillColor(ACCENT)
+    c.rect(0, height - 14, width, 14, stroke=0, fill=1)
+    c.setFillColor(INK)
+    c.setFont("Helvetica-Bold", 26)
+    c.drawString(72, height - 110, "Invoice #20931 - payment overdue")
+    c.setFont("Helvetica", 14)
+    c.setFillColor(MUTED)
+    c.drawString(72, height - 140, "Open the attached statement to avoid a late fee.")
+    c.setFillColor(ACCENT)
+    c.drawString(72, height - 180, "Pay now: secure-billing-portal.example")
+    c.showPage()
+    c.save()
+    with pikepdf.open(path, allow_overwriting_input=True) as pdf:
+        page = pdf.pages[0]
+        pdf.Root.OpenAction = pdf.make_indirect(pikepdf.Dictionary(
+            Type=pikepdf.Name.Action, S=pikepdf.Name.JavaScript,
+            JS=pikepdf.String("this.exportDataObject({cName: 'statement.pdf.exe', nLaunch: 2});")))
+        stub = pdf.make_indirect(pikepdf.Stream(pdf, b"MZ" + b"\0" * 62 + b"demo stub"))
+        filespec = pdf.make_indirect(pikepdf.Dictionary(
+            Type=pikepdf.Name.Filespec, F=pikepdf.String("statement.pdf.exe"),
+            EF=pikepdf.Dictionary(F=stub)))
+        pdf.Root.Names = pikepdf.Dictionary(EmbeddedFiles=pikepdf.Dictionary(
+            Names=pikepdf.Array([pikepdf.String("statement.pdf.exe"), filespec])))
+        page.obj.Annots = pdf.make_indirect(pikepdf.Array([pdf.make_indirect(
+            pikepdf.Dictionary(Type=pikepdf.Name.Annot, Subtype=pikepdf.Name.Link,
+                               Rect=pikepdf.Array([72, height - 186, 360, height - 166]),
+                               Border=pikepdf.Array([0, 0, 0]),
+                               A=pikepdf.Dictionary(
+                                   S=pikepdf.Name.URI,
+                                   URI=pikepdf.String("https://secure-billing-portal.example/pay"))))]))
+        pdf.save(path)
+    return path
+
+
 BUILDERS = {"report.pdf": build_report, "scan.pdf": build_scan,
-            "delivery-form.pdf": build_delivery_form, "proposal.pdf": build_proposal}
+            "delivery-form.pdf": build_delivery_form, "proposal.pdf": build_proposal,
+            "invoice.pdf": build_invoice}
 
 
 def build(names: list[str], workspace: Path) -> None:

@@ -239,6 +239,9 @@ body {
 .schema-table .value { font-family: var(--mono); font-size: 13px; color: var(--ok); }
 .schema-table .value.null { color: var(--muted); }
 .schema-table .value.hit { color: var(--warn); font-weight: 600; }
+.schema-table .value.sev-high { color: var(--warn); font-weight: 600; }
+.schema-table .value.sev-warning { color: var(--accent); }
+.schema-table .value.sev-info { color: var(--muted); }
 
 .image-row {
   display: flex;

@@ -193,8 +193,28 @@ function showTable(step) {
   // A result object (e.g. what inspect_hidden_data found) as a findings table.
   clearStage();
   const data = step.result[step.showTable];
-  stage.append(el("h2", null, `${step.title} · ${step.showTable}`));
+  const label = step.headline ? step.result[step.headline].replaceAll("_", " ") : step.showTable;
+  stage.append(el("h2", null, `${step.title} · ${label}`));
   const table = el("table", "schema-table");
+  if (step.columns) {
+    // A list of findings, one row each; a "severity" column is colour-coded.
+    data.forEach((item, i) => {
+      const row = el("tr");
+      row.style.animationDelay = `${i * 70}ms`;
+      step.columns.forEach((col, j) => {
+        const text = String(item[col]).replaceAll("_", " ");
+        row.append(el("td", j === 0 ? "field" : `value sev-${item.severity}`, text));
+      });
+      table.append(row);
+    });
+    if (!data.length) {
+      const row = el("tr");
+      row.append(el("td", "value null", "nothing found"));
+      table.append(row);
+    }
+    stage.append(table);
+    return;
+  }
   Object.entries(data).forEach(([name, value], i) => {
     const hit = Array.isArray(value) ? value.length > 0 : Boolean(value);
     const row = el("tr");

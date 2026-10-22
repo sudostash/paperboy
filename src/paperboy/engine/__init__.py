@@ -22,6 +22,7 @@ from .pages import (
 )
 from .render import find_blank_pages, render_pages, view_pages
 from .sanitize import inspect_hidden_data, sanitize_pdf
+from .scan import scan_pdf
 from .security import decrypt_pdf, encrypt_pdf
 from .stamp import add_page_numbers, add_watermark
 from .text import extract_text
@@ -36,5 +37,5 @@ __all__ = [
     "render_pages", "view_pages", "find_blank_pages",
     "list_form_fields", "fill_form",
     "add_watermark", "add_page_numbers",
-    "inspect_hidden_data", "sanitize_pdf",
+    "inspect_hidden_data", "sanitize_pdf", "scan_pdf",
 ]
