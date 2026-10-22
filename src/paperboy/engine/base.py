@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import io
+import re
 import secrets
 import subprocess
 from contextlib import contextmanager
@@ -66,7 +67,10 @@ def open_pdf(path: Path | bytes, settings: Settings, password: str | None = None
             raise PdfUserError("Incorrect password") from None
         raise PdfUserError("This PDF is password protected; supply its password") from None
     except pikepdf.PdfError as exc:
-        raise PdfUserError(f"Could not open PDF: {exc}") from exc
+        # qpdf names an in-memory file by its Python repr, a memory address; drop it.
+        detail = re.sub(r"^stream <_io\.BytesIO object at 0x[0-9a-fA-F]+>:?\s*", "",
+                        str(exc))
+        raise PdfUserError(f"Could not open PDF: {detail}") from exc
     try:
         n = len(pdf.pages)
         if n > settings.max_pages:

@@ -221,10 +221,12 @@ def extract_tables(
     cell text (empty and merged cells are ""). strategy "lines" finds tables drawn with
     lines between cells; "text" finds tables laid out by alignment only (rougher).
     Returns up to max_tables (1-200; 50,000 cells in all; 1,000 characters per cell);
-    truncated means there are more. Pages with too much content to read safely are
-    listed in pages_skipped; complete is false if the 60 s time limit stopped it early.
-    Scanned pages have no text to read. To save tables as CSV, use export_tables. Needs
-    the owner password if the PDF forbids copying.
+    truncated means there are more (complete is then still true). Pages that can't be
+    read safely (too much content, lines too dense to analyse, damaged, or too slow)
+    are listed in pages_skipped with the reason; complete is false if the 60 s limit
+    per call stopped it before every page was read. Scanned pages have no text to read.
+    To save tables as CSV, use export_tables. Needs the owner password if the PDF
+    forbids copying.
     """
     return engine.extract_tables(require_input(input_path, SETTINGS), SETTINGS, pages,
                                  strategy, max_tables, password)
@@ -244,9 +246,10 @@ def export_tables(
 ) -> ExportTablesResult:
     """Save the tables extract_tables finds as CSV files (UTF-8, readable by Excel), one
     per table, named page001-table01.csv and so on, in a folder (default:
-    "<name>_tables" next to the PDF). Spreadsheets run cells starting with = + - @ as
-    formulas, so such cells get a leading apostrophe unless escape_formulas=false
-    (numbers like -5 are left alone). Nothing is written if a file exists, unless
+    "<name>_tables" next to the PDF). Spreadsheets run cells starting with = + - @ (or
+    their full-width forms) as formulas, so such cells get a leading apostrophe unless
+    escape_formulas=false (plain numbers like -5 are left alone). Limits and
+    pages_skipped are as for extract_tables. Nothing is written if a file exists, unless
     overwrite. Needs the owner password if the PDF forbids copying.
     """
     src = require_input(input_path, SETTINGS)
