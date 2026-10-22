@@ -596,3 +596,8 @@ def test_documents_without_pages(tmp_path, settings, out):
         E.n_up(empty, out, settings)
     with pytest.raises(PdfUserError, match="no pages"):
         E.insert_blank_pages(empty, out, settings, after=[0])
+
+
+def test_watermarks_ignore_a_malformed_crop_box_too(tmp_path, settings, out):
+    src = _odd_pdf(tmp_path / "c.pdf", lambda p: setattr(p, "CropBox", pikepdf.String("x")))
+    assert E.add_watermark(src, out, settings, text="DRAFT")["pages"] == [1]
