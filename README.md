@@ -76,6 +76,8 @@ Output files are written back into your `--root` folder. Remove the server anyti
 | `find_blank_pages` | Find blank pages (no text, no ink) to pass to `delete_pages`, and *nearly* blank ones (dust, a stamp, initials) to look at with `view_pages` first *(read-only)* |
 | `list_form_fields` | List a form's fields: full name, type, value, allowed options, required/read-only *(read-only)* |
 | `fill_form` | Fill in form fields by name (text, checkboxes, radio buttons, drop-downs); every value is checked first, appearances are regenerated, optional flatten. Signed PDFs are refused |
+| `get_outline` | List the bookmarks (outline) in reading order: level, title, target page, and any link or other action *(read-only)* |
+| `set_outline` | Replace the bookmarks from a list of title, page and level (nesting); an empty list removes them. Refuses signed PDFs |
 | `inspect_hidden_data` | Report what a PDF carries besides its pages: metadata (author, software), scripts and risky actions, attachments, comments, application data, earlier saved versions *(read-only)* |
 | `scan_pdf` | Risk report for a PDF you didn't make: scripts (especially ones that run on open), actions that run without a click, program-launching actions, attachments that are programs or disguise their type (attached PDFs are scanned too), disguised names, data hidden around the file, and known malware if ClamAV is installed. Verdict: no active content found / active content / suspicious, never "safe" *(read-only)* |
 | `sanitize_pdf` | Write a copy safe to share without that hidden data (comments optional); links, bookmarks and accessibility structure are kept |

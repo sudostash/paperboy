@@ -7,6 +7,15 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `get_outline` (read-only) and `set_outline`: read a PDF's bookmarks as a flat list
+  (level, title, 1-based page, plus any link or other action), and replace them from the
+  same shape, so an outline can be read, edited and written back (titles, nesting, pages
+  and web links are kept; scripts, styles, open state and scroll positions are not).
+  Named destinations and go-to actions resolve to pages; damaged or hostile outlines
+  (loops, repeats, deep name trees) are read once, within limits (10,000 bookmarks, 20
+  levels, reported as truncated). Writing checks every entry first, opens the file with
+  the bookmarks panel showing, keeps protected outputs protected, needs the owner
+  password when the PDF forbids document assembly, and refuses signed PDFs.
 - `scan_pdf` (read-only): grades a PDF as no active content found, active content, or
   suspicious, with graded indicators: scripts (document-level, on open, on page or field
   events, in action chains and media actions), actions that run without a click (web

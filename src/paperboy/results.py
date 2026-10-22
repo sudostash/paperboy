@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from typing_extensions import TypedDict
+from typing_extensions import NotRequired, TypedDict
 
 
 class Protected(TypedDict):
@@ -272,3 +272,34 @@ class ScanResult(TypedDict):
     embedded_files: list[ScannedFile]
     antivirus: AntivirusResult
     limits: str                            # what a scan can't tell you
+
+
+class OutlineEntry(TypedDict):
+    level: int                             # 1 = top level, 2 = under the one before, ...
+    title: str
+    page: int | None                       # 1-based target page; None if not a page here
+    link: str | None                       # web or email address the bookmark opens
+    action: str | None                     # anything else a bookmark does, e.g. "JavaScript"
+
+
+class OutlineResult(TypedDict):
+    path: str
+    page_count: int
+    entries: list[OutlineEntry]            # in reading order
+    truncated: bool                        # some left out: over 10,000, or over 20 levels deep
+
+
+class Bookmark(TypedDict):
+    """A bookmark to write (set_outline input); get_outline's entries fit as they are."""
+
+    title: str
+    page: NotRequired[int | None]          # 1-based; none: a heading that goes nowhere
+    level: NotRequired[int]                # default 1; at most one deeper than the previous
+    link: NotRequired[str | None]          # http(s) or mailto address, instead of a page
+    action: NotRequired[str | None]        # accepted from get_outline, not written back
+
+
+class SetOutlineResult(Protected):
+    output: str
+    entries: int                           # bookmarks written
+    replaced: int                          # bookmarks the input had (up to 10,000)

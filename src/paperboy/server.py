@@ -20,6 +20,7 @@ from .errors import PdfUserError
 from .paths import prepare_output, prepare_output_dir, require_input, resolve, same_file
 from .results import (
     BlankPagesResult,
+    Bookmark,
     CheckResult,
     ConvertResult,
     DecryptResult,
@@ -35,6 +36,7 @@ from .results import (
     MergeResult,
     MetadataResult,
     OptimizeResult,
+    OutlineResult,
     PageNumbersResult,
     RearrangeResult,
     RenderResult,
@@ -43,6 +45,7 @@ from .results import (
     SanitizeResult,
     ScanResult,
     SetMetadataResult,
+    SetOutlineResult,
     SplitResult,
     TextResult,
     ViewResult,
@@ -476,6 +479,52 @@ def fill_form(
     src = require_input(input_path, SETTINGS)
     out = prepare_output(src, output_path, "_filled", _overwrite(overwrite), SETTINGS)
     return engine.fill_form(src, out, values, SETTINGS, password, flatten)
+
+
+# --------------------------------------------------------------------------- #
+# Bookmarks
+# --------------------------------------------------------------------------- #
+
+
+@mcp.tool(annotations=_reads("Get bookmarks"))
+@_guard
+def get_outline(input_path: str, password: Optional[str] = None) -> OutlineResult:
+    """List a PDF's bookmarks (its outline) in reading order: each one's level (1 = top,
+    2 = nested under the one before, ...), title and 1-based target page (null if it
+    doesn't go to a page here). Bookmarks that open a web or email address have link set;
+    ones that do something else (e.g. run a script) have action set. truncated means some were
+    left out (over 10,000, or nested over 20 levels). Edit the list and pass it to
+    set_outline to change them.
+    """
+    src = require_input(input_path, SETTINGS)
+    return engine.get_outline(src, SETTINGS, password)
+
+
+@mcp.tool(annotations=_writes("Set bookmarks"))
+@_guard
+def set_outline(
+    input_path: str,
+    entries: list[Bookmark],
+    output_path: Optional[str] = None,
+    password: Optional[str] = None,
+    overwrite: Optional[bool] = None,
+) -> SetOutlineResult:
+    """Replace a PDF's bookmarks (its outline) with entries, in reading order. Each has a
+    title, a level (default 1, up to 20; at most one deeper than the entry before it, so
+    level 2 nests under the previous level-1 entry) and either a 1-based page or a link
+    (http, https or mailto); with neither it is a heading that goes nowhere. An empty
+    list removes all bookmarks. Everything is checked before anything is written.
+
+    To add to existing bookmarks, read them with get_outline first and pass them back
+    with yours (check its truncated flag). Rewriting keeps titles, nesting, pages and
+    links; other actions (scripts and the like), colour and style, open/closed state and
+    exact scroll positions are not kept. The result opens with the bookmarks panel
+    showing. Needs the owner password if the PDF forbids document assembly; signed PDFs
+    are refused because the change would break the signature.
+    """
+    src = require_input(input_path, SETTINGS)
+    out = prepare_output(src, output_path, "_bookmarked", _overwrite(overwrite), SETTINGS)
+    return engine.set_outline(src, out, list(entries), SETTINGS, password)
 
 
 # --------------------------------------------------------------------------- #

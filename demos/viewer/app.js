@@ -203,7 +203,10 @@ function showTable(step) {
       row.style.animationDelay = `${i * 70}ms`;
       step.columns.forEach((col, j) => {
         const text = String(item[col]).replaceAll("_", " ");
-        row.append(el("td", j === 0 ? "field" : `value sev-${item.severity}`, text));
+        const cell = el("td", j === 0 ? "field" : `value sev-${item.severity}`, text);
+        // Nested entries (e.g. bookmarks) are indented by their level.
+        if (j === 0 && step.indent) cell.style.paddingLeft = `${12 + (item[step.indent] - 1) * 24}px`;
+        row.append(cell);
       });
       table.append(row);
     });
