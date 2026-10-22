@@ -11,6 +11,7 @@ from .create import convert_to_pdf, images_to_pdf
 from .extract import extract_attachments, extract_images, list_attachments
 from .forms import fill_form, list_form_fields
 from .info import check_pdf, pdf_info
+from .layout import crop_pages, insert_blank_pages, interleave_pdfs, n_up, resize_pages
 from .metadata import get_metadata, set_metadata
 from .optimize import flatten_pdf, optimize_pdf, repair_pdf
 from .outline import get_outline, set_outline
@@ -44,4 +45,5 @@ __all__ = [
     "get_outline", "set_outline",
     "list_attachments", "extract_attachments", "extract_images",
     "search_text",
+    "crop_pages", "resize_pages", "n_up", "insert_blank_pages", "interleave_pdfs",
 ]

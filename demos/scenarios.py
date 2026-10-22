@@ -263,4 +263,39 @@ SCENARIOS: dict[str, dict] = {
                                     "East (96.9%). North (98.1%) and West (98.6%) were above."},
         ],
     },
+    "page-layout": {
+        "title": "Resize pages and print 2 per sheet",
+        "subtitle": "Convert a Letter report to A4, then make a 2-up handout.",
+        "files": ["report.pdf"],
+        "prompt": "report.pdf is US Letter; our printers use A4. Convert it, then make a "
+                  "handout with two pages per sheet.",
+        "steps": [
+            {"type": "call", "tool": "resize_pages",
+             "args": {"input_path": "report.pdf", "size": "a4"},
+             "show": {"before": "report.pdf", "after": "report_resized.pdf"}},
+            {"type": "say", "text": "report_resized.pdf is A4, with each page's content "
+                                    "scaled slightly to fit. Now the handout."},
+            {"type": "call", "tool": "n_up",
+             "args": {"input_path": "report_resized.pdf", "per_sheet": 2, "size": "a4"},
+             "show": {"after": "report_resized_2up.pdf"}},
+            {"type": "say", "text": "Done: report_resized_2up.pdf has the 3 pages on 2 "
+                                    "landscape A4 sheets, ready to print."},
+        ],
+    },
+    "interleave": {
+        "title": "Combine double-sided scans",
+        "subtitle": "Fronts and backs from a single-sided scanner, back in page order.",
+        "files": ["fronts.pdf", "backs.pdf"],
+        "prompt": "I scanned a double-sided lease on a single-sided scanner: fronts.pdf, "
+                  "then I flipped the stack for backs.pdf. Put it back together.",
+        "steps": [
+            {"type": "call", "tool": "interleave_pdfs",
+             "args": {"front_path": "fronts.pdf", "back_path": "backs.pdf",
+                      "output_path": "lease.pdf"},
+             "show": {"after": "lease.pdf"}},
+            {"type": "say", "text": "lease.pdf has all 6 pages in order: the backs came out "
+                                    "last page first from the flipped stack, so I reversed "
+                                    "them while interleaving."},
+        ],
+    },
 }

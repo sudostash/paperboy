@@ -34,6 +34,9 @@ def rearrange_pages(
         if append_unlisted:
             listed = set(order)
             order += [i for i in range(total) if i not in listed]
+        if len(order) > settings.max_pages:  # "-,-,-" repeats every page
+            raise PdfUserError(f"That order has {len(order)} pages; at most "
+                               f"{settings.max_pages}")
         dst = pikepdf.new()
         for i in order:
             dst.pages.append(src.pages[i])

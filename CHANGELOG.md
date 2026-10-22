@@ -7,6 +7,19 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- Page layout tools. `crop_pages`: crop by margins measured on the page as seen
+  (rotation applied; pt, in or mm), or reset; cropping hides content without removing it.
+  `resize_pages`: change pages to a paper size (A3, A4, A5, Letter, Legal, Tabloid) or a
+  custom one, scaling content to fit, centred, with links, form fields and comments moved
+  along; landscape pages get landscape sheets unless an orientation is forced.
+  `n_up`: 2 pages per landscape sheet or 4 per portrait sheet, in reading order, as
+  viewers show each page (page content only: flatten first to keep comments and filled-in
+  fields). `insert_blank_pages`: blank pages after given page numbers,
+  sized like the page before. `interleave_pdfs`: fronts and backs of a double-sided
+  document scanned single-sided, with the backs reversed by default. Page sizes honour
+  `/UserUnit`; annotations shared between pages move once. Resizing and N-up
+  need the owner password when the PDF forbids changes; outputs of protected PDFs stay
+  protected.
 - `search_text` (read-only): find a word or phrase in a PDF (literal text through PDFium's
   search, so a query can't run away; case-insensitive unless `match_case`, optional
   `whole_word`, a page spec, up to 1,000 results). Each match has its page, the matched
@@ -134,6 +147,9 @@ All notable changes to this project are documented here. The format follows
   permission is always granted, per PDF 2.0).
 
 ### Fixed
+- `rearrange_pages` refuses orders longer than the page cap ("-,-,-" repeated every page
+  without limit). Watermark and page-number tools ignore a malformed CropBox, as viewers do,
+  instead of failing with an internal error.
 - Reading metadata (`get_metadata`, `pdf_info`) no longer creates empty XMP or Info
   structures in the document being read.
 - Images (`convert_to_pdf`, `images_to_pdf`, watermark images) are only opened as PNG, JPEG,

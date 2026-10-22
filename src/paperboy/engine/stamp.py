@@ -86,7 +86,10 @@ def _box(values) -> tuple[float, float, float, float]:
 def _visible_box(page: pikepdf.Page) -> tuple[float, float, float, float]:
     """What viewers show: the CropBox clipped to the MediaBox (or the MediaBox)."""
     mx0, my0, mx1, my1 = _box(page.mediabox)
-    cx0, cy0, cx1, cy1 = _box(page.cropbox)
+    try:
+        cx0, cy0, cx1, cy1 = _box(page.cropbox)
+    except (TypeError, ValueError):  # a malformed CropBox: viewers ignore it
+        return mx0, my0, mx1, my1
     x0, y0, x1, y1 = max(mx0, cx0), max(my0, cy0), min(mx1, cx1), min(my1, cy1)
     if x1 <= x0 or y1 <= y0:  # no overlap: viewers fall back to the MediaBox
         return mx0, my0, mx1, my1

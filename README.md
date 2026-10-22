@@ -66,6 +66,11 @@ Output files are written back into your `--root` folder. Remove the server anyti
 | `rearrange_pages` | Reorder, reverse, or duplicate pages |
 | `delete_pages` / `extract_pages` | Remove or pull out pages |
 | `rotate_pages` | Rotate all or selected pages 90/180/270° |
+| `crop_pages` | Crop pages by margins (top, right, bottom, left as seen; pt, in or mm), or reset the crop. Hides, doesn't remove, content |
+| `resize_pages` | Change pages to A3/A4/A5/Letter/Legal/Tabloid or a custom size, scaling content to fit; links, fields and comments move with it |
+| `n_up` | 2 pages per landscape sheet or 4 per portrait sheet, in reading order, for handouts and printing; places page content only (flatten first to keep comments and filled-in fields) |
+| `insert_blank_pages` | Insert blank pages after given page numbers (0 = before the first), sized like their neighbour |
+| `interleave_pdfs` | Combine fronts and backs from a single-sided scanner into one PDF (backs reversed by default) |
 | `merge_pdfs` | Combine PDFs in order (per-file passwords supported) |
 | `split_pdf` | Split into ranges or one file per page |
 | `optimize_pdf` | Linearize ("fast web view") and recompress to shrink |
