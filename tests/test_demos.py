@@ -141,7 +141,8 @@ async def test_scenario_runs_against_real_server(slug, tmp_path):
                 with Image.open(tmp_path / slug / name) as im:
                     assert im.format == "PNG"
             if step.get("showImages"):
-                assert step["images"] or step["result"].get("files")
+                assert step["images"] or step["result"].get("files") \
+                    or step["result"].get("images")  # render_pages / extract_images
             for key in ("before", "after"):
                 if key in step.get("show", {}):
                     assert (files / step["show"][key]).is_file()
@@ -421,7 +422,8 @@ async def test_viewer_plays_scenario_to_completion(browser, tmp_path, slug):
         assert await page.evaluate("window.__mostReview") == max(reviewed, default=0)
         if calls and calls[-1].get("showImages"):
             last = calls[-1]
-            expected = len(last["images"]) or len(last["result"]["files"])
+            saved = last["result"].get("files") or last["result"].get("images") or []
+            expected = len(last["images"]) or len(saved)
             imgs = page.locator("#stage img")
             assert await imgs.count() == expected
             assert all(w > 0 for w in await imgs.evaluate_all(

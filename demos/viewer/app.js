@@ -174,7 +174,8 @@ async function showImages(step) {
       const p = step.result.pages[i];
       return { src: `${base}/${src}`, caption: `Page ${p.page} · ${p.width_px} × ${p.height_px} px` };
     })
-    : step.result.files.map((f) => ({ src: fileUrl(f), caption: f.split("/").pop() }));
+    : (step.result.files || step.result.images.map((i) => i.file))  // render / extract
+      .map((f) => ({ src: fileUrl(f), caption: f.split("/").pop() }));
   stage.append(el("h2", null, inline ? "What the assistant sees" : `Saved ${items.length} files`));
   const row = el("div", `image-row ${inline ? "inline" : ""}`);
   for (const item of items) {

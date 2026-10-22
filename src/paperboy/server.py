@@ -19,6 +19,7 @@ from .config import Settings
 from .errors import PdfUserError
 from .paths import prepare_output, prepare_output_dir, require_input, resolve, same_file
 from .results import (
+    AttachmentsResult,
     BlankPagesResult,
     Bookmark,
     CheckResult,
@@ -26,6 +27,8 @@ from .results import (
     DecryptResult,
     DeleteResult,
     EncryptResult,
+    ExtractAttachmentsResult,
+    ExtractImagesResult,
     ExtractResult,
     FillFormResult,
     FlattenResult,
@@ -525,6 +528,87 @@ def set_outline(
     src = require_input(input_path, SETTINGS)
     out = prepare_output(src, output_path, "_bookmarked", _overwrite(overwrite), SETTINGS)
     return engine.set_outline(src, out, list(entries), SETTINGS, password)
+
+
+# --------------------------------------------------------------------------- #
+# Attachments and images
+# --------------------------------------------------------------------------- #
+
+
+def _output_folder(src, output_dir: Optional[str], suffix: str):
+    """The output folder: as given, or "<name><suffix>" next to the input; either way
+    resolved and confined to the root (a planted link can't redirect it). It is only
+    created when the first file is written."""
+    folder = resolve(output_dir or str(src.parent / f"{src.stem}{suffix}"), SETTINGS)
+    if folder.exists() and not folder.is_dir():
+        raise PdfUserError(f"{folder} exists and is not a folder")
+    return folder
+
+
+@mcp.tool(annotations=_reads("List attachments"))
+@_guard
+def list_attachments(input_path: str, password: Optional[str] = None) -> AttachmentsResult:
+    """List the files embedded in a PDF (attached to the document or to a page): name,
+    description, declared type and size, the type detected from the file's own bytes,
+    and whether it can run on a computer or has a name that hides what it is.
+    Use the names with extract_attachments.
+    """
+    src = require_input(input_path, SETTINGS)
+    return engine.list_attachments(src, SETTINGS, password)
+
+
+@mcp.tool(annotations=_writes("Extract attachments"))
+@_guard
+def extract_attachments(
+    input_path: str,
+    names: Optional[list[str]] = None,
+    output_dir: Optional[str] = None,
+    allow_executables: bool = False,
+    password: Optional[str] = None,
+    overwrite: Optional[bool] = None,
+) -> ExtractAttachmentsResult:
+    """Save files embedded in a PDF into a folder (default: "<name>_attachments" next to
+    it): all of them, or those named (see list_attachments). Names are made safe to use
+    as file names; prefer a new folder, since saved files can have any name. Attachments
+    that can run on a computer (programs, scripts, ...) are skipped unless
+    allow_executables=true; only set that if the user asked for them. Files that are
+    damaged, over the file size limit or in an unsupported encoding are listed in
+    skipped, as are files past a total of 4x that limit per call; only the first 1,000
+    attachments are read (truncated). Saved files are not password-protected, even if
+    the PDF is. Needs the owner password if the PDF forbids copying.
+    """
+    src = require_input(input_path, SETTINGS)
+    out_dir = _output_folder(src, output_dir, "_attachments")
+    return engine.extract_attachments(src, out_dir, SETTINGS, names, password,
+                                      _overwrite(overwrite), allow_executables)
+
+
+@mcp.tool(annotations=_writes("Extract images"))
+@_guard
+def extract_images(
+    input_path: str,
+    pages: Optional[str] = None,
+    min_size: int = 0,
+    output_dir: Optional[str] = None,
+    password: Optional[str] = None,
+    overwrite: Optional[bool] = None,
+) -> ExtractImagesResult:
+    """Save the pictures in a PDF as image files, in a folder (default: "<name>_images"
+    next to it), named page001-image01.png and so on. pages limits it to a page spec
+    (e.g. "1-3,7"); min_size (pixels) leaves out images narrower or shorter than that,
+    such as icons and rules. Photos are usually saved as the original JPEG; others as
+    PNG (or the format the image is stored in). An image used on several pages is saved
+    once. Images drawn by pages and the forms on them are found; inline images and
+    those inside annotations, patterns or Type 3 fonts are not. Images that are damaged,
+    suspicious (data that doesn't match their size), over 40 million pixels, or past
+    400 million pixels per call are listed in skipped; only the first 2,000 are read
+    (truncated). Saved files are not password-protected, even if the PDF is. Needs the
+    owner password if the PDF forbids copying.
+    """
+    src = require_input(input_path, SETTINGS)
+    out_dir = _output_folder(src, output_dir, "_images")
+    return engine.extract_images(src, out_dir, SETTINGS, pages, min_size, password,
+                                 _overwrite(overwrite))
 
 
 # --------------------------------------------------------------------------- #

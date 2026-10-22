@@ -71,6 +71,23 @@ def _image(path):
     return str(path)
 
 
+def _attached(path):
+    _pdf(path)
+    with pikepdf.open(path, allow_overwriting_input=True) as pdf:
+        pdf.attachments["notes.txt"] = pikepdf.AttachedFileSpec(pdf, b"hello")
+        pdf.save(path)
+    return str(path)
+
+
+def _pictured(path):
+    img = path.with_suffix(".png")
+    Image.new("RGB", (20, 20), "red").save(img)
+    c = canvas.Canvas(str(path))
+    c.drawImage(str(img), 72, 600, 20, 20)
+    c.save()
+    return str(path)
+
+
 def _text(path):
     path.write_text("hello\n  indented\n")
     return str(path)
@@ -125,6 +142,10 @@ CASES = [
     ("inspect_hidden_data", "inspect_hidden_data", lambda d: {"input_path": _pdf(d / "a.pdf")}),
     ("scan_pdf", "scan_pdf", lambda d: {"input_path": _pdf(d / "a.pdf")}),
     ("get_outline", "get_outline", lambda d: {"input_path": _pdf(d / "a.pdf")}),
+    ("list_attachments", "list_attachments", lambda d: {"input_path": _attached(d / "t.pdf")}),
+    ("extract_attachments", "extract_attachments",
+     lambda d: {"input_path": _attached(d / "t.pdf")}),
+    ("extract_images", "extract_images", lambda d: {"input_path": _pictured(d / "p.pdf")}),
     ("set_outline", "set_outline",
      lambda d: {"input_path": _pdf(d / "a.pdf"),
                 "entries": [{"title": "A", "page": 1}, {"title": "B", "page": 2, "level": 2}]}),

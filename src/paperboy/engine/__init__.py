@@ -8,6 +8,7 @@ is a thin adapter over these; a future HTTP transport can reuse them as-is.
 from __future__ import annotations
 
 from .create import convert_to_pdf, images_to_pdf
+from .extract import extract_attachments, extract_images, list_attachments
 from .forms import fill_form, list_form_fields
 from .info import check_pdf, pdf_info
 from .metadata import get_metadata, set_metadata
@@ -40,4 +41,5 @@ __all__ = [
     "add_watermark", "add_page_numbers",
     "inspect_hidden_data", "sanitize_pdf", "scan_pdf",
     "get_outline", "set_outline",
+    "list_attachments", "extract_attachments", "extract_images",
 ]
