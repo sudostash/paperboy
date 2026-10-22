@@ -46,6 +46,7 @@ from .results import (
     RotateResult,
     SanitizeResult,
     ScanResult,
+    SearchResult,
     SetMetadataResult,
     SetOutlineResult,
     SplitResult,
@@ -167,6 +168,37 @@ def extract_text(
     return engine.extract_text(
         require_input(input_path, SETTINGS), SETTINGS, pages, password, max_chars
     )
+
+
+@mcp.tool(annotations=_reads("Search text"))
+@_guard
+def search_text(
+    input_path: str,
+    query: str,
+    pages: str | None = None,
+    match_case: bool = False,
+    whole_word: bool = False,
+    max_results: int = 100,
+    password: str | None = None,
+) -> SearchResult:
+    """Find a word or phrase in a PDF's text (literal text, not a pattern), on all pages
+    or a page spec (e.g. "1-3,7"). Each match has its page, the matched text, a snippet
+    of the text around it, and its rectangles on the page ([left, bottom, right, top] in
+    PDF points, in the page's own coordinates before rotation; one or more per line).
+
+    The query is normalized (NFKC; whitespace runs count as one space; surrounding
+    spaces are ignored, so use whole_word to match whole words only). A space can match
+    across a line break. Matching ignores case (simple case folding) unless match_case.
+    Emoji and other characters beyond U+FFFF can't be searched.
+
+    Returns up to max_results (1-1000) in page order; truncated means there are more.
+    pages_without_text lists pages with no extractable text (e.g. scans); pages_skipped
+    lists pages with too much content to search safely; complete is false if the 60 s
+    time limit stopped the search early. Needs the owner password if the PDF forbids
+    copying.
+    """
+    return engine.search_text(require_input(input_path, SETTINGS), query, SETTINGS, pages,
+                              match_case, whole_word, max_results, password)
 
 
 # --------------------------------------------------------------------------- #

@@ -243,4 +243,24 @@ SCENARIOS: dict[str, dict] = {
                                     "brochure_images."},
         ],
     },
+    "search": {
+        "title": "Search a PDF",
+        "subtitle": "Find every mention of a word, with the page and the text around it.",
+        "files": ["report.pdf"],
+        "prompt": "Where does report.pdf talk about deliveries? And which regions were "
+                  "below 98% on time?",
+        "steps": [
+            {"type": "call", "tool": "search_text",
+             "args": {"input_path": "report.pdf", "query": "deliveries"},
+             "showTable": "matches", "columns": ["page", "context"]},
+            {"type": "say", "text": "Deliveries come up 6 times: the 18% rise on page 1, "
+                                    "each region's total on page 2, and the failed-delivery "
+                                    "target on page 3. Checking the on-time rates on page 2."},
+            {"type": "call", "tool": "search_text",
+             "args": {"input_path": "report.pdf", "query": "on time", "pages": "2"},
+             "showTable": "matches", "columns": ["page", "context"]},
+            {"type": "say", "text": "Two regions were below 98% on time: South (97.4%) and "
+                                    "East (96.9%). North (98.1%) and West (98.6%) were above."},
+        ],
+    },
 }

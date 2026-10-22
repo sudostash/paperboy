@@ -7,6 +7,15 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `search_text` (read-only): find a word or phrase in a PDF (literal text through PDFium's
+  search, so a query can't run away; case-insensitive unless `match_case`, optional
+  `whole_word`, a page spec, up to 1,000 results). Each match has its page, the matched
+  text, a snippet of about 60 characters each side, and its rectangles on the page in PDF
+  points (up to 20). The query is normalized (NFKC, whitespace) and control characters
+  are refused. Pages with no text (scans) are listed; pages with more than 2 MB of
+  content are skipped and listed rather than indexed (a few hundred bytes per character),
+  and a call stops after 60 seconds with `complete: false`. Needs the owner password when
+  the PDF forbids copying.
 - `list_attachments` (read-only), `extract_attachments` and `extract_images`: list the
   files embedded in a PDF (document and page attachments, typed from their bytes) and
   save them, or save its pictures (usually photos as the original JPEG, others as PNG;

@@ -58,6 +58,7 @@ INPUT_TOOLS = {
     "inspect_hidden_data": {}, "sanitize_pdf": {}, "scan_pdf": {},
     "get_outline": {}, "set_outline": {"entries": [{"title": "A", "page": 1}]},
     "list_attachments": {}, "extract_attachments": {}, "extract_images": {},
+    "search_text": {"query": "x"},
 }
 
 
@@ -71,7 +72,7 @@ def test_every_tool_refuses_inputs_outside_root(tool, outside):
     "pdf_info", "get_metadata", "check_pdf", "extract_text", "split_pdf",
     "view_pages", "render_pages", "find_blank_pages", "list_form_fields",
     "inspect_hidden_data", "scan_pdf", "get_outline",
-    "list_attachments", "extract_attachments", "extract_images"}))
+    "list_attachments", "extract_attachments", "extract_images", "search_text"}))
 def test_every_writer_refuses_outputs_outside_root(tool, doc, outside):
     args = dict(INPUT_TOOLS[tool], input_path=str(doc), output_path=str(outside / "o.pdf"))
     with pytest.raises(S.ToolError, match="outside the allowed root"):
@@ -543,3 +544,11 @@ def test_an_output_folder_that_is_a_file_is_refused(doc):
     doc.with_name("taken").write_bytes(b"x")
     with pytest.raises(S.ToolError, match="not a folder"):
         S.extract_images(str(doc), output_dir=str(doc.with_name("taken")))
+
+
+
+def test_search_text_through_the_tool(doc):
+    res = S.search_text(str(doc), "page", max_results=2)
+    assert res["match_count"] == 2 and res["truncated"] is True
+    with pytest.raises(S.ToolError, match="query must be"):
+        S.search_text(str(doc), " ")

@@ -142,6 +142,7 @@ CASES = [
     ("inspect_hidden_data", "inspect_hidden_data", lambda d: {"input_path": _pdf(d / "a.pdf")}),
     ("scan_pdf", "scan_pdf", lambda d: {"input_path": _pdf(d / "a.pdf")}),
     ("get_outline", "get_outline", lambda d: {"input_path": _pdf(d / "a.pdf")}),
+    ("search_text", "search_text", lambda d: {"input_path": _pdf(d / "a.pdf"), "query": "a"}),
     ("list_attachments", "list_attachments", lambda d: {"input_path": _attached(d / "t.pdf")}),
     ("extract_attachments", "extract_attachments",
      lambda d: {"input_path": _attached(d / "t.pdf")}),
