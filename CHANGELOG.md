@@ -7,6 +7,20 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `scan_pdf` (read-only): grades a PDF as no active content found, active content, or
+  suspicious, with graded indicators: scripts (document-level, on open, on page or field
+  events, in action chains and media actions), actions that run without a click (web
+  requests, form submissions, printing), program-launching and other risky actions, XFA
+  (suspicious when it carries scripts), Flash/3D/media, JBIG2, attachments identified by
+  their bytes through common encodings (programs, scripts, shortcuts, disk images,
+  macro-capable Office files, disguised or double extensions), attached PDFs scanned in turn,
+  names disguised with hex escapes, scripts in the file the document doesn't reach, data
+  before the header or after the end (polyglots), unusual compression chains, damaged
+  structure, and the sites the document links to. Decoding is capped so small files can't
+  expand into gigabytes. Optional ClamAV (`PAPERBOY_CLAMSCAN`) adds known-malware
+  signatures, also on a decrypted copy of encrypted files (written to a private temporary
+  folder and deleted), with its size limits raised and overruns reported rather than
+  passed as clean. It never calls a file "safe".
 - `inspect_hidden_data` (read-only) and `sanitize_pdf`: find and remove what a PDF carries
   besides its pages: metadata (Info and XMP), JavaScript and risky actions (launch, submit,
   import, remote go-to, ...) including those hidden in action chains and XFA, automatic

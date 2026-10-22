@@ -41,6 +41,7 @@ from .results import (
     RepairResult,
     RotateResult,
     SanitizeResult,
+    ScanResult,
     SetMetadataResult,
     SplitResult,
     TextResult,
@@ -491,6 +492,20 @@ def inspect_hidden_data(input_path: str, password: Optional[str] = None) -> Hidd
     """
     src = require_input(input_path, SETTINGS)
     return engine.inspect_hidden_data(src, SETTINGS, password)
+
+
+@mcp.tool(annotations=_reads("Scan PDF"))
+@_guard
+def scan_pdf(input_path: str, password: Optional[str] = None,
+             antivirus: bool = True) -> ScanResult:
+    """Scan a PDF you didn't make for risks: scripts (especially ones that run on open),
+    actions that launch programs, attachments that are programs or disguise their type,
+    disguised names, hidden data around the file, and (if ClamAV is installed) known
+    malware. verdict is no_active_content_found, active_content or suspicious, never "safe":
+    a scan can't prove that. To remove active content, use sanitize_pdf.
+    """
+    src = require_input(input_path, SETTINGS)
+    return engine.scan_pdf(src, SETTINGS, password, antivirus)
 
 
 @mcp.tool(annotations=_writes("Sanitize PDF"))

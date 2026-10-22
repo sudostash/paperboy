@@ -77,6 +77,7 @@ Output files are written back into your `--root` folder. Remove the server anyti
 | `list_form_fields` | List a form's fields: full name, type, value, allowed options, required/read-only *(read-only)* |
 | `fill_form` | Fill in form fields by name (text, checkboxes, radio buttons, drop-downs); every value is checked first, appearances are regenerated, optional flatten. Signed PDFs are refused |
 | `inspect_hidden_data` | Report what a PDF carries besides its pages: metadata (author, software), scripts and risky actions, attachments, comments, application data, earlier saved versions *(read-only)* |
+| `scan_pdf` | Risk report for a PDF you didn't make: scripts (especially ones that run on open), actions that run without a click, program-launching actions, attachments that are programs or disguise their type (attached PDFs are scanned too), disguised names, data hidden around the file, and known malware if ClamAV is installed. Verdict: no active content found / active content / suspicious, never "safe" *(read-only)* |
 | `sanitize_pdf` | Write a copy safe to share without that hidden data (comments optional); links, bookmarks and accessibility structure are kept |
 | `add_watermark` | Text ("CONFIDENTIAL", "DRAFT") or image watermark, or a corner stamp ("APPROVED"): position, size, colour, opacity, rotation, over or under the content |
 | `add_page_numbers` | Page numbers ("Page {n} of {total}") or Bates numbers ("ACME-{n:06}"), any corner or edge, with a start number and page selection |
@@ -114,6 +115,7 @@ pip install -e ".[dev]"
 |---|---|---|
 | **LibreOffice** (`soffice`) | `convert_to_pdf` for Office/HTML docs | `apt install libreoffice` / `brew install --cask libreoffice` |
 | **qpdf** CLI | `flatten_pdf` and deeper `check_pdf` | `apt install qpdf` / `brew install qpdf` |
+| **ClamAV** (`clamscan`) | known-malware signatures in `scan_pdf` (encrypted files are also scanned as a decrypted copy in a private temporary folder, deleted afterwards) | `apt install clamav` / `brew install clamav`, then `freshclam` |
 
 Everything else (encryption, merge, split, optimize, repair, image/text conversion) works with no system binaries — pikepdf ships qpdf in its wheel.
 
@@ -178,6 +180,8 @@ All configuration is environment variables. Sensible defaults; nothing is requir
 | `PAPERBOY_ALLOW_OVERWRITE` | `false` | Default for the `overwrite` flag on every tool. |
 | `PAPERBOY_SOFFICE` | *(auto)* | Path to the `soffice` binary. |
 | `PAPERBOY_QPDF` | *(auto)* | Path to the `qpdf` binary. |
+| `PAPERBOY_CLAMSCAN` | *(auto)* | Path to ClamAV's `clamscan`, used by `scan_pdf`. |
+| `PAPERBOY_CLAMSCAN_TIMEOUT` | `300` | Seconds before a ClamAV scan is stopped. |
 | `PAPERBOY_LOG_LEVEL` | `INFO` | Logging verbosity (logs go to stderr). |
 
 ## Security

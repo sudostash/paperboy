@@ -165,4 +165,30 @@ SCENARIOS: dict[str, dict] = {
                                     "its pages are unchanged; proposal.pdf is untouched."},
         ],
     },
+    "scan": {
+        "title": "Check a PDF for malicious content",
+        "subtitle": "Look for what attackers hide in PDFs, then make a defused copy.",
+        "files": ["invoice.pdf"],
+        "prompt": "I got invoice.pdf from a sender I don't know. Is it safe to open?",
+        "steps": [
+            {"type": "call", "tool": "scan_pdf", "args": {"input_path": "invoice.pdf"},
+             "showTable": "indicators", "headline": "verdict",
+             "columns": ["code", "severity", "detail"]},
+            {"type": "say", "text": "Don't open it. It runs a script the moment it opens, "
+                                    "and that script launches an attached Windows program "
+                                    "named statement.pdf.exe to look like a PDF. It also "
+                                    "links to an unfamiliar payment site. (No antivirus is "
+                                    "installed here, so this is a structural check.) "
+                                    "Making a copy with the script and attachment removed."},
+            {"type": "call", "tool": "sanitize_pdf", "args": {"input_path": "invoice.pdf"},
+             "showTable": "removed"},
+            {"type": "call", "tool": "scan_pdf",
+             "args": {"input_path": "invoice_sanitized.pdf"},
+             "showTable": "indicators", "headline": "verdict",
+             "columns": ["code", "severity", "detail"]},
+            {"type": "say", "text": "No active content found in invoice_sanitized.pdf; the "
+                                    "remaining link is listed for you to judge. Still treat "
+                                    "the sender as suspect: a scan can't prove a file is safe."},
+        ],
+    },
 }

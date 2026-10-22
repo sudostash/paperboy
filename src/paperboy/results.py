@@ -239,3 +239,36 @@ class SanitizeResult(Protected):
     output: str
     removed: HiddenData
     document_id_reset: bool
+
+
+class ScanIndicator(TypedDict):
+    code: str                              # e.g. "javascript_on_open", "launch_actions"
+    severity: Literal["info", "warning", "high"]
+    count: int
+    detail: str
+
+
+class ScannedFile(TypedDict):
+    name: str
+    size: int | None                       # bytes, when the file records it
+    detected_type: str                     # from the file's own bytes, not its name
+    executable: bool                       # can run on a computer if opened
+    extension_mismatch: bool               # its name hides what it really is
+
+
+class AntivirusResult(TypedDict):
+    available: bool                        # ClamAV installed (and not skipped)
+    engine: str | None                     # e.g. "ClamAV 1.4.1"
+    database: str | None                   # signature version and date
+    infected: bool | None                  # None if it couldn't scan
+    findings: list[str]                    # signature names
+    error: str | None
+
+
+class ScanResult(TypedDict):
+    path: str
+    verdict: Literal["no_active_content_found", "active_content", "suspicious"]
+    indicators: list[ScanIndicator]
+    embedded_files: list[ScannedFile]
+    antivirus: AntivirusResult
+    limits: str                            # what a scan can't tell you
