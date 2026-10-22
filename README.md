@@ -72,6 +72,8 @@ Output files are written back into your `--root` folder. Remove the server anyti
 | `flatten_pdf` | Flatten form fields and annotations *(needs qpdf CLI)* |
 | `convert_to_pdf` | Image / text / Office / HTML → PDF *(Office needs LibreOffice)* |
 | `images_to_pdf` | Combine images into one PDF |
+| `view_pages` | Show up to 5 pages to the assistant as images, so it can see layouts, scans, charts, and signatures *(read-only)* |
+| `render_pages` | Save pages as PNG or JPEG files at 36-600 dpi (copy-protected PDFs need the owner password) |
 
 **Typed results.** Every tool publishes an MCP `outputSchema` and returns `structuredContent`,
 so assistants read exact fields (`pages`, `password_protected`, `files`...) instead of parsing
@@ -190,6 +192,12 @@ All configuration is environment variables. Sensible defaults; nothing is requir
   - **Merging** protected files: they must share one password (otherwise the merge is refused,
     so no input's pages become readable with another input's password), and the output gets
     the strictest permissions of all its inputs.
+- **Copy restrictions are only partly enforced.** `render_pages` refuses to export a PDF whose
+  permissions forbid copying unless you give its owner password. `extract_text` and
+  `view_pages` do not check that permission today, so treat copy restrictions as advisory.
+- **Rendering is bounded.** Each image is capped at 40 megapixels and each `render_pages`
+  call at 400 megapixels in total. PDFium calls are serialized (it is not thread-safe), and
+  files are written via a temporary file and an atomic rename, never through a link.
 - **Tool annotations** tell clients what each tool does. The four inspection tools
   (`pdf_info`, `get_metadata`, `check_pdf`, `extract_text`) are marked `readOnlyHint`, so clients
   may run them without a prompt. Every tool that writes a file is marked `destructiveHint`
@@ -250,7 +258,7 @@ python demos/record.py            # writes demos/out/videos/<scenario>.webm
 
 - Streamable-HTTP transport with OAuth + per-session file isolation (hosted mode)
 - Watermarks, page numbering, and stamping
-- PDF → image (page rasterization) and PDF/A conversion
+- PDF/A conversion
 - OCR for scanned documents
 
 ## License

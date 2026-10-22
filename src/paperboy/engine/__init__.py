@@ -19,6 +19,7 @@ from .pages import (
     rotate_pages,
     split_pdf,
 )
+from .render import render_pages, view_pages
 from .security import decrypt_pdf, encrypt_pdf
 from .text import extract_text
 
@@ -29,4 +30,5 @@ __all__ = [
     "merge_pdfs", "split_pdf",
     "optimize_pdf", "repair_pdf", "flatten_pdf",
     "convert_to_pdf", "images_to_pdf",
+    "render_pages", "view_pages",
 ]

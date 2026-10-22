@@ -136,6 +136,34 @@ function showSchema(step) {
   stage.append(table);
 }
 
+// The transcript shows workspace paths as ~/Documents/...; they're served from files/.
+function fileUrl(displayPath) {
+  return `${base}/files/${displayPath.replace(/^~\/Documents\//, "")}`;
+}
+
+async function showImages(step) {
+  clearStage();
+  const inline = step.images.length > 0;  // view_pages returns images to the assistant
+  const items = inline
+    ? step.images.map((src, i) => {
+      const p = step.result.pages[i];
+      return { src: `${base}/${src}`, caption: `Page ${p.page} · ${p.width_px} × ${p.height_px} px` };
+    })
+    : step.result.files.map((f) => ({ src: fileUrl(f), caption: f.split("/").pop() }));
+  stage.append(el("h2", null, inline ? "What the assistant sees" : `Saved ${items.length} files`));
+  const row = el("div", `image-row ${inline ? "inline" : ""}`);
+  for (const item of items) {
+    const fig = el("figure", "shot");
+    const img = document.createElement("img");
+    img.src = item.src;
+    img.alt = item.caption;
+    fig.append(img, el("figcaption", null, item.caption));
+    row.append(fig);
+  }
+  stage.append(row);
+  await Promise.all([...row.querySelectorAll("img")].map((img) => img.decode()));
+}
+
 async function approve(card, title) {
   const bar = el("div", "approve");
   bar.append(el("span", null, `Allow Paperboy to run “${title}”?`));
@@ -166,6 +194,9 @@ async function call(step) {
   log.scrollTop = log.scrollHeight;
   if (step.showSchema) {
     showSchema(step);
+    await sleep(2600);
+  } else if (step.showImages) {
+    await showImages(step);
     await sleep(2600);
   } else if (step.show) {
     await showFiles(step.show);

@@ -5,9 +5,13 @@ The tool functions are called directly; ``@mcp.tool()`` returns them unchanged.
 """
 from __future__ import annotations
 
+import base64
 import dataclasses
+import io
+import json
 import logging
 
+import pikepdf
 import pytest
 from PIL import Image
 
@@ -48,6 +52,7 @@ INPUT_TOOLS = {
     "extract_pages": {"pages": "1"}, "rotate_pages": {"degrees": 90},
     "split_pdf": {}, "optimize_pdf": {}, "repair_pdf": {}, "flatten_pdf": {},
     "set_metadata": {"fields": {"title": "x"}}, "convert_to_pdf": {},
+    "view_pages": {}, "render_pages": {},
 }
 
 
@@ -58,7 +63,8 @@ def test_every_tool_refuses_inputs_outside_root(tool, outside):
 
 
 @pytest.mark.parametrize("tool", sorted(t for t in INPUT_TOOLS if t not in {
-    "pdf_info", "get_metadata", "check_pdf", "extract_text", "split_pdf"}))
+    "pdf_info", "get_metadata", "check_pdf", "extract_text", "split_pdf",
+    "view_pages", "render_pages"}))
 def test_every_writer_refuses_outputs_outside_root(tool, doc, outside):
     args = dict(INPUT_TOOLS[tool], input_path=str(doc), output_path=str(outside / "o.pdf"))
     with pytest.raises(S.ToolError, match="outside the allowed root"):
@@ -325,3 +331,76 @@ def test_merge_into_case_variant_of_an_input_is_refused(make_pdf):
     with pytest.raises(S.ToolError, match="same as an input"):
         S.merge_pdfs([str(a), str(b)], str(a.with_name("A.PDF")), overwrite=True)
     assert page_labels(a) == ["PAGE-1"]
+
+
+# --- rendering --------------------------------------------------------------------------
+
+
+def test_render_pages_defaults_to_a_sibling_folder(doc):
+    res = S.render_pages(str(doc), pages="1-2", dpi=72)
+    assert res["output_dir"] == str(doc.parent / "doc_pages")
+    assert [f.rsplit("/", 1)[1] for f in res["files"]] == ["doc_p001.png", "doc_p002.png"]
+    with pytest.raises(S.ToolError, match="already exists"):
+        S.render_pages(str(doc), pages="1", dpi=72)
+    S.render_pages(str(doc), pages="1", dpi=72, overwrite=True)
+
+
+def test_render_pages_refuses_output_dir_outside_root(doc, outside):
+    with pytest.raises(S.ToolError, match="outside the allowed root"):
+        S.render_pages(str(doc), output_dir=str(outside / "imgs"))
+    assert not (outside / "imgs").exists()
+
+
+def test_render_pages_into_named_folder(doc, tmp_path):
+    res = S.render_pages(str(doc), pages="last", format="jpeg", dpi=72,
+                         output_dir=str(tmp_path / "out"))
+    assert res["files"] == [str(tmp_path / "out" / "doc_p005.jpg")]
+
+
+def test_render_pages_honours_copy_protection(make_pdf, tmp_path):
+    src = make_pdf("p.pdf", 1)
+    locked = tmp_path / "locked.pdf"
+    with pikepdf.open(src) as pdf:
+        pdf.save(locked, encryption=pikepdf.Encryption(
+            user="u", owner="o", R=6, allow=pikepdf.Permissions(extract=False)))
+    with pytest.raises(S.ToolError, match="does not allow copying"):
+        S.render_pages(str(locked), password="u")
+    assert S.render_pages(str(locked), password="o", dpi=72)["pages"] == [1]
+
+
+def test_view_pages_returns_text_summary_then_one_image_per_page(doc):
+    result = S.view_pages(str(doc), pages="2-3", max_side_px=400)
+    content = result.content
+    summary = json.loads(content[0].text)
+    # mcp 2.x calls it structured_content, mcp 1.x structuredContent.
+    assert summary == getattr(result, "structured_content",
+                              getattr(result, "structuredContent", None))
+    assert [p["page"] for p in summary["pages"]] == [2, 3]
+    images = content[1:]
+    assert [c.type for c in images] == ["image", "image"]
+    for item, page in zip(images, summary["pages"], strict=True):
+        with Image.open(io.BytesIO(base64.b64decode(item.data))) as im:
+            assert im.format == "PNG"
+            assert im.size == (page["width_px"], page["height_px"])
+            assert max(im.size) == 400
+
+
+def test_view_pages_writes_nothing(doc):
+    before = sorted(p.name for p in doc.parent.iterdir())
+    S.view_pages(str(doc))
+    assert sorted(p.name for p in doc.parent.iterdir()) == before
+
+
+def test_view_pages_errors_are_tool_errors(make_pdf):
+    six = make_pdf("six.pdf", 6)
+    with pytest.raises(S.ToolError, match="at most 5 pages"):
+        S.view_pages(str(six), pages="1-6")
+    with pytest.raises(S.ToolError, match="max_side_px must be between"):
+        S.view_pages(str(six), max_side_px=5000)
+
+
+def test_render_pages_default_folder_symlinked_outside_root_is_refused(doc, outside):
+    (doc.parent / "doc_pages").symlink_to(outside, target_is_directory=True)
+    with pytest.raises(S.ToolError, match="outside the allowed root"):
+        S.render_pages(str(doc), dpi=72)
+    assert list(outside.iterdir()) == [outside / "secret.pdf"]

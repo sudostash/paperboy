@@ -7,6 +7,14 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `view_pages`: returns up to five pages as images (PNG, long side 200-2000 px, default 1568)
+  so the assistant can see layouts, scans, charts, and signatures. Read-only.
+- `render_pages`: saves pages as PNG or JPEG files at 36-600 dpi. Honors a PDF's copy
+  restriction unless the owner password is given; refuses images over 40 megapixels or
+  calls over 400 megapixels in total; writes via a temporary file and atomic rename (never
+  through symlinks or hard links) and never leaves partial output behind.
+- Page rendering uses PDFium via `pypdfium2` (BSD-3-Clause / Apache-2.0), serialized
+  behind a lock because PDFium is not thread-safe.
 - Structured output: every tool declares an MCP `outputSchema` (from typed result shapes in
   `paperboy.results`) and returns `structuredContent` alongside the JSON text.
 - MCP tool annotations on every tool: a human-readable `title`, `readOnlyHint` on the four
@@ -18,6 +26,8 @@ All notable changes to this project are documented here. The format follows
   and a CI job that runs the suite against mcp 1.x.
 
 ### Changed
+- Minimum `mcp` raised to 1.22, the first release where a tool can return images alongside
+  schema-checked structured content.
 - `pdf_info`'s `metadata` now holds the same friendly fields as `get_metadata` (`title`,
   `author`, `subject`, `keywords`, `creator`, `producer`) instead of raw XMP keys.
 - Tool results always contain every field: values that don't apply are `null` (e.g.
@@ -31,6 +41,8 @@ All notable changes to this project are documented here. The format follows
   permission is always granted, per PDF 2.0).
 
 ### Fixed
+- `prepare_output_dir` (used by `split_pdf`'s `output_dir`) reported an existing regular file
+  at that path as an internal error; it is now a clear error.
 - `pdf_info` and `get_metadata` reported no metadata for PDFs that store it only in the
   classic Info dictionary (very common); fields now come from XMP when present, otherwise
   from the Info dictionary. An empty XMP value no longer shows up as the string "None".
