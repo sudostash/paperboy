@@ -10,7 +10,6 @@ import functools
 import json
 import logging
 import os
-from typing import Optional
 
 from mcp.types import CallToolResult, ImageContent, TextContent, ToolAnnotations
 
@@ -112,11 +111,11 @@ def _writes(title: str) -> ToolAnnotations:
     })
 
 
-def _overwrite(flag: Optional[bool]) -> bool:
+def _overwrite(flag: bool | None) -> bool:
     return SETTINGS.default_overwrite if flag is None else flag
 
 
-def _combined_output(output_path: str, inputs: list, overwrite: Optional[bool]):
+def _combined_output(output_path: str, inputs: list, overwrite: bool | None):
     """Resolve the output of a many-to-one tool; it may never replace one of its inputs."""
     out = resolve(output_path, SETTINGS)
     if any(same_file(out, src) for src in inputs):
@@ -134,7 +133,7 @@ def _combined_output(output_path: str, inputs: list, overwrite: Optional[bool]):
 
 @mcp.tool(annotations=_reads("PDF info"))
 @_guard
-def pdf_info(input_path: str, password: Optional[str] = None) -> InfoResult:
+def pdf_info(input_path: str, password: str | None = None) -> InfoResult:
     """Report page count, file size, PDF version, encryption status and metadata.
 
     Works on an encrypted file without a password (returns is_encrypted only).
@@ -144,14 +143,14 @@ def pdf_info(input_path: str, password: Optional[str] = None) -> InfoResult:
 
 @mcp.tool(annotations=_reads("Get metadata"))
 @_guard
-def get_metadata(input_path: str, password: Optional[str] = None) -> MetadataResult:
+def get_metadata(input_path: str, password: str | None = None) -> MetadataResult:
     """Read document metadata: title, author, subject, keywords, creator, producer."""
     return engine.get_metadata(require_input(input_path, SETTINGS), SETTINGS, password)
 
 
 @mcp.tool(annotations=_reads("Check PDF"))
 @_guard
-def check_pdf(input_path: str, password: Optional[str] = None) -> CheckResult:
+def check_pdf(input_path: str, password: str | None = None) -> CheckResult:
     """Validate structural integrity and report any problems found."""
     return engine.check_pdf(require_input(input_path, SETTINGS), SETTINGS, password)
 
@@ -160,8 +159,8 @@ def check_pdf(input_path: str, password: Optional[str] = None) -> CheckResult:
 @_guard
 def extract_text(
     input_path: str,
-    pages: Optional[str] = None,
-    password: Optional[str] = None,
+    pages: str | None = None,
+    password: str | None = None,
     max_chars: int = 50000,
 ) -> TextResult:
     """Extract text from all pages or a page spec (e.g. "1-3,7"). Returns text + truncation flag."""
@@ -180,14 +179,14 @@ def extract_text(
 def encrypt_pdf(
     input_path: str,
     user_password: str,
-    output_path: Optional[str] = None,
-    owner_password: Optional[str] = None,
+    output_path: str | None = None,
+    owner_password: str | None = None,
     algorithm: str = "AES-256",
     allow_print: bool = True,
     allow_copy: bool = True,
     allow_modify: bool = True,
-    current_password: Optional[str] = None,
-    overwrite: Optional[bool] = None,
+    current_password: str | None = None,
+    overwrite: bool | None = None,
 ) -> EncryptResult:
     """Add a password to a PDF.
 
@@ -209,8 +208,8 @@ def encrypt_pdf(
 def decrypt_pdf(
     input_path: str,
     password: str,
-    output_path: Optional[str] = None,
-    overwrite: Optional[bool] = None,
+    output_path: str | None = None,
+    overwrite: bool | None = None,
 ) -> DecryptResult:
     """Remove the password from a PDF, given its correct password. Not a cracker."""
     src = require_input(input_path, SETTINGS)
@@ -228,10 +227,10 @@ def decrypt_pdf(
 def rearrange_pages(
     input_path: str,
     page_order: str,
-    output_path: Optional[str] = None,
+    output_path: str | None = None,
     append_unlisted: bool = False,
-    password: Optional[str] = None,
-    overwrite: Optional[bool] = None,
+    password: str | None = None,
+    overwrite: bool | None = None,
 ) -> RearrangeResult:
     """Reorder/duplicate/reverse pages. page_order e.g. "3,1,2", "5-1" (reverse), "last,1-4".
 
@@ -247,9 +246,9 @@ def rearrange_pages(
 def delete_pages(
     input_path: str,
     pages: str,
-    output_path: Optional[str] = None,
-    password: Optional[str] = None,
-    overwrite: Optional[bool] = None,
+    output_path: str | None = None,
+    password: str | None = None,
+    overwrite: bool | None = None,
 ) -> DeleteResult:
     """Delete pages, e.g. pages="2,5-7"."""
     src = require_input(input_path, SETTINGS)
@@ -262,9 +261,9 @@ def delete_pages(
 def extract_pages(
     input_path: str,
     pages: str,
-    output_path: Optional[str] = None,
-    password: Optional[str] = None,
-    overwrite: Optional[bool] = None,
+    output_path: str | None = None,
+    password: str | None = None,
+    overwrite: bool | None = None,
 ) -> ExtractResult:
     """Save only the given pages as a new PDF, e.g. pages="1-3,10"."""
     src = require_input(input_path, SETTINGS)
@@ -277,10 +276,10 @@ def extract_pages(
 def rotate_pages(
     input_path: str,
     degrees: int,
-    pages: Optional[str] = None,
-    output_path: Optional[str] = None,
-    password: Optional[str] = None,
-    overwrite: Optional[bool] = None,
+    pages: str | None = None,
+    output_path: str | None = None,
+    password: str | None = None,
+    overwrite: bool | None = None,
 ) -> RotateResult:
     """Rotate pages clockwise by 90/180/270 degrees (all pages if pages omitted)."""
     src = require_input(input_path, SETTINGS)
@@ -293,8 +292,8 @@ def rotate_pages(
 def merge_pdfs(
     input_paths: list[str],
     output_path: str,
-    passwords: Optional[dict[str, str]] = None,
-    overwrite: Optional[bool] = None,
+    passwords: dict[str, str] | None = None,
+    overwrite: bool | None = None,
 ) -> MergeResult:
     """Merge PDFs in the given order into output_path.
 
@@ -315,10 +314,10 @@ def merge_pdfs(
 @_guard
 def split_pdf(
     input_path: str,
-    ranges: Optional[str] = None,
-    output_dir: Optional[str] = None,
-    password: Optional[str] = None,
-    overwrite: Optional[bool] = None,
+    ranges: str | None = None,
+    output_dir: str | None = None,
+    password: str | None = None,
+    overwrite: bool | None = None,
 ) -> SplitResult:
     """Split a PDF into several files.
 
@@ -344,11 +343,11 @@ def split_pdf(
 @_guard
 def optimize_pdf(
     input_path: str,
-    output_path: Optional[str] = None,
+    output_path: str | None = None,
     linearize: bool = True,
     compress: bool = True,
-    password: Optional[str] = None,
-    overwrite: Optional[bool] = None,
+    password: str | None = None,
+    overwrite: bool | None = None,
 ) -> OptimizeResult:
     """Shrink a PDF: linearize ("fast web view") and recompress object streams."""
     src = require_input(input_path, SETTINGS)
@@ -360,9 +359,9 @@ def optimize_pdf(
 @_guard
 def repair_pdf(
     input_path: str,
-    output_path: Optional[str] = None,
-    password: Optional[str] = None,
-    overwrite: Optional[bool] = None,
+    output_path: str | None = None,
+    password: str | None = None,
+    overwrite: bool | None = None,
 ) -> RepairResult:
     """Rebuild a damaged PDF's structure by reading and rewriting it."""
     src = require_input(input_path, SETTINGS)
@@ -374,9 +373,9 @@ def repair_pdf(
 @_guard
 def flatten_pdf(
     input_path: str,
-    output_path: Optional[str] = None,
-    password: Optional[str] = None,
-    overwrite: Optional[bool] = None,
+    output_path: str | None = None,
+    password: str | None = None,
+    overwrite: bool | None = None,
 ) -> FlattenResult:
     """Flatten form fields and annotations into page content (requires the qpdf CLI)."""
     src = require_input(input_path, SETTINGS)
@@ -394,9 +393,9 @@ def flatten_pdf(
 def set_metadata(
     input_path: str,
     fields: dict[str, str],
-    output_path: Optional[str] = None,
-    password: Optional[str] = None,
-    overwrite: Optional[bool] = None,
+    output_path: str | None = None,
+    password: str | None = None,
+    overwrite: bool | None = None,
 ) -> SetMetadataResult:
     """Set metadata. fields keys: title, author, subject, keywords, creator, producer."""
     if not fields:
@@ -415,8 +414,8 @@ def set_metadata(
 @_guard
 def convert_to_pdf(
     input_path: str,
-    output_path: Optional[str] = None,
-    overwrite: Optional[bool] = None,
+    output_path: str | None = None,
+    overwrite: bool | None = None,
 ) -> ConvertResult:
     """Create a PDF from an image, a text/markdown file, or an Office/HTML document.
 
@@ -432,7 +431,7 @@ def convert_to_pdf(
 def images_to_pdf(
     input_paths: list[str],
     output_path: str,
-    overwrite: Optional[bool] = None,
+    overwrite: bool | None = None,
 ) -> ImagesResult:
     """Combine images into a single PDF, one image per page, in order."""
     if not isinstance(input_paths, list) or not input_paths:
@@ -449,7 +448,7 @@ def images_to_pdf(
 
 @mcp.tool(annotations=_reads("List form fields"))
 @_guard
-def list_form_fields(input_path: str, password: Optional[str] = None) -> FormFieldsResult:
+def list_form_fields(input_path: str, password: str | None = None) -> FormFieldsResult:
     """List a PDF form's fields: full name, type, current value, allowed options, flags, page.
 
     Use the names with fill_form. If copying is forbidden and only the open password
@@ -464,10 +463,10 @@ def list_form_fields(input_path: str, password: Optional[str] = None) -> FormFie
 def fill_form(
     input_path: str,
     values: dict[str, str | bool],
-    output_path: Optional[str] = None,
+    output_path: str | None = None,
     flatten: bool = False,
-    password: Optional[str] = None,
-    overwrite: Optional[bool] = None,
+    password: str | None = None,
+    overwrite: bool | None = None,
 ) -> FillFormResult:
     """Fill in form fields: values maps each field's full name to its value.
 
@@ -491,7 +490,7 @@ def fill_form(
 
 @mcp.tool(annotations=_reads("Get bookmarks"))
 @_guard
-def get_outline(input_path: str, password: Optional[str] = None) -> OutlineResult:
+def get_outline(input_path: str, password: str | None = None) -> OutlineResult:
     """List a PDF's bookmarks (its outline) in reading order: each one's level (1 = top,
     2 = nested under the one before, ...), title and 1-based target page (null if it
     doesn't go to a page here). Bookmarks that open a web or email address have link set;
@@ -508,9 +507,9 @@ def get_outline(input_path: str, password: Optional[str] = None) -> OutlineResul
 def set_outline(
     input_path: str,
     entries: list[Bookmark],
-    output_path: Optional[str] = None,
-    password: Optional[str] = None,
-    overwrite: Optional[bool] = None,
+    output_path: str | None = None,
+    password: str | None = None,
+    overwrite: bool | None = None,
 ) -> SetOutlineResult:
     """Replace a PDF's bookmarks (its outline) with entries, in reading order. Each has a
     title, a level (default 1, up to 20; at most one deeper than the entry before it, so
@@ -535,7 +534,7 @@ def set_outline(
 # --------------------------------------------------------------------------- #
 
 
-def _output_folder(src, output_dir: Optional[str], suffix: str):
+def _output_folder(src, output_dir: str | None, suffix: str):
     """The output folder: as given, or "<name><suffix>" next to the input; either way
     resolved and confined to the root (a planted link can't redirect it). It is only
     created when the first file is written."""
@@ -547,7 +546,7 @@ def _output_folder(src, output_dir: Optional[str], suffix: str):
 
 @mcp.tool(annotations=_reads("List attachments"))
 @_guard
-def list_attachments(input_path: str, password: Optional[str] = None) -> AttachmentsResult:
+def list_attachments(input_path: str, password: str | None = None) -> AttachmentsResult:
     """List the files embedded in a PDF (attached to the document or to a page): name,
     description, declared type and size, the type detected from the file's own bytes,
     and whether it can run on a computer or has a name that hides what it is.
@@ -561,11 +560,11 @@ def list_attachments(input_path: str, password: Optional[str] = None) -> Attachm
 @_guard
 def extract_attachments(
     input_path: str,
-    names: Optional[list[str]] = None,
-    output_dir: Optional[str] = None,
+    names: list[str] | None = None,
+    output_dir: str | None = None,
     allow_executables: bool = False,
-    password: Optional[str] = None,
-    overwrite: Optional[bool] = None,
+    password: str | None = None,
+    overwrite: bool | None = None,
 ) -> ExtractAttachmentsResult:
     """Save files embedded in a PDF into a folder (default: "<name>_attachments" next to
     it): all of them, or those named (see list_attachments). Names are made safe to use
@@ -587,11 +586,11 @@ def extract_attachments(
 @_guard
 def extract_images(
     input_path: str,
-    pages: Optional[str] = None,
+    pages: str | None = None,
     min_size: int = 0,
-    output_dir: Optional[str] = None,
-    password: Optional[str] = None,
-    overwrite: Optional[bool] = None,
+    output_dir: str | None = None,
+    password: str | None = None,
+    overwrite: bool | None = None,
 ) -> ExtractImagesResult:
     """Save the pictures in a PDF as image files, in a folder (default: "<name>_images"
     next to it), named page001-image01.png and so on. pages limits it to a page spec
@@ -618,7 +617,7 @@ def extract_images(
 
 @mcp.tool(annotations=_reads("Inspect hidden data"))
 @_guard
-def inspect_hidden_data(input_path: str, password: Optional[str] = None) -> HiddenDataResult:
+def inspect_hidden_data(input_path: str, password: str | None = None) -> HiddenDataResult:
     """Report hidden data a PDF carries before sharing it: metadata (author, software),
     scripts and risky actions, attachments, comments, application data, thumbnails,
     and earlier saved versions still inside the file. Changes nothing.
@@ -629,7 +628,7 @@ def inspect_hidden_data(input_path: str, password: Optional[str] = None) -> Hidd
 
 @mcp.tool(annotations=_reads("Scan PDF"))
 @_guard
-def scan_pdf(input_path: str, password: Optional[str] = None,
+def scan_pdf(input_path: str, password: str | None = None,
              antivirus: bool = True) -> ScanResult:
     """Scan a PDF you didn't make for risks: scripts (especially ones that run on open),
     actions that launch programs, attachments that are programs or disguise their type,
@@ -645,13 +644,13 @@ def scan_pdf(input_path: str, password: Optional[str] = None,
 @_guard
 def sanitize_pdf(
     input_path: str,
-    output_path: Optional[str] = None,
+    output_path: str | None = None,
     remove_metadata: bool = True,
     remove_scripts: bool = True,
     remove_attachments: bool = True,
     remove_comments: bool = False,
-    password: Optional[str] = None,
-    overwrite: Optional[bool] = None,
+    password: str | None = None,
+    overwrite: bool | None = None,
 ) -> SanitizeResult:
     """Write a copy without hidden data: metadata (incl. comment authors and camera data
     in images), scripts and risky actions, and attachments (comments too if
@@ -677,19 +676,19 @@ def sanitize_pdf(
 @_guard
 def add_watermark(
     input_path: str,
-    text: Optional[str] = None,
-    image_path: Optional[str] = None,
+    text: str | None = None,
+    image_path: str | None = None,
     position: str = "center",
-    pages: Optional[str] = None,
+    pages: str | None = None,
     opacity: float = 0.2,
-    rotation: Optional[float] = None,
-    font_size: Optional[float] = None,
+    rotation: float | None = None,
+    font_size: float | None = None,
     scale: float = 0.5,
     color: str = "gray",
     layer: str = "over",
-    output_path: Optional[str] = None,
-    password: Optional[str] = None,
-    overwrite: Optional[bool] = None,
+    output_path: str | None = None,
+    password: str | None = None,
+    overwrite: bool | None = None,
 ) -> WatermarkResult:
     """Add a text watermark ("CONFIDENTIAL", "DRAFT") or an image (a logo) to pages.
 
@@ -713,13 +712,13 @@ def add_page_numbers(
     format: str = "Page {n} of {total}",
     position: str = "bottom-center",
     start: int = 1,
-    pages: Optional[str] = None,
+    pages: str | None = None,
     font_size: float = 10,
     margin: float = 36,
     color: str = "black",
-    output_path: Optional[str] = None,
-    password: Optional[str] = None,
-    overwrite: Optional[bool] = None,
+    output_path: str | None = None,
+    password: str | None = None,
+    overwrite: bool | None = None,
 ) -> PageNumbersResult:
     """Add page numbers, or Bates numbers for legal documents (format="ACME-{n:06}").
 
@@ -742,9 +741,9 @@ def add_page_numbers(
 @_guard
 def view_pages(
     input_path: str,
-    pages: Optional[str] = None,
+    pages: str | None = None,
     max_side_px: int = 1568,
-    password: Optional[str] = None,
+    password: str | None = None,
 ) -> ViewResult:
     """Look at pages as images: layout, scans, charts, signatures, handwriting.
 
@@ -769,9 +768,9 @@ def view_pages(
 @_guard
 def find_blank_pages(
     input_path: str,
-    pages: Optional[str] = None,
+    pages: str | None = None,
     ink_threshold_percent: float = 0.005,
-    password: Optional[str] = None,
+    password: str | None = None,
 ) -> BlankPagesResult:
     """Find blank pages (no text, no ink) and nearly blank ones (no text, a little ink).
 
@@ -789,12 +788,12 @@ def find_blank_pages(
 @_guard
 def render_pages(
     input_path: str,
-    pages: Optional[str] = None,
+    pages: str | None = None,
     dpi: int = 150,
     format: str = "png",
-    output_dir: Optional[str] = None,
-    password: Optional[str] = None,
-    overwrite: Optional[bool] = None,
+    output_dir: str | None = None,
+    password: str | None = None,
+    overwrite: bool | None = None,
 ) -> RenderResult:
     """Save pages as PNG or JPEG image files, one per page (all pages if pages omitted).
 

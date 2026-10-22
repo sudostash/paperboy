@@ -273,6 +273,18 @@ Every module has a test file (`tests/test_<module>.py`). Tests that need the qpd
 it is absent; LibreOffice conversions are tested with a stand-in `soffice` script, so they run
 everywhere. CI also runs the suite against mcp 1.x.
 
+Before opening a pull request, run the CI jobs locally (GitHub Actions is currently turned
+off for this repository):
+
+```bash
+scripts/ci-local.sh                 # lint, Python 3.10-3.13 with the coverage gate, mcp 1.x,
+                                    # lowest dependency versions, and the browser demos
+scripts/ci-local.sh lint test-3.12  # just some jobs
+```
+
+It needs [uv](https://docs.astral.sh/uv/) (which fetches any missing Python version) and
+qpdf, and keeps one virtualenv per job in `.ci/`.
+
 ### Demo videos
 
 `demos/` records a short tutorial video for each feature. Every scenario runs against the real

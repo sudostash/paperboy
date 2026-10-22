@@ -16,3 +16,4 @@ venv/
 demos/out/
 .coverage
 htmlcov/
+.ci/
