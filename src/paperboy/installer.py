@@ -184,7 +184,8 @@ def uninstall(client_key: str, *, name: str = SERVER_NAME) -> dict:
             raise RuntimeError("The `claude` CLI was not found.")
         proc = subprocess.run([claude, "mcp", "remove", name], capture_output=True, text=True)
         if proc.returncode != 0:
-            raise RuntimeError(f"`claude mcp remove` failed: {(proc.stderr or proc.stdout).strip()}")
+            detail = (proc.stderr or proc.stdout).strip()
+            raise RuntimeError(f"`claude mcp remove` failed: {detail}")
         return {"client": "claude-code", "action": "removed", "name": name}
 
     path = client.config_path()

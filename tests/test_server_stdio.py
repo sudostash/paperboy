@@ -10,10 +10,9 @@ import os
 import sys
 
 import pytest
-from reportlab.pdfgen import canvas
-
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
+from reportlab.pdfgen import canvas
 
 EXPECTED_TOOLS = {
     "pdf_info", "get_metadata", "check_pdf", "extract_text",

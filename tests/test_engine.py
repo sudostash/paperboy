@@ -1,8 +1,6 @@
 """Engine tests. These exercise PDF behavior directly, without the MCP layer."""
 from __future__ import annotations
 
-import shutil
-
 import pikepdf
 import pytest
 from PIL import Image
@@ -11,7 +9,6 @@ from paperboy import engine as E
 from paperboy.errors import DependencyError, PdfUserError
 
 from conftest import HAS_QPDF, HAS_SOFFICE, page_labels
-
 
 # --- inspection -----------------------------------------------------------
 
