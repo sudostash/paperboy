@@ -5,15 +5,17 @@ import io
 import os
 import tempfile
 import threading
+import time
 from pathlib import Path
 
 import pypdfium2 as pdfium
+import pypdfium2.raw as pdfium_raw
 
 from ..config import Settings
 from ..errors import PdfUserError
 from ..pagespec import parse_pages
 from ..paths import same_file
-from ..results import RenderResult, ViewResult
+from ..results import BlankPagesResult, RenderResult, ViewResult
 from .base import open_pdf, require_copy_permission
 
 DPI_RANGE = (36, 600)
@@ -21,6 +23,12 @@ MAX_PIXELS = 40_000_000         # per image, about 6300 x 6300; bounds memory pe
 MAX_TOTAL_PIXELS = 400_000_000  # per render_pages call; bounds time and disk use
 VIEW_MAX_PAGES = 5
 VIEW_SIDE_RANGE = (200, 2000)
+BLANK_DPI = 50              # enough to see marks, cheap to render
+BLANK_MAX_SIDE = 1000       # bounds pixels per page whatever its size
+BLANK_THRESHOLD_RANGE = (0.0, 5.0)
+NEARLY_BLANK_LIMIT = 0.5    # % ink up to which a text-free page is worth a look
+BLANK_TIME_LIMIT_S = 60     # per call; a hostile file can make each page slow
+INK_CONTRAST = 25           # grey levels from the background that count as a mark
 FORMATS = {"png": ("png", "PNG", ".png"), "jpeg": ("jpeg", "JPEG", ".jpg"),
            "jpg": ("jpeg", "JPEG", ".jpg")}
 
@@ -53,9 +61,13 @@ def _open(data: bytes) -> pdfium.PdfDocument:
     # file can't be swapped between the permission check and rendering.
     with _PDFIUM_LOCK:
         try:
-            return pdfium.PdfDocument(data)
+            doc = pdfium.PdfDocument(data)
         except pdfium.PdfiumError as exc:
             raise PdfUserError(f"Could not open PDF: {exc}") from exc
+        # Render form fields too; without this PDFium skips them, so a filled-in form
+        # would look empty (and a page of fields could be reported blank).
+        doc.init_forms()
+        return doc
 
 
 def _close(doc: pdfium.PdfDocument) -> None:
@@ -76,19 +88,57 @@ def _page_size(doc: pdfium.PdfDocument, index: int) -> tuple[float, float]:
             page.close()
 
 
-def _render(doc: pdfium.PdfDocument, index: int, scale: float):
+def _render(doc: pdfium.PdfDocument, index: int, scale: float, *, grayscale: bool = False):
     """Render one page to a PIL image that no longer references PDFium memory."""
     with _PDFIUM_LOCK:
         try:
             page = doc[index]
             try:
-                image = page.render(scale=scale).to_pil()
+                image = page.render(scale=scale, grayscale=grayscale).to_pil()
                 # to_pil shares the bitmap's buffer for these modes; detach it.
                 return image.copy() if image.mode in ("RGBA", "RGBX", "L") else image
             finally:
                 page.close()
         except pdfium.PdfiumError as exc:
             raise PdfUserError(f"Could not render page {index + 1}: {exc}") from exc
+
+
+def _has_text(doc: pdfium.PdfDocument, index: int) -> bool:
+    """True if the page has any text object, even whitespace or invisible OCR text.
+
+    Probes page objects instead of building PDFium's text index, which a tiny file
+    can make take minutes and gigabytes. Counting any text as content errs toward
+    keeping a page.
+    """
+    with _PDFIUM_LOCK:
+        try:
+            page = doc[index]
+            try:
+                objects = page.get_objects(filter=[pdfium_raw.FPDF_PAGEOBJ_TEXT],
+                                           max_depth=15)
+                return next(objects, None) is not None
+            finally:
+                page.close()
+        except pdfium.PdfiumError as exc:
+            raise PdfUserError(f"Could not read page {index + 1}: {exc}") from exc
+
+
+def _ink_percent(image) -> float:
+    """Share of pixels that clearly differ from the page's background (its median shade).
+
+    Measuring against the background, not white, keeps off-white or coloured scans
+    blank; a uniform page of any colour has no ink.
+    """
+    hist = image.histogram()
+    total = sum(hist)
+    seen, background = 0, 255
+    for shade, count in enumerate(hist):
+        seen += count
+        if seen * 2 >= total:
+            background = shade
+            break
+    ink = sum(count for shade, count in enumerate(hist) if abs(shade - background) > INK_CONTRAST)
+    return ink / total * 100
 
 
 def _check_target(f: Path, src: Path, overwrite: bool) -> None:
@@ -211,3 +261,54 @@ def view_pages(
     finally:
         _close(doc)
     return {"path": str(path), "total_pages": total, "pages": viewed}, images
+
+
+def find_blank_pages(
+    path: Path,
+    settings: Settings,
+    pages: str | None = None,
+    ink_threshold_percent: float = 0.005,
+    password: str | None = None,
+) -> BlankPagesResult:
+    """Sort text-free pages into blank and nearly blank.
+
+    A page with any text object is content. Otherwise it is rendered small in
+    grayscale: blank if at most *ink_threshold_percent* of its pixels differ from
+    its background, nearly blank up to NEARLY_BLANK_LIMIT (dust, a stamp, initials:
+    look with view_pages before deleting). Analysing pages isn't copying them, so a
+    copy-restricted PDF only needs its open password. Stops after
+    BLANK_TIME_LIMIT_S, reporting ``complete: false``.
+    """
+    if not BLANK_THRESHOLD_RANGE[0] <= ink_threshold_percent <= BLANK_THRESHOLD_RANGE[1]:
+        raise PdfUserError(
+            f"ink_threshold_percent must be between {BLANK_THRESHOLD_RANGE[0]:g} and "
+            f"{BLANK_THRESHOLD_RANGE[1]:g}"
+        )
+    data, total = _plain_copy(path.read_bytes(), settings, password, exporting=False)
+    targets = parse_pages(pages, total, dedupe=True) if pages else list(range(total))
+    details, checked = [], 0
+    if targets:
+        deadline = time.monotonic() + BLANK_TIME_LIMIT_S
+        doc = _open(data)
+        try:
+            for i in targets:
+                if checked and time.monotonic() > deadline:
+                    break
+                checked += 1
+                if _has_text(doc, i):
+                    continue
+                scale = min(BLANK_DPI / 72, BLANK_MAX_SIDE / max(_page_size(doc, i)))
+                ink = _ink_percent(_render(doc, i, scale, grayscale=True))
+                if ink <= max(ink_threshold_percent, NEARLY_BLANK_LIMIT):
+                    verdict = "blank" if ink <= ink_threshold_percent else "nearly_blank"
+                    details.append({"page": i + 1, "ink_percent": round(ink, 4),
+                                    "verdict": verdict})
+        finally:
+            _close(doc)
+    return {
+        "path": str(path), "total_pages": total, "pages_checked": checked,
+        "complete": checked == len(targets),
+        "blank_pages": [d["page"] for d in details if d["verdict"] == "blank"],
+        "nearly_blank_pages": [d["page"] for d in details if d["verdict"] == "nearly_blank"],
+        "details": details, "ink_threshold_percent": ink_threshold_percent,
+    }

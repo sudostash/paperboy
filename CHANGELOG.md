@@ -7,6 +7,14 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `find_blank_pages` (read-only): a page with any text object is content; otherwise it is
+  rendered small and measured against its own background (so off-white paper is fine).
+  `blank_pages` (at most `ink_threshold_percent`, default 0.005%) can go straight to
+  `delete_pages`; `nearly_blank_pages` (up to 0.5% ink: dust, but also a stamp or initials)
+  should be looked at with `view_pages` first. Bounded per page and per call (60 s, then
+  `complete: false`).
+- PDFium now renders form fields, so `view_pages` and `render_pages` show filled-in values
+  (they were blank before).
 - `view_pages`: returns up to five pages as images (PNG, long side 200-2000 px, default 1568)
   so the assistant can see layouts, scans, charts, and signatures. Read-only.
 - `render_pages`: saves pages as PNG or JPEG files at 36-600 dpi. Honors a PDF's copy

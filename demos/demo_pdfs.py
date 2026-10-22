@@ -76,7 +76,44 @@ def build_report(path: Path) -> Path:
     return path
 
 
-BUILDERS = {"report.pdf": build_report}
+SCAN_PAGES = [
+    ("Field notes", ["Route 14: two failed first attempts.", "Depot B: van 7 in for service."]),
+    None,                                   # a page the scanner fed through empty
+    ("Field notes (cont.)", ["Customer feedback: 4.6 / 5 average.", "Next audit: 3 Nov."]),
+    "dust",                                 # an empty page with a few specks of dust
+    ("Sign-off", ["Reviewed by the regional lead."]),
+]
+
+
+def build_scan(path: Path) -> Path:
+    """A five-page 'scan' with a truly blank page 2 and a dusty but empty page 4."""
+    import random
+
+    c = canvas.Canvas(str(path), pagesize=letter)
+    width, height = letter
+    for page in SCAN_PAGES:
+        c.setFillColor(colors.HexColor("#fbfaf6"))  # off-white scanner paper
+        c.rect(0, 0, width, height, stroke=0, fill=1)
+        if page == "dust":
+            rnd = random.Random(7)
+            c.setFillGray(0.35)
+            for _ in range(20):
+                c.circle(rnd.uniform(40, width - 40), rnd.uniform(40, height - 40), 0.7,
+                         stroke=0, fill=1)
+        elif page:
+            title, lines = page
+            c.setFillColor(INK)
+            c.setFont("Helvetica-Bold", 24)
+            c.drawString(72, height - 110, title)
+            c.setFont("Helvetica", 14)
+            for i, line in enumerate(lines):
+                c.drawString(72, height - 160 - i * 26, line)
+        c.showPage()
+    c.save()
+    return path
+
+
+BUILDERS = {"report.pdf": build_report, "scan.pdf": build_scan}
 
 
 def build(names: list[str], workspace: Path) -> None:

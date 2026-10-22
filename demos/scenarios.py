@@ -8,7 +8,9 @@ Step types:
     {"type": "tools"}                      list the server's tools and their hints
     {"type": "say", "text": ...}           an assistant message
     {"type": "call", "tool": ..., "args": {...},
-     "show": {"before": file, "after": file},  call a tool, optionally render PDFs,
+     "show": {"before": file, "after": file,   call a tool, optionally render PDFs
+              "highlight": result_field,        (outlining pages listed in the result
+              "review": result_field},          in red, or amber for "look first"),
      "showSchema": True,                       or show its typed result vs. its schema,
      "showImages": True}                       or the images it returned / files it saved
 
@@ -70,6 +72,28 @@ SCENARIOS: dict[str, dict] = {
              "showImages": True},
             {"type": "say", "text": "Saved 3 PNGs at 150 dpi in report_pages/: report_p001.png "
                                     "to report_p003.png."},
+        ],
+    },
+    "blank-pages": {
+        "title": "Find and remove blank pages",
+        "subtitle": "Empty pages and scanner dust are found by text and ink, then removed.",
+        "files": ["scan.pdf"],
+        "prompt": "scan.pdf came out of the scanner with blank pages in it. "
+                  "Find them and take them out.",
+        "steps": [
+            {"type": "call", "tool": "find_blank_pages", "args": {"input_path": "scan.pdf"},
+             "show": {"after": "scan.pdf", "highlight": "blank_pages",
+                      "review": "nearly_blank_pages"}},
+            {"type": "say", "text": "Page 2 is blank. Page 4 is nearly blank: it has a few "
+                                    "marks, so I'll look at it before deleting anything."},
+            {"type": "call", "tool": "view_pages",
+             "args": {"input_path": "scan.pdf", "pages": "4"}, "showImages": True},
+            {"type": "say", "text": "Page 4 is only scanner dust. Removing pages 2 and 4."},
+            {"type": "call", "tool": "delete_pages",
+             "args": {"input_path": "scan.pdf", "pages": "2,4"},
+             "show": {"before": "scan.pdf", "after": "scan_trimmed.pdf"}},
+            {"type": "say", "text": "Done. scan_trimmed.pdf has the 3 pages with content, "
+                                    "and scan.pdf is unchanged."},
         ],
     },
 }

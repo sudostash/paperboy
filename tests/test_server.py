@@ -52,7 +52,7 @@ INPUT_TOOLS = {
     "extract_pages": {"pages": "1"}, "rotate_pages": {"degrees": 90},
     "split_pdf": {}, "optimize_pdf": {}, "repair_pdf": {}, "flatten_pdf": {},
     "set_metadata": {"fields": {"title": "x"}}, "convert_to_pdf": {},
-    "view_pages": {}, "render_pages": {},
+    "view_pages": {}, "render_pages": {}, "find_blank_pages": {},
 }
 
 
@@ -64,7 +64,7 @@ def test_every_tool_refuses_inputs_outside_root(tool, outside):
 
 @pytest.mark.parametrize("tool", sorted(t for t in INPUT_TOOLS if t not in {
     "pdf_info", "get_metadata", "check_pdf", "extract_text", "split_pdf",
-    "view_pages", "render_pages"}))
+    "view_pages", "render_pages", "find_blank_pages"}))
 def test_every_writer_refuses_outputs_outside_root(tool, doc, outside):
     args = dict(INPUT_TOOLS[tool], input_path=str(doc), output_path=str(outside / "o.pdf"))
     with pytest.raises(S.ToolError, match="outside the allowed root"):
@@ -404,3 +404,24 @@ def test_render_pages_default_folder_symlinked_outside_root_is_refused(doc, outs
     with pytest.raises(S.ToolError, match="outside the allowed root"):
         S.render_pages(str(doc), dpi=72)
     assert list(outside.iterdir()) == [outside / "secret.pdf"]
+
+
+
+def test_find_blank_pages_then_delete_them(tmp_path):
+    from reportlab.pdfgen import canvas
+    src = tmp_path / "scan.pdf"
+    c = canvas.Canvas(str(src))
+    for text in ("ONE", None, "THREE", None):
+        if text:
+            c.drawString(72, 720, text)
+        c.showPage()
+    c.save()
+    found = S.find_blank_pages(str(src))
+    assert found["blank_pages"] == [2, 4]
+    trimmed = S.delete_pages(str(src), ",".join(map(str, found["blank_pages"])))
+    assert page_labels(trimmed["output"]) == ["ONE", "THREE"]
+
+
+def test_find_blank_pages_errors_are_tool_errors(doc):
+    with pytest.raises(S.ToolError, match="ink_threshold_percent must be between"):
+        S.find_blank_pages(str(doc), ink_threshold_percent=10)
