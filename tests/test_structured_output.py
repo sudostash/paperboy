@@ -88,6 +88,15 @@ def _pictured(path):
     return str(path)
 
 
+def _tabled(path):
+    from reportlab.lib import colors
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
+    table = Table([["a", "b"], ["1", "=2"]])
+    table.setStyle(TableStyle([("GRID", (0, 0), (-1, -1), 0.5, colors.black)]))
+    SimpleDocTemplate(str(path)).build([table])
+    return str(path)
+
+
 def _text(path):
     path.write_text("hello\n  indented\n")
     return str(path)
@@ -143,6 +152,8 @@ CASES = [
     ("scan_pdf", "scan_pdf", lambda d: {"input_path": _pdf(d / "a.pdf")}),
     ("get_outline", "get_outline", lambda d: {"input_path": _pdf(d / "a.pdf")}),
     ("search_text", "search_text", lambda d: {"input_path": _pdf(d / "a.pdf"), "query": "a"}),
+    ("extract_tables", "extract_tables", lambda d: {"input_path": _tabled(d / "t.pdf")}),
+    ("export_tables", "export_tables", lambda d: {"input_path": _tabled(d / "t.pdf")}),
     ("crop_pages", "crop_pages",
      lambda d: {"input_path": _pdf(d / "a.pdf"), "margins": [10, 10, 10, 10]}),
     ("resize_pages", "resize_pages", lambda d: {"input_path": _pdf(d / "a.pdf"), "size": "a4"}),

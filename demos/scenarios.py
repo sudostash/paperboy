@@ -298,4 +298,21 @@ SCENARIOS: dict[str, dict] = {
                                     "them while interleaving."},
         ],
     },
+    "tables": {
+        "title": "Get tables out of a PDF",
+        "subtitle": "Read the tables in a statement, then save them as CSV for a spreadsheet.",
+        "files": ["statement.pdf"],
+        "prompt": "Which region had the most failed deliveries in statement.pdf? And give me "
+                  "the tables as spreadsheets.",
+        "steps": [
+            {"type": "call", "tool": "extract_tables", "args": {"input_path": "statement.pdf"},
+             "showGrid": True},
+            {"type": "say", "text": "South had the most failed deliveries (285), then East "
+                                    "(254). Saving both tables as CSV files."},
+            {"type": "call", "tool": "export_tables", "args": {"input_path": "statement.pdf"},
+             "showTable": "files", "columns": ["file", "row_count", "column_count"]},
+            {"type": "say", "text": "Done: statement_tables has page001-table01.csv (regions) "
+                                    "and page002-table01.csv (charges), ready for Excel."},
+        ],
+    },
 }

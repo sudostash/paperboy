@@ -61,6 +61,7 @@ INPUT_TOOLS = {
     "search_text": {"query": "x"},
     "crop_pages": {"margins": [1, 1, 1, 1]}, "resize_pages": {"size": "a4"},
     "n_up": {}, "insert_blank_pages": {"after": [1]},
+    "extract_tables": {}, "export_tables": {},
 }
 
 
@@ -74,7 +75,8 @@ def test_every_tool_refuses_inputs_outside_root(tool, outside):
     "pdf_info", "get_metadata", "check_pdf", "extract_text", "split_pdf",
     "view_pages", "render_pages", "find_blank_pages", "list_form_fields",
     "inspect_hidden_data", "scan_pdf", "get_outline",
-    "list_attachments", "extract_attachments", "extract_images", "search_text"}))
+    "list_attachments", "extract_attachments", "extract_images", "search_text",
+    "extract_tables", "export_tables"}))
 def test_every_writer_refuses_outputs_outside_root(tool, doc, outside):
     args = dict(INPUT_TOOLS[tool], input_path=str(doc), output_path=str(outside / "o.pdf"))
     with pytest.raises(S.ToolError, match="outside the allowed root"):
@@ -523,7 +525,7 @@ def test_bad_bookmarks_are_a_tool_error(doc):
 
 
 
-@pytest.mark.parametrize("tool", ["extract_attachments", "extract_images"])
+@pytest.mark.parametrize("tool", ["extract_attachments", "extract_images", "export_tables"])
 def test_extractors_refuse_output_folders_outside_root(tool, doc, outside):
     with pytest.raises(S.ToolError, match="outside the allowed root"):
         getattr(S, tool)(input_path=str(doc), output_dir=str(outside / "files"))

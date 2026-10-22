@@ -60,6 +60,8 @@ Output files are written back into your `--root` folder. Remove the server anyti
 | `get_metadata` / `set_metadata` | Read / write title, author, subject, keywords, creator, producer |
 | `extract_text` | Pull text from all or selected pages |
 | `search_text` | Find a word or phrase (literal, optional case and whole-word matching): each match's page, a snippet around it, and its rectangles on the page; lists pages with no text layer *(read-only)* |
+| `extract_tables` | Find tables (ruled, or laid out by alignment) and return their rows *(read-only)* |
+| `export_tables` | Save each table as a CSV file for Excel, with formula-like cells escaped so a spreadsheet won't run them |
 | `check_pdf` | Validate structural integrity and report problems |
 | `encrypt_pdf` | Add a password — AES-256 (default), AES-128, RC4 — with print/copy/modify restrictions |
 | `decrypt_pdf` | Remove a password you know (not a cracker) |

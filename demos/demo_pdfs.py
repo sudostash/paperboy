@@ -362,10 +362,50 @@ def build_backs(path: Path) -> Path:
     return path
 
 
+def build_statement(path: Path) -> Path:
+    """A monthly delivery statement: a ruled table of regions on page 1, and a
+    table of charges on page 2."""
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.platypus import (
+        PageBreak,
+        Paragraph,
+        SimpleDocTemplate,
+        Spacer,
+        Table,
+        TableStyle,
+    )
+
+    styles = getSampleStyleSheet()
+    style = TableStyle([("GRID", (0, 0), (-1, -1), 0.6, RULE),
+                        ("BACKGROUND", (0, 0), (-1, 0), ACCENT),
+                        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                        ("ALIGN", (1, 1), (-1, -1), "RIGHT"),
+                        ("TOPPADDING", (0, 0), (-1, -1), 6),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 6)])
+    regions = Table([["Region", "Deliveries", "On time", "Failed"],
+                     ["North", "12,400", "98.1%", "236"], ["South", "10,950", "97.4%", "285"],
+                     ["East", "8,210", "96.9%", "254"], ["West", "9,775", "98.6%", "137"]],
+                    colWidths=[120, 100, 90, 80])
+    regions.setStyle(style)
+    charges = Table([["Item", "Quantity", "Unit price", "Amount"],
+                     ["Courier routes", "41,335", "EUR 2.10", "EUR 86,803.50"],
+                     ["Failed-delivery returns", "912", "EUR 4.00", "EUR 3,648.00"],
+                     ["Fuel surcharge", "1", "EUR 1,250.00", "EUR 1,250.00"]],
+                    colWidths=[150, 80, 90, 110])
+    charges.setStyle(style)
+    SimpleDocTemplate(str(path), pagesize=letter, title="Delivery statement, September").build([
+        Paragraph("Delivery statement, September", styles["Title"]), Spacer(1, 12),
+        Paragraph("Deliveries by region", styles["Heading2"]), regions, PageBreak(),
+        Paragraph("Charges", styles["Heading2"]), charges])
+    return path
+
+
 BUILDERS = {"report.pdf": build_report, "scan.pdf": build_scan,
             "delivery-form.pdf": build_delivery_form, "proposal.pdf": build_proposal,
             "invoice.pdf": build_invoice, "brochure.pdf": build_brochure,
-            "fronts.pdf": build_fronts, "backs.pdf": build_backs}
+            "fronts.pdf": build_fronts, "backs.pdf": build_backs,
+            "statement.pdf": build_statement}
 
 
 def build(names: list[str], workspace: Path) -> None:

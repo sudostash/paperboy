@@ -27,6 +27,7 @@ from .results import (
     DecryptResult,
     DeleteResult,
     EncryptResult,
+    ExportTablesResult,
     ExtractAttachmentsResult,
     ExtractImagesResult,
     ExtractResult,
@@ -55,6 +56,7 @@ from .results import (
     SetMetadataResult,
     SetOutlineResult,
     SplitResult,
+    TablesResult,
     TextResult,
     ViewResult,
     WatermarkResult,
@@ -204,6 +206,53 @@ def search_text(
     """
     return engine.search_text(require_input(input_path, SETTINGS), query, SETTINGS, pages,
                               match_case, whole_word, max_results, password)
+
+
+@mcp.tool(annotations=_reads("Extract tables"))
+@_guard
+def extract_tables(
+    input_path: str,
+    pages: str | None = None,
+    strategy: str = "lines",
+    max_tables: int = 20,
+    password: str | None = None,
+) -> TablesResult:
+    """Find tables on all pages or a page spec (e.g. "1-3,7") and return each as rows of
+    cell text (empty and merged cells are ""). strategy "lines" finds tables drawn with
+    lines between cells; "text" finds tables laid out by alignment only (rougher).
+    Returns up to max_tables (1-200; 50,000 cells in all; 1,000 characters per cell);
+    truncated means there are more. Pages with too much content to read safely are
+    listed in pages_skipped; complete is false if the 60 s time limit stopped it early.
+    Scanned pages have no text to read. To save tables as CSV, use export_tables. Needs
+    the owner password if the PDF forbids copying.
+    """
+    return engine.extract_tables(require_input(input_path, SETTINGS), SETTINGS, pages,
+                                 strategy, max_tables, password)
+
+
+@mcp.tool(annotations=_writes("Export tables"))
+@_guard
+def export_tables(
+    input_path: str,
+    pages: str | None = None,
+    strategy: str = "lines",
+    max_tables: int = 20,
+    escape_formulas: bool = True,
+    output_dir: str | None = None,
+    password: str | None = None,
+    overwrite: bool | None = None,
+) -> ExportTablesResult:
+    """Save the tables extract_tables finds as CSV files (UTF-8, readable by Excel), one
+    per table, named page001-table01.csv and so on, in a folder (default:
+    "<name>_tables" next to the PDF). Spreadsheets run cells starting with = + - @ as
+    formulas, so such cells get a leading apostrophe unless escape_formulas=false
+    (numbers like -5 are left alone). Nothing is written if a file exists, unless
+    overwrite. Needs the owner password if the PDF forbids copying.
+    """
+    src = require_input(input_path, SETTINGS)
+    out_dir = _output_folder(src, output_dir, "_tables")
+    return engine.export_tables(src, out_dir, SETTINGS, pages, strategy, max_tables,
+                                escape_formulas, password, _overwrite(overwrite))
 
 
 # --------------------------------------------------------------------------- #

@@ -7,6 +7,18 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `extract_tables` (read-only) and `export_tables`: find tables with pdfplumber (ruled
+  tables, or `strategy="text"` for ones laid out by alignment) and return their rows, or
+  save each as a UTF-8 CSV file for Excel. Cells starting with `= + - @` get a leading
+  apostrophe so spreadsheets don't run them as formulas (numbers like `-5` are left
+  alone). Rotated pages are read as seen. Pages whose content or font data is too large
+  to read safely are skipped and listed, a call stops after 60 seconds, and results are
+  capped (200 tables, 50,000 cells). Needs the owner password when the PDF forbids
+  copying.
+
+### Dependencies
+- New: `pdfplumber>=0.11.9` and `pdfminer.six>=20251230` (both MIT). Earlier pdfminer.six
+  releases run code from malicious PDFs (CVE-2025-64512, CVE-2025-70559).
 - Page layout tools. `crop_pages`: crop by margins measured on the page as seen
   (rotation applied; pt, in or mm), or reset; cropping hides content without removing it.
   `resize_pages`: change pages to a paper size (A3, A4, A5, Letter, Legal, Tabloid) or a
