@@ -54,6 +54,7 @@ INPUT_TOOLS = {
     "set_metadata": {"fields": {"title": "x"}}, "convert_to_pdf": {},
     "view_pages": {}, "render_pages": {}, "find_blank_pages": {},
     "list_form_fields": {}, "fill_form": {"values": {"x": "y"}},
+    "add_watermark": {"text": "X"}, "add_page_numbers": {},
 }
 
 
@@ -456,3 +457,24 @@ def test_fill_form_errors_are_tool_errors(tmp_path):
     form = _server_form(tmp_path)
     with pytest.raises(S.ToolError, match="Unknown field"):
         S.fill_form(str(form), {"nope": "x"})
+
+
+
+def test_watermark_and_numbers_default_names(doc):
+    wm = S.add_watermark(str(doc), text="DRAFT")
+    assert wm["output"] == str(doc.with_name("doc_watermarked.pdf"))
+    num = S.add_page_numbers(str(doc))
+    assert num["output"] == str(doc.with_name("doc_numbered.pdf"))
+    assert "Page 5 of 5" in page_labels(num["output"])[4]
+
+
+def test_watermark_image_outside_root_is_refused(doc, outside):
+    logo = outside / "logo.png"
+    Image.new("RGB", (10, 10)).save(logo)
+    with pytest.raises(S.ToolError, match="outside the allowed root"):
+        S.add_watermark(str(doc), image_path=str(logo))
+
+
+def test_stamp_errors_are_tool_errors(doc):
+    with pytest.raises(S.ToolError, match="format can only use"):
+        S.add_page_numbers(str(doc), format="{x}")

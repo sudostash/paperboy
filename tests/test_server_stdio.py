@@ -24,6 +24,7 @@ EXPECTED_TOOLS = {
     "convert_to_pdf", "images_to_pdf",
     "view_pages", "render_pages", "find_blank_pages",
     "list_form_fields", "fill_form",
+    "add_watermark", "add_page_numbers",
 }
 
 

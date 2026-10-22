@@ -34,6 +34,7 @@ from .results import (
     MergeResult,
     MetadataResult,
     OptimizeResult,
+    PageNumbersResult,
     RearrangeResult,
     RenderResult,
     RepairResult,
@@ -42,6 +43,7 @@ from .results import (
     SplitResult,
     TextResult,
     ViewResult,
+    WatermarkResult,
 )
 
 try:  # mcp >= 2.0 renamed FastMCP to MCPServer
@@ -471,6 +473,71 @@ def fill_form(
     src = require_input(input_path, SETTINGS)
     out = prepare_output(src, output_path, "_filled", _overwrite(overwrite), SETTINGS)
     return engine.fill_form(src, out, values, SETTINGS, password, flatten)
+
+
+# --------------------------------------------------------------------------- #
+# Watermarks and page numbers
+# --------------------------------------------------------------------------- #
+
+
+@mcp.tool(annotations=_writes("Add watermark"))
+@_guard
+def add_watermark(
+    input_path: str,
+    text: Optional[str] = None,
+    image_path: Optional[str] = None,
+    position: str = "center",
+    pages: Optional[str] = None,
+    opacity: float = 0.2,
+    rotation: Optional[float] = None,
+    font_size: Optional[float] = None,
+    scale: float = 0.5,
+    color: str = "gray",
+    layer: str = "over",
+    output_path: Optional[str] = None,
+    password: Optional[str] = None,
+    overwrite: Optional[bool] = None,
+) -> WatermarkResult:
+    """Add a text watermark ("CONFIDENTIAL", "DRAFT") or an image (a logo) to pages.
+
+    position: center (default) or top-/bottom- left/center/right; a corner with
+    opacity=1 makes a stamp such as "APPROVED". opacity 0-1 (default 0.2); rotation in
+    degrees (default 45 at the center, 0 elsewhere); font_size auto-fits if omitted; scale is the
+    image width as a share of the page. color: #rrggbb, black, gray, red, blue, green.
+    layer: over (default) or under the content. Text is Latin characters only.
+    """
+    src = require_input(input_path, SETTINGS)
+    image = require_input(image_path, SETTINGS) if image_path else None
+    out = prepare_output(src, output_path, "_watermarked", _overwrite(overwrite), SETTINGS)
+    return engine.add_watermark(src, out, SETTINGS, text, image, position, pages, opacity,
+                                rotation, font_size, scale, color, layer, password)
+
+
+@mcp.tool(annotations=_writes("Add page numbers"))
+@_guard
+def add_page_numbers(
+    input_path: str,
+    format: str = "Page {n} of {total}",
+    position: str = "bottom-center",
+    start: int = 1,
+    pages: Optional[str] = None,
+    font_size: float = 10,
+    margin: float = 36,
+    color: str = "black",
+    output_path: Optional[str] = None,
+    password: Optional[str] = None,
+    overwrite: Optional[bool] = None,
+) -> PageNumbersResult:
+    """Add page numbers, or Bates numbers for legal documents (format="ACME-{n:06}").
+
+    format uses {n} (required), {total} and zero padding like {n:06}. Page k shows
+    n = k + start - 1, so start=0 with pages="2-" skips a cover page and numbers the
+    next page 1. position: top-/bottom- left/center/right (default bottom-center).
+    """
+    src = require_input(input_path, SETTINGS)
+    out = prepare_output(src, output_path, "_numbered", _overwrite(overwrite), SETTINGS)
+    return engine.add_page_numbers(src, out, SETTINGS, format, position, start, pages,
+                                   font_size, margin, color, password)
 
 
 # --------------------------------------------------------------------------- #

@@ -13,6 +13,7 @@ from ..config import Settings
 from ..errors import DependencyError, PdfUserError
 from ..results import ConvertResult, ImagesResult
 
+IMAGE_FORMATS = ("PNG", "JPEG", "GIF", "BMP", "TIFF", "WEBP")
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tif", ".tiff", ".webp"}
 TEXT_EXTS = {".txt", ".md", ".log", ".csv", ".json", ".xml", ".yaml", ".yml"}
 OFFICE_EXTS = {
@@ -66,7 +67,8 @@ def _open_image(p: Path):
         with warnings.catch_warnings():
             # Pillow only warns between MAX_IMAGE_PIXELS and twice that; refuse those too.
             warnings.simplefilter("error", Image.DecompressionBombWarning)
-            img = Image.open(p)
+            # Only common formats: Pillow's others include EPS, handed to Ghostscript.
+            img = Image.open(p, formats=IMAGE_FORMATS)
             img.load()
         return img
     except (Image.DecompressionBombError, Image.DecompressionBombWarning) as exc:

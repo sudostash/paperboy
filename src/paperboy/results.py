@@ -200,3 +200,15 @@ class FillFormResult(Protected):
     unrenderable_fields: list[str]         # values the form's font can't draw (shown as ?)
     xfa_removed: bool                      # XFA data dropped so viewers show the filled fields
     usage_rights_removed: bool             # Reader extensions dropped (they break on change)
+
+
+class WatermarkResult(Protected):
+    output: str
+    pages: list[int]                       # 1-based pages that were marked
+
+
+class PageNumbersResult(Protected):
+    output: str
+    pages: list[int]                       # 1-based pages that were numbered
+    first_label: str | None                # e.g. "Page 1 of 12" or "ACME-000041"
+    last_label: str | None
