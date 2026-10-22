@@ -22,7 +22,7 @@ EXPECTED_TOOLS = {
     "merge_pdfs", "split_pdf",
     "optimize_pdf", "repair_pdf", "flatten_pdf", "set_metadata",
     "convert_to_pdf", "images_to_pdf",
-    "view_pages", "render_pages",
+    "view_pages", "render_pages", "find_blank_pages",
 }
 
 
@@ -64,7 +64,8 @@ async def test_lists_all_tools(server_env):
             assert {t.name for t in tools.tools} == EXPECTED_TOOLS
 
 
-READ_ONLY_TOOLS = {"pdf_info", "get_metadata", "check_pdf", "extract_text", "view_pages"}
+READ_ONLY_TOOLS = {"pdf_info", "get_metadata", "check_pdf", "extract_text", "view_pages",
+                   "find_blank_pages"}
 
 
 async def test_tool_annotations(server_env):

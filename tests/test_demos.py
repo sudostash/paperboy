@@ -80,7 +80,8 @@ def test_scenario_is_well_formed(slug):
         if step["type"] == "call":
             assert step["tool"] in EXPECTED_TOOLS
             assert isinstance(step["args"], dict)
-            assert set(step.get("show", {})) <= {"before", "after", "password"}
+            assert set(step.get("show", {})) <= {"before", "after", "password", "highlight",
+                                                 "review"}
             views = [k for k in ("show", "showSchema", "showImages") if step.get(k)]
             assert len(views) <= 1, f"pick one stage view, not {views}"
         if step["type"] == "say":
@@ -380,12 +381,18 @@ async def test_viewer_plays_scenario_to_completion(browser, tmp_path, slug):
     approvals: list[str] = []
     await page.expose_function("__sawApproval", lambda text: approvals.append(text))
     await page.add_init_script("""
+        window.__mostFlagged = 0;
+        window.__mostReview = 0;
         new MutationObserver(() => {
           const bar = document.querySelector('.approve span');
           if (bar && !bar.dataset.seen) {
             bar.dataset.seen = 1;
             window.__sawApproval(bar.textContent);
           }
+          window.__mostFlagged = Math.max(window.__mostFlagged,
+                                          document.querySelectorAll('canvas.flagged').length);
+          window.__mostReview = Math.max(window.__mostReview,
+                                         document.querySelectorAll('canvas.review').length);
         }).observe(document, {subtree: true, childList: true});
     """)
     try:
@@ -405,6 +412,12 @@ async def test_viewer_plays_scenario_to_completion(browser, tmp_path, slug):
         assert approvals == [f"Allow Paperboy to run “{t}”?" for t in writes]
         if calls and calls[-1].get("show"):
             assert await page.locator("#stage canvas").count() > 0
+        highlighted = [len(c["result"][c["show"]["highlight"]]) for c in calls
+                       if (c.get("show") or {}).get("highlight")]
+        assert await page.evaluate("window.__mostFlagged") == max(highlighted, default=0)
+        reviewed = [len(c["result"][c["show"]["review"]]) for c in calls
+                    if (c.get("show") or {}).get("review")]
+        assert await page.evaluate("window.__mostReview") == max(reviewed, default=0)
         if calls and calls[-1].get("showImages"):
             last = calls[-1]
             expected = len(last["images"]) or len(last["result"]["files"])

@@ -467,3 +467,17 @@ def test_failed_save_leaves_no_temp_file(marked, tmp_path, settings, monkeypatch
     with pytest.raises(OSError, match="No space left"):
         E.render_pages(marked, tmp_path / "p", settings, pages="1")
     assert list((tmp_path / "p").iterdir()) == []  # neither the target nor a temp file
+
+
+def test_form_field_values_are_rendered(tmp_path, settings):
+    # Without PDFium's form environment, filled-in fields don't appear at all.
+    path = tmp_path / "form.pdf"
+    c = canvas.Canvas(str(path), pagesize=(300, 120))
+    c.acroForm.textfield(name="name", value="JOHN SMITH", x=20, y=40, width=260, height=40,
+                         fontSize=24, borderWidth=0)
+    c.showPage()
+    c.save()
+    _, (png,) = E.view_pages(path, settings, max_side_px=300)
+    im = _decode(png).convert("L")
+    field = im.crop((20, 120 - 80, 280, 120 - 40))  # the field's area, top-down
+    assert field.getextrema()[0] < 100  # dark text pixels are present

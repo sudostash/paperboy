@@ -19,6 +19,7 @@ from .config import Settings
 from .errors import PdfUserError
 from .paths import prepare_output, prepare_output_dir, require_input, resolve, same_file
 from .results import (
+    BlankPagesResult,
     CheckResult,
     ConvertResult,
     DecryptResult,
@@ -458,6 +459,26 @@ def view_pages(
         ],
         structuredContent=result,
     )
+
+
+@mcp.tool(annotations=_reads("Find blank pages"))
+@_guard
+def find_blank_pages(
+    input_path: str,
+    pages: Optional[str] = None,
+    ink_threshold_percent: float = 0.005,
+    password: Optional[str] = None,
+) -> BlankPagesResult:
+    """Find blank pages (no text, no ink) and nearly blank ones (no text, a little ink).
+
+    blank_pages can be passed to delete_pages. nearly_blank_pages may hold scanner dust
+    but also a stamp, initials or faint pencil: look at them with view_pages before
+    deleting. ink_threshold_percent (0-5, default 0.005) is how much of a page may
+    differ from its background and still be blank. If complete is false, the time
+    limit stopped the scan after pages_checked pages; call again for the rest.
+    """
+    src = require_input(input_path, SETTINGS)
+    return engine.find_blank_pages(src, SETTINGS, pages, ink_threshold_percent, password)
 
 
 @mcp.tool(annotations=_writes("Render pages to images"))

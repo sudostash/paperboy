@@ -92,13 +92,22 @@ async function renderStrip(file, maxHeight, password) {
   return strip;
 }
 
-async function showFiles(show) {
+async function showFiles(show, result) {
   clearStage();
   const both = show.before && show.after;
   const height = (stage.clientHeight - 44 - (both ? 90 : 40)) / (both ? 2 : 1);
+  // show.highlight / show.review name result fields listing 1-based pages to outline.
+  const flagged = new Set(show.highlight ? result[show.highlight] : []);
+  const review = new Set(show.review ? result[show.review] : []);
   for (const [label, file] of [["Before", show.before], ["After", show.after]]) {
     if (!file) continue;
     const strip = await renderStrip(file, height, show.password);
+    if (!both) {
+      [...strip.children].forEach((canvas, i) => {
+        if (flagged.has(i + 1)) canvas.classList.add("flagged");
+        if (review.has(i + 1)) canvas.classList.add("review");
+      });
+    }
     stage.append(el("div", "strip-label", both ? `${label} · ${file}` : file), strip);
     await sleep(both ? 700 : 300);
   }
@@ -199,7 +208,7 @@ async function call(step) {
     await showImages(step);
     await sleep(2600);
   } else if (step.show) {
-    await showFiles(step.show);
+    await showFiles(step.show, step.result);
   }
   await sleep(1800);
 }

@@ -154,3 +154,20 @@ class ViewResult(TypedDict):
     path: str
     total_pages: int
     pages: list[ViewedPage]                # one image per entry follows in the content
+
+
+class BlankPage(TypedDict):
+    page: int
+    ink_percent: float                     # share of pixels differing from the background
+    verdict: Literal["blank", "nearly_blank"]
+
+
+class BlankPagesResult(TypedDict):
+    path: str
+    total_pages: int
+    pages_checked: int
+    complete: bool                         # false if the time limit stopped the scan
+    blank_pages: list[int]                 # 1-based; safe to pass to delete_pages
+    nearly_blank_pages: list[int]          # a little ink: look (view_pages) before deleting
+    details: list[BlankPage]               # measurements for both lists
+    ink_threshold_percent: float

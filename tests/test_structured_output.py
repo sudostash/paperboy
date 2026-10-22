@@ -46,6 +46,17 @@ def _owner_only(path):
     return _locked(path, user="", owner="boss")
 
 
+def _blank_middle(path):
+    c = canvas.Canvas(str(path))
+    c.drawString(72, 720, "ONE")
+    c.showPage()
+    c.showPage()  # blank
+    c.drawString(72, 720, "THREE")
+    c.showPage()
+    c.save()
+    return str(path)
+
+
 def _image(path):
     Image.new("RGB", (20, 20), "red").save(path)
     return str(path)
@@ -95,6 +106,9 @@ CASES = [
     ("view_pages-locked", "view_pages",
      lambda d: {"input_path": _locked(d / "l.pdf"), "password": "pw"}),
     ("render_pages", "render_pages", lambda d: {"input_path": _pdf(d / "a.pdf"), "dpi": 72}),
+    ("find_blank_pages", "find_blank_pages", lambda d: {"input_path": _blank_middle(d / "b.pdf")}),
+    ("find_blank_pages-none", "find_blank_pages",
+     lambda d: {"input_path": _pdf(d / "a.pdf"), "ink_threshold_percent": 0}),
     ("render_pages-jpeg", "render_pages",
      lambda d: {"input_path": _pdf(d / "a.pdf"), "pages": "2", "format": "jpeg"}),
 ]

@@ -73,6 +73,7 @@ Output files are written back into your `--root` folder. Remove the server anyti
 | `convert_to_pdf` | Image / text / Office / HTML → PDF *(Office needs LibreOffice)* |
 | `images_to_pdf` | Combine images into one PDF |
 | `view_pages` | Show up to 5 pages to the assistant as images, so it can see layouts, scans, charts, and signatures *(read-only)* |
+| `find_blank_pages` | Find blank pages (no text, no ink) to pass to `delete_pages`, and *nearly* blank ones (dust, a stamp, initials) to look at with `view_pages` first *(read-only)* |
 | `render_pages` | Save pages as PNG or JPEG files at 36-600 dpi (copy-protected PDFs need the owner password) |
 
 **Typed results.** Every tool publishes an MCP `outputSchema` and returns `structuredContent`,
