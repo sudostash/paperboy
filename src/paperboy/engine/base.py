@@ -6,6 +6,7 @@ import re
 import secrets
 import subprocess
 from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -111,16 +112,40 @@ def inherit_protection(src: pikepdf.Pdf, password: str | None) -> Protection:
     """
     if not src.is_encrypted:
         return Protection()
-    if src.user_password_matched:
+    if not src.owner_password_matched:
         # The owner password is unknown; a random one keeps the permissions enforceable.
         user, owner, changed = password or "", secrets.token_urlsafe(32), False
-    else:  # opened with the owner password
+    else:  # opened with the owner password: keep it, so it still lifts the restrictions
         owner = password or ""
-        if src.encryption.R <= 4:  # qpdf recovers the user password, in PDFDocEncoding
+        known = KNOWN_USER_PASSWORD.get()
+        if src.user_password_matched:  # the same password opens and owns it
+            user, changed = password or "", False
+        elif src.encryption.R <= 4:  # qpdf recovers the user password, in PDFDocEncoding
             user, changed = src.encryption.user_password.decode("pdfdoc"), False
+        elif known is not None:  # a pipeline recovered it from the file it started with
+            user, changed = known, False
         else:  # AES-256 cannot be recovered: never fall back to "opens without a password"
             user, changed = password or secrets.token_urlsafe(32), True
     return Protection(pikepdf.Encryption(user=user, owner=owner, R=6, allow=src.allow), changed)
+
+
+# The user password of the document a run_pipeline started from, when known. Each step
+# writes AES-256, from which the user password can't be recovered, so later steps opened
+# with the owner password need it to keep the original user password.
+KNOWN_USER_PASSWORD: ContextVar[str | None] = ContextVar("known_user_password",
+                                                         default=None)
+
+
+def known_user_password(pdf: pikepdf.Pdf, password: str | None) -> str | None:
+    """The user password of an open document, if it can be told: the password given if
+    it opens the document as a user, or the one qpdf recovers from RC4/AES-128."""
+    if not pdf.is_encrypted:
+        return None
+    if pdf.user_password_matched:
+        return password or ""
+    if pdf.owner_password_matched and pdf.encryption.R <= 4:
+        return pdf.encryption.user_password.decode("pdfdoc")
+    return None
 
 
 def combine_protections(protections: list[Protection]) -> Protection:

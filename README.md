@@ -63,6 +63,7 @@ Output files are written back into your `--root` folder. Remove the server anyti
 | `extract_tables` | Find tables (ruled, or laid out by alignment) and return their rows *(read-only)* |
 | `export_tables` | Save each table as a CSV file for Excel, with formula-like cells escaped so a spreadsheet won't run them |
 | `compare_pdfs` | Compare two versions page by page: pages matched first (insertions don't shift everything), then the lines removed and added, and optionally how pages look (% of pixels changed, with red/green difference images) *(read-only)* |
+| `run_pipeline` | Run several one-file tools in one call (e.g. decrypt → delete pages → optimize → encrypt), each on the result of the last; only the final file is saved, and nothing if a step fails |
 | `check_pdf` | Validate structural integrity and report problems |
 | `encrypt_pdf` | Add a password — AES-256 (default), AES-128, RC4 — with print/copy/modify restrictions |
 | `decrypt_pdf` | Remove a password you know (not a cracker) |
@@ -231,6 +232,11 @@ All configuration is environment variables. Sensible defaults; nothing is requir
 - **Rendering is bounded.** Each image is capped at 40 megapixels and each `render_pages`
   call at 400 megapixels in total. PDFium calls are serialized (it is not thread-safe), and
   files are written via a temporary file and an atomic rename, never through a link.
+- **Pipelines run each step under its tool's own rules.** `run_pipeline` checks every
+  step's arguments before running any, applies the file-size cap to each intermediate
+  file, and keeps the input's protection (and owner password) through the chain. Steps
+  hand files over in a private temporary folder in the system's temp directory, which can
+  briefly hold a decrypted copy after a `decrypt_pdf` step; each is removed once used.
 - **Extraction is bounded and careful with names.** `extract_attachments` and
   `extract_images` decode with byte budgets and refuse data they can't measure (decompression
   bombs, predictor or JPEG headers that disagree with the image's size); each call has a total

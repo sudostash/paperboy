@@ -10,11 +10,17 @@ import functools
 import json
 import logging
 import os
+import re
+import time
+from pathlib import Path
+from typing import Annotated
 
 from mcp.types import CallToolResult, ImageContent, TextContent, ToolAnnotations
+from pydantic import Field
 
 from . import SERVER_NAME, __version__, engine
 from .config import Settings
+from .engine.base import KNOWN_USER_PASSWORD, known_user_password, open_pdf
 from .errors import PdfUserError
 from .paths import prepare_output, prepare_output_dir, require_input, resolve, same_file
 from .results import (
@@ -46,6 +52,8 @@ from .results import (
     OptimizeResult,
     OutlineResult,
     PageNumbersResult,
+    PipelineResult,
+    PipelineStepInput,
     RearrangeResult,
     RenderResult,
     RepairResult,
@@ -1059,6 +1067,223 @@ def render_pages(
     )
     return engine.render_pages(src, out_dir, SETTINGS, pages, dpi, format, password,
                                _overwrite(overwrite))
+
+
+# --------------------------------------------------------------------------- #
+# Pipelines
+# --------------------------------------------------------------------------- #
+
+PIPELINE_MAX_STEPS = 20
+PIPELINE_TIME_LIMIT_S = 300  # checked between steps; each step has its own limits
+# Arguments a pipeline supplies itself: the file each step reads and writes, and the
+# password that opens it.
+_PIPELINE_OWN = {"input_path", "output_path", "password", "overwrite", "current_password"}
+
+
+def _step_runners() -> dict:
+    """Each tool a pipeline can run: (the tool, a call of its engine function on one
+    file). Each takes one PDF and writes one PDF, so steps chain."""
+    S = SETTINGS
+    return {
+        "rotate_pages": lambda s, o, a, pw: engine.rotate_pages(s, o, a["degrees"], S,
+                                                                a["pages"], pw),
+        "delete_pages": lambda s, o, a, pw: engine.delete_pages(s, o, a["pages"], S, pw),
+        "extract_pages": lambda s, o, a, pw: engine.extract_pages(s, o, a["pages"], S, pw),
+        "rearrange_pages": lambda s, o, a, pw: engine.rearrange_pages(
+            s, o, a["page_order"], S, a["append_unlisted"], pw),
+        "decrypt_pdf": lambda s, o, a, pw: engine.decrypt_pdf(s, o, pw or "", S),
+        "encrypt_pdf": lambda s, o, a, pw: engine.encrypt_pdf(
+            s, o, a["user_password"], S, a["owner_password"], a["algorithm"],
+            a["allow_print"], a["allow_copy"], a["allow_modify"], pw),
+        "optimize_pdf": lambda s, o, a, pw: engine.optimize_pdf(s, o, S, a["linearize"],
+                                                                a["compress"], pw),
+        "repair_pdf": lambda s, o, a, pw: engine.repair_pdf(s, o, S, pw),
+        "flatten_pdf": lambda s, o, a, pw: engine.flatten_pdf(s, o, S, pw),
+        "set_metadata": lambda s, o, a, pw: engine.set_metadata(s, o, _fields(a), S, pw),
+        "sanitize_pdf": lambda s, o, a, pw: engine.sanitize_pdf(
+            s, o, S, a["remove_metadata"], a["remove_scripts"], a["remove_attachments"],
+            a["remove_comments"], pw),
+        "add_watermark": lambda s, o, a, pw: engine.add_watermark(
+            s, o, S, a["text"],
+            require_input(a["image_path"], S) if a["image_path"] else None,
+            a["position"], a["pages"], a["opacity"], a["rotation"], a["font_size"],
+            a["scale"], a["color"], a["layer"], pw),
+        "add_page_numbers": lambda s, o, a, pw: engine.add_page_numbers(
+            s, o, S, a["format"], a["position"], a["start"], a["pages"], a["font_size"],
+            a["margin"], a["color"], pw),
+        "fill_form": lambda s, o, a, pw: engine.fill_form(s, o, a["values"], S, pw,
+                                                          a["flatten"]),
+        "crop_pages": lambda s, o, a, pw: engine.crop_pages(s, o, S, a["margins"], a["unit"],
+                                                            a["pages"], a["reset"], pw),
+        "resize_pages": lambda s, o, a, pw: engine.resize_pages(
+            s, o, S, a["size"], a["width"], a["height"], a["unit"], a["orientation"],
+            a["pages"], pw),
+        "n_up": lambda s, o, a, pw: engine.n_up(s, o, S, a["per_sheet"], a["size"],
+                                                a["pages"], pw),
+        "insert_blank_pages": lambda s, o, a, pw: engine.insert_blank_pages(
+            s, o, S, a["after"], a["count"], pw),
+        "set_outline": lambda s, o, a, pw: engine.set_outline(s, o, a["entries"], S, pw),
+    }
+
+
+def _fields(args: dict) -> dict:
+    """set_metadata's check, as the tool does it."""
+    if not args["fields"]:
+        raise PdfUserError("Provide at least one metadata field to set")
+    return args["fields"]
+
+
+@functools.cache
+def _step_model(tool: str):
+    """Validation for a step's arguments, made from the tool's own parameters (types and
+    defaults), less what the pipeline supplies; unknown arguments are refused."""
+    import inspect
+
+    from pydantic import ConfigDict, create_model
+
+    params = inspect.signature(globals()[tool]).parameters
+    fields = {name: (p.annotation, ... if p.default is inspect.Parameter.empty else p.default)
+              for name, p in params.items() if name not in _PIPELINE_OWN}
+    return create_model(f"{tool}_step", __config__=ConfigDict(extra="forbid"), **fields)
+
+
+def _step_args(n: int, step, runners: dict) -> tuple[str, dict]:
+    from pydantic import ValidationError
+
+    if not isinstance(step, dict) or not isinstance(step.get("tool"), str):
+        raise ToolError(f"Step {n} must be an object with a tool name")
+    extra = sorted(set(step) - {"tool", "args"})
+    if extra:  # e.g. "arguments" instead of "args": the step would run with defaults
+        raise ToolError(f"Step {n}: unknown key {', '.join(map(repr, extra))}; a step has "
+                        "\"tool\" and \"args\"")
+    tool = step["tool"]
+    if tool not in runners:
+        raise ToolError(f"Step {n}: {tool!r} can't run in a pipeline. Steps can be: "
+                        f"{', '.join(sorted(runners))}")
+    args = step.get("args") or {}
+    if not isinstance(args, dict):
+        raise ToolError(f"Step {n} ({tool}): args must be an object")
+    try:
+        return tool, _step_model(tool)(**args).model_dump()
+    except ValidationError as exc:
+        problems = "; ".join(f"{'.'.join(map(str, e['loc'])) or 'args'}: {e['msg']}"
+                             for e in exc.errors()[:5])
+        raise ToolError(f"Step {n} ({tool}): {problems}") from None
+
+
+def _publish(made, out, overwrite: bool) -> None:
+    """Move the finished file into place: copied beside it, then renamed over it, so
+    the output is never half-written and never written through a link. A file it
+    replaces keeps its permissions; read-only files, links and anything that isn't a
+    regular file are refused, as is a file that appeared during the run unless
+    overwriting."""
+    import shutil
+    import stat
+    import tempfile
+
+    mode = None
+    if os.path.lexists(out):
+        if out.is_symlink() or not out.is_file():
+            raise PdfUserError(f"{out} exists and is not a regular file; choose another "
+                               "output_path")
+        if not overwrite:
+            raise PdfUserError(f"{out} already exists (pass overwrite=true to replace it)")
+        if not os.access(out, os.W_OK):
+            raise PdfUserError(f"{out} is read-only")
+        mode = stat.S_IMODE(os.stat(out).st_mode)
+    fd, tmp = tempfile.mkstemp(dir=out.parent, prefix=f".{out.stem}.", suffix=out.suffix)
+    os.close(fd)
+    try:
+        shutil.copyfile(made, tmp)
+        if mode is None:
+            shutil.copymode(made, tmp)  # a new file: the usual mode, not mkstemp's private one
+        else:
+            os.chmod(tmp, mode)
+        os.replace(tmp, out)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
+
+
+@mcp.tool(annotations=_writes("Run pipeline"))
+@_guard
+def run_pipeline(
+    input_path: str,
+    steps: Annotated[list[PipelineStepInput], Field(min_length=1, max_length=20)],
+    output_path: str | None = None,
+    password: str | None = None,
+    overwrite: bool | None = None,
+) -> PipelineResult:
+    """Run several tools on a PDF in one call, each on the result of the one before,
+    and save only the final result (default: "<name>_processed.pdf"). Each step is
+    {"tool": name, "args": {...}} with the same arguments as that tool, without
+    input_path, output_path, password or overwrite, e.g.
+    [{"tool": "decrypt_pdf"}, {"tool": "delete_pages", "args": {"pages": "1"}},
+     {"tool": "optimize_pdf"}, {"tool": "encrypt_pdf", "args": {"user_password": "x"}}].
+    Steps can be the tools that take one PDF and write one PDF: rotate_pages,
+    delete_pages, extract_pages, rearrange_pages, decrypt_pdf, encrypt_pdf (last step
+    only), optimize_pdf, repair_pdf, flatten_pdf, set_metadata, sanitize_pdf,
+    add_watermark, add_page_numbers, fill_form, crop_pages, resize_pages, n_up,
+    insert_blank_pages, set_outline; up to 20. password opens the input and is used by
+    every step (decrypt_pdf removes it). Every step's arguments are checked before any
+    step runs, and each step applies its tool's own rules. Steps hand files to each other
+    in a private temporary folder, deleted afterwards; if a step fails, nothing is saved.
+    """
+    import tempfile
+
+    src = require_input(input_path, SETTINGS)
+    if not isinstance(steps, list) or not 1 <= len(steps) <= PIPELINE_MAX_STEPS:
+        raise ToolError(f"Give 1 to {PIPELINE_MAX_STEPS} steps")
+    runners = _step_runners()
+    plan = [_step_args(n, step, runners) for n, step in enumerate(steps, 1)]
+    for n, (tool, _) in enumerate(plan, 1):
+        if tool == "encrypt_pdf" and n != len(plan):
+            # Later steps would open it with the new password and re-encrypt it, and
+            # the owner password given here would be lost.
+            raise ToolError(f"Step {n}: encrypt_pdf must be the last step")
+    replace = _overwrite(overwrite)
+    out = prepare_output(src, output_path, "_processed", replace, SETTINGS)
+    with open_pdf(src, SETTINGS, password) as first:
+        known_user = known_user_password(first, password)
+    done, current, pw, result, changed = [], src, password, {}, False
+    deadline = time.monotonic() + PIPELINE_TIME_LIMIT_S
+    token = KNOWN_USER_PASSWORD.set(known_user)
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            for n, (tool, args) in enumerate(plan, 1):
+                if n > 1 and time.monotonic() > deadline:
+                    raise PdfUserError(f"The pipeline took over {PIPELINE_TIME_LIMIT_S} s; "
+                                       f"stopped before step {n} ({tool}), nothing saved")
+                made = Path(tmp) / f"step{n:02d}.pdf"
+                try:
+                    result = runners[tool](current, made, args, pw)
+                except PdfUserError as exc:
+                    # The file a step read may be a temporary one; don't show where.
+                    detail = re.sub(re.escape(tmp) + r"[^\s:'\"]*", "the PDF",
+                                    str(exc).replace(str(current), "the PDF"))
+                    raise PdfUserError(f"Step {n} ({tool}) failed: {detail}") from exc
+                if made.stat().st_size > SETTINGS.max_file_bytes:
+                    raise PdfUserError(
+                        f"Step {n} ({tool}) made a file over the "
+                        f"{SETTINGS.max_file_bytes // 2**20} MB limit; nothing saved")
+                done.append({"tool": tool, "result": {k: v for k, v in result.items()
+                                                      if k != "output"}})
+                changed = changed or bool(result.get("user_password_changed"))
+                if current != src:
+                    current.unlink()  # the previous step's file is no longer needed
+                current = made
+                if tool == "decrypt_pdf":
+                    pw = None
+                    KNOWN_USER_PASSWORD.set(None)
+            _publish(current, out, replace)
+    finally:
+        KNOWN_USER_PASSWORD.reset(token)
+    protection = {k: result.get(k, False) for k in
+                  ("password_protected", "permissions_restricted")}
+    protection["user_password_changed"] = changed
+    if plan[-1][0] == "encrypt_pdf":  # it reports what it set up, not inheritance
+        protection["password_protected"] = True
+    return {"output": str(out), "steps": done, **protection}
 
 
 # --------------------------------------------------------------------------- #

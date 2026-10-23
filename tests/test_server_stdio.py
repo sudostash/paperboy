@@ -30,7 +30,7 @@ EXPECTED_TOOLS = {
     "search_text",
     "crop_pages", "resize_pages", "n_up", "insert_blank_pages", "interleave_pdfs",
     "extract_tables", "export_tables",
-    "compare_pdfs",
+    "compare_pdfs", "run_pipeline",
 }
 
 

@@ -27,6 +27,7 @@ from .base import (
     open_pdf,
     require_modify_permission,
 )
+from .search import _content_size
 from .stamp import _displayed_size, _isolate, _rotation, _visible_box
 
 UNITS = {"pt": 1.0, "in": 72.0, "mm": 72 / 25.4}
@@ -37,6 +38,7 @@ PAPER = {  # portrait width, height in points
 MIN_SIDE = 18.0           # points (a quarter inch) a page may be cropped or resized down to
 MAX_SIDE = 14_400.0       # points: the largest page PDF viewers support (200 inches)
 N_UP_MARGIN, N_UP_GAP = 18.0, 12.0
+N_UP_MAX_CONTENT = 16 * 2**20  # content a placed page may process (forms as often as drawn)
 MAX_BLANKS = 1_000
 # Annotation keys holding x, y coordinates (in pairs) on the page.
 _POINT_KEYS = ("/QuadPoints", "/Vertices", "/L", "/CL")
@@ -296,7 +298,14 @@ def n_up(path: Path, out: Path, settings: Settings, per_sheet: int = 2,
         if min(cell_w, cell_h) < MIN_SIDE or max(sheet_w, sheet_h) > MAX_SIDE:
             raise PdfUserError(f"The first page ({first_w:.0f} x {first_h:.0f} pt) is too "
                                "small or large to use as the sheet; give a paper size")
-        for i in set(order):
+        sizes: dict = {}
+        for i in sorted(set(order)):
+            # A page that already draws its content many times over (e.g. an N-up of an
+            # N-up of ...) would be drawn that many times more: refuse it.
+            work = _content_size(src.pages[i], N_UP_MAX_CONTENT, sizes)
+            if work is None or work > N_UP_MAX_CONTENT:
+                raise PdfUserError(f"Page {i + 1} has too much content (or too many nested "
+                                   "drawings) to place on a sheet")
             # Place each page as viewers show it. qpdf's placement reads /Rotate (only
             # plain 90/180/270 before qpdf 12) and frames the page by its TrimBox; this
             # copy is never saved.
@@ -304,6 +313,7 @@ def n_up(path: Path, out: Path, settings: Settings, per_sheet: int = 2,
             page.obj.Rotate = _rotation(page)
             page.obj.TrimBox = pikepdf.Array(list(_sized(page, i + 1)))
         dst = pikepdf.new()
+        forms: dict[int, pikepdf.Object] = {}
         try:
             for start in range(0, len(order), per_sheet):
                 dst.add_blank_page(page_size=(sheet_w, sheet_h))
@@ -312,8 +322,10 @@ def n_up(path: Path, out: Path, settings: Settings, per_sheet: int = 2,
                     col, row = slot % cols, slot // cols
                     x = N_UP_MARGIN + col * (cell_w + N_UP_GAP)
                     y = sheet_h - N_UP_MARGIN - (row + 1) * cell_h - row * N_UP_GAP
-                    sheet.add_overlay(src.pages[i], pikepdf.Rectangle(x, y, x + cell_w,
-                                                                      y + cell_h))
+                    if i not in forms:  # each page copied once, however often placed
+                        forms[i] = dst.copy_foreign(src.pages[i].as_form_xobject())
+                    sheet.add_overlay(forms[i], pikepdf.Rectangle(x, y, x + cell_w,
+                                                                  y + cell_h))
             copy_docinfo(src, dst)
             protection = inherit_protection(src, password)
             dst.save(str(out), encryption=protection.encryption)
