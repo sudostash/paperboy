@@ -529,3 +529,21 @@ class PipelineStepResult(TypedDict):
 class PipelineResult(Protected):
     output: str
     steps: list[PipelineStepResult]
+
+
+class PdfFile(TypedDict):
+    path: str
+    relative_path: str                     # from the root
+    size: int                              # bytes
+    modified: str                          # ISO 8601, UTC
+
+
+class PdfListResult(TypedDict):
+    root: str
+    folder: str
+    files: list[PdfFile]                   # sorted by path
+    count: int
+    # Not every file was seen or listed: past max_results, or the walk's limits (entries,
+    # depth, time). A truncated list is the files found so far, sorted.
+    truncated: bool
+    skipped_folders: int                   # folders that couldn't be read

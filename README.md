@@ -64,6 +64,7 @@ Output files are written back into your `--root` folder. Remove the server anyti
 | `export_tables` | Save each table as a CSV file for Excel, with formula-like cells escaped so a spreadsheet won't run them |
 | `compare_pdfs` | Compare two versions page by page: pages matched first (insertions don't shift everything), then the lines removed and added, and optionally how pages look (% of pixels changed, with red/green difference images) *(read-only)* |
 | `run_pipeline` | Run several one-file tools in one call (e.g. decrypt → delete pages → optimize → encrypt), each on the result of the last; only the final file is saved, and nothing if a step fails |
+| `list_pdfs` | List the PDFs under `PAPERBOY_ROOT` (or a folder in it): path, size, last changed; up to 1,000 *(read-only)* |
 | `check_pdf` | Validate structural integrity and report problems |
 | `encrypt_pdf` | Add a password — AES-256 (default), AES-128, RC4 — with print/copy/modify restrictions |
 | `decrypt_pdf` | Remove a password you know (not a cracker) |
@@ -105,6 +106,14 @@ text. Every field is always present; a value that doesn't apply is `null` (for e
 
 **Page specs** are 1-based and accept ranges, `last`/`end`, open ranges (`4-`), and reversal (`5-1`):
 e.g. `"1,3,5-8"`, `"last,1-4"`, `"5-1"`. Existing files are never overwritten unless `overwrite=true`.
+
+### Resources and prompts
+
+- **`paperboy://pdfs`** — a resource listing the PDFs under `PAPERBOY_ROOT` (as `list_pdfs`),
+  for clients that let you attach resources.
+- **Prompts** your client may offer as shortcuts: `prepare_for_signing`,
+  `compress_for_email` (with a size in MB), `share_safely` and `check_untrusted_pdf`. Each
+  takes a file path and guides the assistant through the right tools in order.
 
 ## Install
 
@@ -232,6 +241,11 @@ All configuration is environment variables. Sensible defaults; nothing is requir
 - **Rendering is bounded.** Each image is capped at 40 megapixels and each `render_pages`
   call at 400 megapixels in total. PDFium calls are serialized (it is not thread-safe), and
   files are written via a temporary file and an atomic rename, never through a link.
+- **Listing shows what's in the root.** `list_pdfs` and `paperboy://pdfs` let the assistant
+  see the name, size and date of every PDF under `PAPERBOY_ROOT` (not hidden ones) without
+  you naming a file; it never reads their contents, follows links out of the root, or walks
+  more than 50,000 entries. File names are passed on as data; ones with control characters
+  are left out.
 - **Pipelines run each step under its tool's own rules.** `run_pipeline` checks every
   step's arguments before running any, applies the file-size cap to each intermediate
   file, and keeps the input's protection (and owner password) through the chain. Steps

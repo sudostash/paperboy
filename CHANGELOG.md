@@ -7,6 +7,16 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `list_pdfs` (read-only) and the `paperboy://pdfs` resource: the PDFs under
+  `PAPERBOY_ROOT` (or a folder in it), with size and last change, sorted by path. It
+  needs a root; never descends links or junctions, and lists a linked file only if it
+  resolves inside the root; skips hidden files and folders and names with control
+  characters; counts unreadable folders; and stops at 50,000 entries, 32 folders deep or
+  10 seconds, saying so.
+- Prompt templates: `prepare_for_signing`, `compress_for_email` (a size in MB),
+  `share_safely` and `check_untrusted_pdf`, each walking the assistant through the right
+  tools for a job and asking before anything irreversible. Paths are quoted as data;
+  ones with control characters are refused.
 - `run_pipeline`: run up to 20 tools that take one PDF and write one (page, security,
   stamping, form, layout, outline and clean-up tools) in one call, each on the result of
   the one before, so a chain like decrypt → delete pages → optimize → encrypt is one

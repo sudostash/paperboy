@@ -357,4 +357,18 @@ SCENARIOS: dict[str, dict] = {
                                     "unchanged."},
         ],
     },
+    "list-pdfs": {
+        "title": "See which PDFs you have",
+        "subtitle": "List the PDFs Paperboy may use, then pick one to work on.",
+        "files": ["report.pdf", "proposal.pdf", "statement.pdf", "contract-v1.pdf",
+                  "contract-v2.pdf"],
+        "prompt": "Which PDFs do I have here?",
+        "steps": [
+            {"type": "call", "tool": "list_pdfs", "args": {},
+             "showTable": "files", "columns": ["relative_path", "size", "modified"]},
+            {"type": "say", "text": "Five PDFs: two versions of a contract, a proposal, a "
+                                    "delivery statement and the Q3 report. Want me to compare "
+                                    "the two contract versions, or get one ready to share?"},
+        ],
+    },
 }
