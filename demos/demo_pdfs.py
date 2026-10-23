@@ -401,11 +401,53 @@ def build_statement(path: Path) -> Path:
     return path
 
 
+def _contract(path: Path, fee: str, extra_page: bool, stamp_x: float) -> Path:
+    """A three-page service agreement; versions differ in the fee, an added schedule
+    and where the approval stamp sits."""
+    c = canvas.Canvas(str(path), pagesize=letter)
+    width, height = letter
+    pages = [("Service agreement", ["Between Paperboy Demo Co. and Northwind Traders.",
+                                    "Effective 1 November 2026."]),
+             ("Fees", [f"Monthly fee: {fee}.", "Invoices are due within 30 days."]),
+             ("Termination", ["Either party may end this agreement with 60 days' notice."])]
+    if extra_page:
+        pages.insert(2, ("Schedule B", ["Weekend deliveries are charged at 1.5x."]))
+    for n, (title, lines) in enumerate(pages):
+        c.setFillColor(ACCENT)
+        c.rect(0, height - 14, width, 14, stroke=0, fill=1)
+        c.setFillColor(INK)
+        c.setFont("Helvetica-Bold", 24)
+        c.drawString(72, height - 110, title)
+        c.setFont("Helvetica", 14)
+        c.setFillColor(MUTED)
+        for k, line in enumerate(lines):
+            c.drawString(72, height - 150 - 24 * k, line)
+        if n == 0:  # an approval stamp
+            c.setStrokeColor(colors.HexColor("#c0392b"))
+            c.setLineWidth(3)
+            c.roundRect(stamp_x, height - 330, 150, 60, 8)
+            c.setFillColor(colors.HexColor("#c0392b"))
+            c.setFont("Helvetica-Bold", 18)
+            c.drawCentredString(stamp_x + 75, height - 307, "APPROVED")
+        c.showPage()
+    c.save()
+    return path
+
+
+def build_contract_v1(path: Path) -> Path:
+    return _contract(path, "EUR 4,800", extra_page=False, stamp_x=72)
+
+
+def build_contract_v2(path: Path) -> Path:
+    return _contract(path, "EUR 5,250", extra_page=True, stamp_x=360)
+
+
 BUILDERS = {"report.pdf": build_report, "scan.pdf": build_scan,
             "delivery-form.pdf": build_delivery_form, "proposal.pdf": build_proposal,
             "invoice.pdf": build_invoice, "brochure.pdf": build_brochure,
             "fronts.pdf": build_fronts, "backs.pdf": build_backs,
-            "statement.pdf": build_statement}
+            "statement.pdf": build_statement, "contract-v1.pdf": build_contract_v1,
+            "contract-v2.pdf": build_contract_v2}
 
 
 def build(names: list[str], workspace: Path) -> None:

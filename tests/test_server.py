@@ -573,3 +573,21 @@ def test_interleave_is_confined_and_combines(doc, outside, make_pdf):
         S.interleave_pdfs(str(doc), str(backs), str(doc), overwrite=True)
     res = S.interleave_pdfs(str(doc), str(backs), str(doc.with_name("i.pdf")))
     assert res["pages"] == 10
+
+
+
+def test_compare_pdfs_is_confined_and_returns_images(doc, outside, make_pdf):
+    with pytest.raises(S.ToolError, match="outside the allowed root"):
+        S.compare_pdfs(str(doc), str(outside / "secret.pdf"))
+    with pytest.raises(S.ToolError, match="outside the allowed root"):
+        S.compare_pdfs(str(outside / "secret.pdf"), str(doc))
+    assert S.compare_pdfs(str(doc), str(doc))["identical"] is True
+    other = make_pdf("other.pdf", 5)
+    import pikepdf
+    with pikepdf.open(other, allow_overwriting_input=True) as pdf:
+        pdf.pages[0].obj.Contents = pdf.make_stream(b"0 0 300 300 re f")
+        pdf.save(other)
+    res = S.compare_pdfs(str(doc), str(other), mode="visual")
+    summary = getattr(res, "structured_content", getattr(res, "structuredContent", None))
+    assert summary["changed"] == 1 and json.loads(res.content[0].text) == summary
+    assert [c.type for c in res.content] == ["text", "image"]

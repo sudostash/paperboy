@@ -91,20 +91,33 @@ def _content_size(page: pikepdf.Page, cap: int, sizes: dict) -> int | None:
                 break
         return total
 
-    def drawn(source) -> Counter | None:
-        """How many times the content draws each named XObject."""
-        try:
-            ops = pikepdf.parse_content_stream(source, "Do")
-        except (pikepdf.PdfError, ValueError, TypeError):
-            return None
-        return Counter(str(operands[0]) for operands, _ in ops
-                       if operands and isinstance(operands[0], pikepdf.Name))
+    def drawn(streams) -> Counter | None:
+        """How many times the content draws each named XObject. Each stream is parsed
+        once (*sizes*, under ("do", stream)), however many pages share it."""
+        counts: Counter = Counter()
+        for stream in streams:
+            if not isinstance(stream, pikepdf.Stream):
+                continue
+            key = ("do", stream.objgen)
+            if key not in sizes:
+                try:
+                    ops = pikepdf.parse_content_stream(stream, "Do")
+                except (pikepdf.PdfError, ValueError, TypeError):
+                    sizes[key] = None
+                else:
+                    sizes[key] = Counter(str(operands[0]) for operands, _ in ops
+                                         if operands and isinstance(operands[0],
+                                                                    pikepdf.Name))
+            if sizes[key] is None:
+                return None
+            counts += sizes[key]
+        return counts
 
-    def work(source, streams, resources, path) -> tuple[int, int] | None:
+    def work(streams, resources, path) -> tuple[int, int] | None:
         total = size_of(streams)
         if total is None or total > cap:
             return None if total is None else (total, 0)
-        counts = drawn(source)
+        counts = drawn(streams)
         if counts is None:
             return None
         xobjects = resources.get("/XObject") if isinstance(resources, pikepdf.Dictionary) \
@@ -122,7 +135,7 @@ def _content_size(page: pikepdf.Page, cap: int, sizes: dict) -> int | None:
                 return None
             if key not in memo:
                 own = form.get("/Resources")
-                memo[key] = work(form, [form],
+                memo[key] = work([form],
                                  own if isinstance(own, pikepdf.Dictionary) else resources,
                                  path | {key})
             if memo[key] is None:
@@ -140,7 +153,7 @@ def _content_size(page: pikepdf.Page, cap: int, sizes: dict) -> int | None:
         return None
     contents = page.obj.get("/Contents")
     streams = list(contents) if isinstance(contents, pikepdf.Array) else [contents]
-    result = work(page, streams, page.obj.get("/Resources"), frozenset())
+    result = work(streams, page.obj.get("/Resources"), frozenset())
     return None if result is None else result[0]
 
 

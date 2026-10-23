@@ -171,6 +171,11 @@ async function showImages(step) {
   const inline = step.images.length > 0;  // view_pages returns images to the assistant
   const items = inline
     ? step.images.map((src, i) => {
+      if (step.result.pages === undefined) {  // compare_pdfs: one image per changed page
+        const d = step.result.images[i];
+        return { src: `${base}/${src}`,
+          caption: `Page ${d.page_a} → ${d.page_b} · ${d.pixel_change}% changed` };
+      }
       const p = step.result.pages[i];
       return { src: `${base}/${src}`, caption: `Page ${p.page} · ${p.width_px} × ${p.height_px} px` };
     })

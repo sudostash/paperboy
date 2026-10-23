@@ -7,6 +7,18 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `compare_pdfs` (read-only): compare two versions of a PDF page by page. Pages are
+  matched first (anchored on pages identical and unique in both, then by how alike their
+  words are), so an inserted or deleted page, or page-number footers, don't make every
+  later page look changed; matched pages are compared by text (lines removed and added,
+  and how alike they are) and, with `mode="visual"` or `"both"`, by how they look in
+  colour (% of pixels that differ), returning images of the most changed pages with
+  removals in red, additions in green and recolouring in blue. Whitespace and Unicode
+  forms (NFKC) are ignored, case optionally. Every stage is bounded: page content is
+  measured first and heavy pages skipped, matching and line differences have work
+  budgets, listed lines share a 50,000-character budget, and a 60-second deadline covers
+  the whole call (`complete: false` when it hits). Comparing text needs the owner
+  password of a PDF that forbids copying; visual comparison doesn't.
 - `extract_tables` (read-only) and `export_tables`: find tables with pdfplumber (ruled
   tables, or `strategy="text"` for ones laid out by alignment) and return their rows, or
   save each as a UTF-8 CSV file for Excel. Cells starting with `= + - @` (or their

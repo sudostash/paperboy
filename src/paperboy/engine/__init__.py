@@ -7,6 +7,7 @@ is a thin adapter over these; a future HTTP transport can reuse them as-is.
 """
 from __future__ import annotations
 
+from .compare import compare_pdfs
 from .create import convert_to_pdf, images_to_pdf
 from .extract import extract_attachments, extract_images, list_attachments
 from .forms import fill_form, list_form_fields
@@ -48,4 +49,5 @@ __all__ = [
     "search_text",
     "crop_pages", "resize_pages", "n_up", "insert_blank_pages", "interleave_pdfs",
     "extract_tables", "export_tables",
+    "compare_pdfs",
 ]
