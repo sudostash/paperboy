@@ -30,7 +30,7 @@ EXPECTED_TOOLS = {
     "search_text",
     "crop_pages", "resize_pages", "n_up", "insert_blank_pages", "interleave_pdfs",
     "extract_tables", "export_tables",
-    "compare_pdfs", "run_pipeline",
+    "compare_pdfs", "run_pipeline", "list_pdfs",
 }
 
 
@@ -76,7 +76,7 @@ READ_ONLY_TOOLS = {"pdf_info", "get_metadata", "check_pdf", "extract_text", "vie
                    "find_blank_pages", "list_form_fields", "inspect_hidden_data",
                    "scan_pdf", "get_outline",
                    "list_attachments", "search_text",
-                   "extract_tables", "compare_pdfs"}
+                   "extract_tables", "compare_pdfs", "list_pdfs"}
 
 
 async def test_tool_annotations(server_env):
@@ -134,3 +134,32 @@ async def test_missing_file_is_error(server_env, tmp_path):
             await s.initialize()
             res = await s.call_tool("pdf_info", {"input_path": str(tmp_path / "nope.pdf")})
             assert _is_error(res)
+
+
+
+async def test_resources_and_prompts_over_stdio(server_env, tmp_path):
+    from conftest import _make_pdf
+    _make_pdf(tmp_path / "listed.pdf", 1)
+    async with await _session(server_env) as (r, w):
+        async with ClientSession(r, w) as s:
+            await s.initialize()
+            resources = await s.list_resources()
+            assert [str(x.uri) for x in resources.resources] == ["paperboy://pdfs"]
+            read = await s.read_resource("paperboy://pdfs")
+            listing = json.loads(read.contents[0].text)
+            assert [f["relative_path"] for f in listing["files"]] == ["listed.pdf"]
+            prompts = await s.list_prompts()
+            assert {p.name for p in prompts.prompts} == {
+                "prepare_for_signing", "compress_for_email", "share_safely",
+                "check_untrusted_pdf"}
+            got = await s.get_prompt("compress_for_email", {"path": "a.pdf", "max_mb": "7"})
+            text = got.messages[0].content.text
+            assert '"a.pdf"' in text and "under 7 MB" in text
+            for bad in ("-3", "seven"):
+                with pytest.raises(Exception):  # noqa: B017 - the SDKs raise different types
+                    await s.get_prompt("compress_for_email", {"path": "a.pdf", "max_mb": bad})
+            for name in ("prepare_for_signing", "share_safely", "check_untrusted_pdf"):
+                got = await s.get_prompt(name, {"path": "a.pdf"})
+                assert '"a.pdf"' in got.messages[0].content.text
+            tool = await s.call_tool("list_pdfs", {})
+            assert not _is_error(tool) and _payload(tool)["count"] == 1
