@@ -153,6 +153,11 @@ CASES = [
     ("get_outline", "get_outline", lambda d: {"input_path": _pdf(d / "a.pdf")}),
     ("search_text", "search_text", lambda d: {"input_path": _pdf(d / "a.pdf"), "query": "a"}),
     ("extract_tables", "extract_tables", lambda d: {"input_path": _tabled(d / "t.pdf")}),
+    ("compare_pdfs", "compare_pdfs",
+     lambda d: {"path_a": _pdf(d / "a.pdf"), "path_b": _pdf(d / "b.pdf", pages=4)}),
+    ("compare_pdfs-visual", "compare_pdfs",
+     lambda d: {"path_a": _pdf(d / "a.pdf"), "path_b": _blank_middle(d / "b.pdf"),
+                "mode": "both"}),
     ("export_tables", "export_tables", lambda d: {"input_path": _tabled(d / "t.pdf")}),
     ("crop_pages", "crop_pages",
      lambda d: {"input_path": _pdf(d / "a.pdf"), "margins": [10, 10, 10, 10]}),
@@ -261,5 +266,10 @@ async def test_structured_result_is_valid_and_lossless(server_env, tmp_path, too
             assert _field(item, "mime_type", "mimeType") == "image/png"
             with Image.open(io.BytesIO(base64.b64decode(item.data))) as im:
                 assert im.size == (page["width_px"], page["height_px"])
+    elif tool == "compare_pdfs":  # one PNG per difference image listed
+        assert len(images) == len(structured["images"])
+        for item in images:
+            with Image.open(io.BytesIO(base64.b64decode(item.data))) as im:
+                assert im.format == "PNG"
     else:
         assert images == []

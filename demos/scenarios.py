@@ -315,4 +315,25 @@ SCENARIOS: dict[str, dict] = {
                                     "and page002-table01.csv (charges), ready for Excel."},
         ],
     },
+    "compare": {
+        "title": "Compare two versions of a PDF",
+        "subtitle": "See what changed in the text, page by page, and how the pages look.",
+        "files": ["contract-v1.pdf", "contract-v2.pdf"],
+        "prompt": "What changed between contract-v1.pdf and contract-v2.pdf?",
+        "steps": [
+            {"type": "call", "tool": "compare_pdfs",
+             "args": {"path_a": "contract-v1.pdf", "path_b": "contract-v2.pdf"},
+             "showTable": "differences", "columns": ["status", "page_b", "removed", "added"]},
+            {"type": "say", "text": "Two text changes: the monthly fee went from EUR 4,800 to "
+                                    "EUR 5,250, and a new page 3, Schedule B, charges weekend "
+                                    "deliveries at 1.5x. Checking the layout too."},
+            {"type": "call", "tool": "compare_pdfs",
+             "args": {"path_a": "contract-v1.pdf", "path_b": "contract-v2.pdf",
+                      "mode": "both"},
+             "showImages": True},
+            {"type": "say", "text": "One more change the text doesn't show: the approval "
+                                    "stamp on page 1 moved from the left (red: where it "
+                                    "was) to the right (green: where it is now)."},
+        ],
+    },
 }

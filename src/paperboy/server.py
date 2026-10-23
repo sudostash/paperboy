@@ -22,6 +22,7 @@ from .results import (
     BlankPagesResult,
     Bookmark,
     CheckResult,
+    CompareResult,
     ConvertResult,
     CropResult,
     DecryptResult,
@@ -961,6 +962,46 @@ def view_pages(
     result, images = engine.view_pages(src, SETTINGS, pages, max_side_px, password)
     # Images can't live in structured content, so return a full result: the JSON
     # summary as text (as for every tool), then one image per page.
+    return CallToolResult(
+        content=[
+            TextContent(type="text", text=json.dumps(result, indent=2)),
+            *(ImageContent(type="image", data=base64.b64encode(png).decode("ascii"),
+                           mimeType="image/png") for png in images),
+        ],
+        structuredContent=result,
+    )
+
+
+@mcp.tool(annotations=_reads("Compare PDFs"))
+@_guard
+def compare_pdfs(
+    path_a: str,
+    path_b: str,
+    mode: str = "text",
+    ignore_case: bool = False,
+    password_a: str | None = None,
+    password_b: str | None = None,
+) -> CompareResult:
+    """Compare two versions of a PDF (A, the older, and B, the newer) page by page.
+
+    Pages are matched first, by their text, so a page inserted or deleted (or page-number
+    footers shifting) doesn't make every later page look changed; reordered pages show
+    as removed and added. mode "text" compares each matched page's text and lists the
+    lines removed and added (lines shown as written; up to 50 per page and 50,000
+    characters in all); "visual" matches pages by position and compares how they look,
+    in colour (the % of pixels that differ), returning images of the most changed pages
+    with what was removed in red, added in green and recoloured in blue; "both" matches
+    by text and does both. Pages with no text (e.g. scans) can only be compared
+    visually; in text mode they are "unknown". Whitespace and Unicode forms are ignored;
+    ignore_case ignores case too. complete is false if the 60 s limit stopped some pages
+    being compared. Needs the owner password of a PDF that forbids copying, except in
+    visual mode. Nothing is written to disk.
+    """
+    a, b = require_input(path_a, SETTINGS), require_input(path_b, SETTINGS)
+    result, images = engine.compare_pdfs(a, b, SETTINGS, mode, ignore_case, password_a,
+                                         password_b)
+    if not images:
+        return result
     return CallToolResult(
         content=[
             TextContent(type="text", text=json.dumps(result, indent=2)),

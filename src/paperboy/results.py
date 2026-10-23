@@ -456,3 +456,47 @@ class ExportTablesResult(TypedDict):
     complete: bool
     truncated: bool
     pages_skipped: list[PageSkip]
+
+
+class PageDifference(TypedDict):
+    # changed / added (only in B) / removed (only in A) / unknown (not compared: no text,
+    # skipped, or the time limit); pages that are the same aren't listed.
+    status: Literal["same", "changed", "added", "removed", "unknown"]
+    page_a: int | None                     # 1-based, in the first PDF
+    page_b: int | None                     # 1-based, in the second PDF
+    similarity: float | None               # 0-1, how alike the pages' text is
+    added: list[str]                       # lines only in B (up to 50)
+    removed: list[str]                     # lines only in A (up to 50)
+    lines_truncated: bool                  # not every changed line is listed
+    pixel_change: float | None             # % of pixels that differ (visual modes)
+
+
+class CompareSkip(TypedDict):
+    document: Literal["a", "b"]
+    page: int
+    reason: str
+
+
+class DiffImage(TypedDict):
+    page_a: int
+    page_b: int
+    pixel_change: float
+
+
+class CompareResult(TypedDict):
+    path_a: str
+    path_b: str
+    pages_a: int
+    pages_b: int
+    mode: Literal["text", "visual", "both"]
+    identical: bool                        # every page pair compared and the same
+    same: int                              # page pairs that are the same
+    changed: int
+    added: int
+    removed: int
+    unknown: int
+    differences: list[PageDifference]      # every pair that isn't the same (first 500)
+    truncated: bool                        # more than 500 differences
+    complete: bool                         # false: limits stopped some pages being compared
+    pages_skipped: list[CompareSkip]       # too much content to read safely
+    images: list[DiffImage]                # the difference images returned, in order
