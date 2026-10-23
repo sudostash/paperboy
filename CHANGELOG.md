@@ -7,6 +7,16 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `extract_tables` (read-only) and `export_tables`: find tables with pdfplumber (ruled
+  tables, or `strategy="text"` for ones laid out by alignment) and return their rows, or
+  save each as a UTF-8 CSV file for Excel. Cells starting with `= + - @` (or their
+  full-width forms) get a leading apostrophe so spreadsheets don't run them as formulas;
+  plain numbers like `-5` are left alone. pdfplumber reads a plain copy pikepdf writes,
+  and runs in a child process with CPU and memory limits that is stopped after 60
+  seconds per call (pages read by then still count); pages whose content (each form as
+  often as it is drawn) or font data is too large, or whose ruled lines are too dense to
+  analyse, are skipped and listed with the reason; results are capped (200 tables,
+  50,000 cells). Needs the owner password when the PDF forbids copying.
 - Page layout tools. `crop_pages`: crop by margins measured on the page as seen
   (rotation applied; pt, in or mm), or reset; cropping hides content without removing it.
   `resize_pages`: change pages to a paper size (A3, A4, A5, Letter, Legal, Tabloid) or a
@@ -123,6 +133,11 @@ All notable changes to this project are documented here. The format follows
 - Tests for every module (60% to 99% branch coverage), a 95% branch-coverage gate in CI,
   and a CI job that runs the suite against mcp 1.x.
 
+### Dependencies
+- New: `pdfplumber>=0.11.9` and `pdfminer.six>=20251230` (both MIT). Earlier pdfminer.six
+  releases run code from malicious PDFs (CVE-2025-64512, CVE-2025-70559). pdfplumber pins
+  an exact pdfminer.six, so a pdfminer.six security fix also needs a pdfplumber release.
+
 ### Changed
 - Copy-restricted PDFs: `extract_text`, `decrypt_pdf`, and `encrypt_pdf` with
   `current_password` now need the owner password when the PDF forbids copying (as
@@ -147,6 +162,9 @@ All notable changes to this project are documented here. The format follows
   permission is always granted, per PDF 2.0).
 
 ### Fixed
+- `search_text` counts a form's content once for every time a page draws it, and skips
+  pages with forms nested more than 12 deep or drawing themselves (they could make one
+  page cost minutes). "Could not open PDF" messages no longer include a memory address.
 - `rearrange_pages` refuses orders longer than the page cap ("-,-,-" repeated every page
   without limit). Watermark and page-number tools ignore a malformed CropBox, as viewers do,
   instead of failing with an internal error.

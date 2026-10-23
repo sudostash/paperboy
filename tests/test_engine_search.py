@@ -197,11 +197,12 @@ def test_content_in_forms_counts_and_shared_streams_are_measured_once(story, set
     def move_into_form(pdf):
         page = pdf.pages[2].obj
         form = pikepdf.Stream(pdf, b"")
-        form.write(b"x" * 500)
+        form.write(b"%" + b"x" * 500)
         form.Subtype, form.BBox = pikepdf.Name.Form, pikepdf.Array([0, 0, 10, 10])
         form = pdf.make_indirect(form)
-        form.Resources = pikepdf.Dictionary(XObject=pikepdf.Dictionary(Self=form))  # a loop
+        form.Resources = pikepdf.Dictionary(XObject=pikepdf.Dictionary(Self=form))  # unused
         page.Resources.XObject = pikepdf.Dictionary(Fm0=form)
+        page.Contents.write(page.Contents.read_bytes() + b" /Fm0 Do")
     with pikepdf.open(story, allow_overwriting_input=True) as pdf:
         move_into_form(pdf)
         pdf.save(story)
@@ -249,3 +250,69 @@ def test_the_lock_is_released_when_a_page_fails(story, settings, monkeypatch):
     from paperboy.engine.render import _PDFIUM_LOCK
     assert _PDFIUM_LOCK.acquire(timeout=1)
     _PDFIUM_LOCK.release()
+
+
+
+def _formed(pdf, page_index: int, form_content: bytes, draws: int = 1, **resources):
+    """Give a page a form drawn *draws* times; returns the form."""
+    page = pdf.pages[page_index].obj
+    form = pikepdf.Stream(pdf, b"")
+    form.write(form_content)
+    form.Subtype, form.BBox = pikepdf.Name.Form, pikepdf.Array([0, 0, 10, 10])
+    form = pdf.make_indirect(form)
+    form.Resources = pikepdf.Dictionary(XObject=pikepdf.Dictionary(**resources))
+    page.Resources.XObject = pikepdf.Dictionary(Fm0=form)
+    page.Contents.write(page.Contents.read_bytes() + b" /Fm0 Do" * draws)
+    return form
+
+
+def test_a_form_counts_each_time_it_is_drawn(story, settings, monkeypatch):
+    with pikepdf.open(story, allow_overwriting_input=True) as pdf:
+        _formed(pdf, 2, b"%" + b"x" * 100, draws=10)    # 1 KB processed from 100 bytes
+        pdf.save(story)
+    monkeypatch.setattr(search, "MAX_PAGE_CONTENT", 800)
+    assert E.search_text(story, "fox", settings)["pages_skipped"] == [3]
+
+
+def test_a_form_that_draws_itself_is_skipped(story, settings):
+    with pikepdf.open(story, allow_overwriting_input=True) as pdf:
+        form = _formed(pdf, 2, b"/Me Do")
+        form.Resources.XObject.Me = form
+        pdf.save(story)
+    assert E.search_text(story, "fox", settings)["pages_skipped"] == [3]
+
+
+def test_forms_nested_too_deep_are_skipped(story, settings, monkeypatch):
+    monkeypatch.setattr(search, "MAX_FORM_DEPTH", 2)
+    with pikepdf.open(story, allow_overwriting_input=True) as pdf:
+        inner = pdf.make_indirect(pikepdf.Stream(pdf, b"% innermost"))
+        inner.Subtype, inner.BBox = pikepdf.Name.Form, pikepdf.Array([0, 0, 1, 1])
+        middle = pdf.make_indirect(pikepdf.Stream(pdf, b"/In Do"))
+        middle.Subtype, middle.BBox = pikepdf.Name.Form, pikepdf.Array([0, 0, 1, 1])
+        middle.Resources = pikepdf.Dictionary(XObject=pikepdf.Dictionary(In=inner))
+        _formed(pdf, 0, b"/Mid Do", Mid=middle)          # page -> form -> middle -> inner
+        _formed(pdf, 2, b"/In Do", In=inner)             # page -> form -> inner: allowed
+        pdf.save(story)
+    assert E.search_text(story, "fox", settings)["pages_skipped"] == [1]
+
+
+def test_content_that_cannot_be_parsed_is_skipped(story, settings, monkeypatch):
+    def fail(*args, **kwargs):
+        raise pikepdf.PdfError("can't parse")   # qpdf is lenient; this is the guard
+    monkeypatch.setattr(search.pikepdf, "parse_content_stream", fail)
+    assert E.search_text(story, "fox", settings)["pages_skipped"] == [1, 2, 3]
+
+
+
+def test_a_very_deep_chain_of_forms_is_refused_without_recursing(story, settings):
+    with pikepdf.open(story, allow_overwriting_input=True) as pdf:
+        inner = None
+        for _ in range(3000):
+            form = pdf.make_indirect(pikepdf.Stream(pdf, b"/In Do" if inner else b"%"))
+            form.Subtype, form.BBox = pikepdf.Name.Form, pikepdf.Array([0, 0, 1, 1])
+            if inner is not None:
+                form.Resources = pikepdf.Dictionary(XObject=pikepdf.Dictionary(In=inner))
+            inner = form
+        _formed(pdf, 2, b"/In Do", In=inner)
+        pdf.save(story)
+    assert E.search_text(story, "fox", settings)["pages_skipped"] == [3]

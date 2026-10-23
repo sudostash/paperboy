@@ -190,6 +190,22 @@ async function showImages(step) {
   await Promise.all([...row.querySelectorAll("img")].map((img) => img.decode()));
 }
 
+function showGrid(step) {
+  // The tables a tool found, drawn as tables (first row as the header).
+  clearStage();
+  for (const t of step.result.tables) {
+    stage.append(el("h2", null, `Page ${t.page} · table ${t.index}`));
+    const table = el("table", "schema-table grid");
+    t.rows.forEach((cells, i) => {
+      const row = el("tr");
+      row.style.animationDelay = `${i * 70}ms`;
+      cells.forEach((c) => row.append(el(i === 0 ? "th" : "td", i === 0 ? null : "value", c)));
+      table.append(row);
+    });
+    stage.append(table);
+  }
+}
+
 function showTable(step) {
   // A result object (e.g. what inspect_hidden_data found) as a findings table.
   clearStage();
@@ -261,6 +277,9 @@ async function call(step) {
   log.scrollTop = log.scrollHeight;
   if (step.showSchema) {
     showSchema(step);
+    await sleep(2600);
+  } else if (step.showGrid) {
+    showGrid(step);
     await sleep(2600);
   } else if (step.showTable) {
     showTable(step);

@@ -29,6 +29,7 @@ from .scan import scan_pdf
 from .search import search_text
 from .security import decrypt_pdf, encrypt_pdf
 from .stamp import add_page_numbers, add_watermark
+from .tables import export_tables, extract_tables
 from .text import extract_text
 
 __all__ = [
@@ -46,4 +47,5 @@ __all__ = [
     "list_attachments", "extract_attachments", "extract_images",
     "search_text",
     "crop_pages", "resize_pages", "n_up", "insert_blank_pages", "interleave_pdfs",
+    "extract_tables", "export_tables",
 ]

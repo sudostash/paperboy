@@ -16,6 +16,7 @@ import io
 import re
 import time
 import unicodedata
+from collections import Counter
 from pathlib import Path
 
 import pikepdf
@@ -68,13 +69,15 @@ def _snippet(textpage, index: int, count: int, total: int) -> str:
 
 
 def _content_size(page: pikepdf.Page, cap: int, sizes: dict) -> int | None:
-    """Decoded bytes of a page's content and the forms it draws, counted no further than
-    past *cap*; None if some of it can't be measured. Streams shared between pages are
-    measured once (*sizes*)."""
-    total, seen, stack = 0, set(), [(page.obj.get("/Contents"), page.obj.get("/Resources"), 0)]
-    while stack:
-        contents, resources, depth = stack.pop()
-        streams = list(contents) if isinstance(contents, pikepdf.Array) else [contents]
+    """Decoded bytes a reader processes for a page: its content, plus each form's content
+    once for every time it is drawn, forms inside forms included; counted no further
+    than past *cap*. None if it can't be measured: undecodable data or content, forms
+    nested deeper than MAX_FORM_DEPTH, or a form that draws itself. Streams shared
+    between pages are decoded once (*sizes*)."""
+    memo: dict = {}  # form -> (bytes processed for one drawing, nesting below it) or None
+
+    def size_of(streams) -> int | None:
+        total = 0
         for stream in streams:
             if not isinstance(stream, pikepdf.Stream):
                 continue
@@ -85,15 +88,60 @@ def _content_size(page: pikepdf.Page, cap: int, sizes: dict) -> int | None:
                 return None
             total += sizes[key]
             if total > cap:
-                return total
+                break
+        return total
+
+    def drawn(source) -> Counter | None:
+        """How many times the content draws each named XObject."""
+        try:
+            ops = pikepdf.parse_content_stream(source, "Do")
+        except (pikepdf.PdfError, ValueError, TypeError):
+            return None
+        return Counter(str(operands[0]) for operands, _ in ops
+                       if operands and isinstance(operands[0], pikepdf.Name))
+
+    def work(source, streams, resources, path) -> tuple[int, int] | None:
+        total = size_of(streams)
+        if total is None or total > cap:
+            return None if total is None else (total, 0)
+        counts = drawn(source)
+        if counts is None:
+            return None
         xobjects = resources.get("/XObject") if isinstance(resources, pikepdf.Dictionary) \
             else None
-        for _, form in xobjects.items() if isinstance(xobjects, pikepdf.Dictionary) else []:
-            if isinstance(form, pikepdf.Stream) and form.get("/Subtype") == pikepdf.Name.Form \
-                    and form.objgen not in seen and depth < MAX_FORM_DEPTH:
-                seen.add(form.objgen)
-                stack.append((form, form.get("/Resources"), depth + 1))
-    return total
+        height = 0
+        for name, count in counts.items():
+            form = xobjects.get(name) if isinstance(xobjects, pikepdf.Dictionary) else None
+            if not (isinstance(form, pikepdf.Stream)
+                    and form.get("/Subtype") == pikepdf.Name.Form):
+                continue
+            key = form.objgen
+            if key in path:  # a form that draws itself would never end
+                return None
+            if len(path) + 1 > MAX_FORM_DEPTH:  # before going deeper, not after
+                return None
+            if key not in memo:
+                own = form.get("/Resources")
+                memo[key] = work(form, [form],
+                                 own if isinstance(own, pikepdf.Dictionary) else resources,
+                                 path | {key})
+            if memo[key] is None:
+                return None
+            each, below = memo[key]
+            height = max(height, below + 1)
+            if len(path) + height > MAX_FORM_DEPTH:
+                return None
+            total += count * each
+            if total > cap:
+                break
+        return total, height
+
+    if not isinstance(page.obj, pikepdf.Dictionary):  # a damaged page tree (qpdf 11)
+        return None
+    contents = page.obj.get("/Contents")
+    streams = list(contents) if isinstance(contents, pikepdf.Array) else [contents]
+    result = work(page, streams, page.obj.get("/Resources"), frozenset())
+    return None if result is None else result[0]
 
 
 def _prepare(data: bytes, settings: Settings, password: str | None, pages: str | None

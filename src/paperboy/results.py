@@ -417,3 +417,42 @@ class InterleaveResult(Protected):
     pages: int
     fronts: int
     backs: int
+
+
+class PageSkip(TypedDict):
+    page: int                              # 1-based
+    reason: str
+
+
+class Table(TypedDict):
+    page: int                              # 1-based
+    index: int                             # 1-based, on its page
+    rows: list[list[str]]                  # cell text; "" for empty or merged cells
+    row_count: int
+    column_count: int
+
+
+class TablesResult(TypedDict):
+    path: str
+    tables: list[Table]
+    pages_searched: int
+    complete: bool                         # false: the time limit stopped it early
+    truncated: bool                        # stopped at max_tables or the cell limit
+    pages_skipped: list[PageSkip]          # not read, and why (first 1,000)
+
+
+class TableFile(TypedDict):
+    file: str
+    page: int
+    index: int
+    row_count: int
+    column_count: int
+
+
+class ExportTablesResult(TypedDict):
+    output_dir: str
+    files: list[TableFile]
+    pages_searched: int
+    complete: bool
+    truncated: bool
+    pages_skipped: list[PageSkip]

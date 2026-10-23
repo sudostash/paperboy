@@ -29,6 +29,7 @@ EXPECTED_TOOLS = {
     "list_attachments", "extract_attachments", "extract_images",
     "search_text",
     "crop_pages", "resize_pages", "n_up", "insert_blank_pages", "interleave_pdfs",
+    "extract_tables", "export_tables",
 }
 
 
@@ -73,7 +74,8 @@ async def test_lists_all_tools(server_env):
 READ_ONLY_TOOLS = {"pdf_info", "get_metadata", "check_pdf", "extract_text", "view_pages",
                    "find_blank_pages", "list_form_fields", "inspect_hidden_data",
                    "scan_pdf", "get_outline",
-                   "list_attachments", "search_text"}
+                   "list_attachments", "search_text",
+                   "extract_tables"}
 
 
 async def test_tool_annotations(server_env):

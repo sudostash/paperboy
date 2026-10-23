@@ -29,6 +29,10 @@ dependencies = [
     "reportlab>=4.0.4",    # 4.0.0-4.0.3 hard-require pycairo, a native build
     "Pillow>=10.0",
     "pypdfium2>=4.30",     # page rendering (BSD-3-Clause / Apache-2.0)
+    "pdfplumber>=0.11.9",  # tables (MIT); 0.11.9 pins the pdfminer.six below, and each
+                           # release pins one exactly: security fixes need a new pdfplumber
+    "pdfminer.six>=20251230",  # MIT; earlier versions run code from malicious PDFs
+                           # (CVE-2025-64512, CVE-2025-70559)
     "typing-extensions>=4.11",
 ]
 
