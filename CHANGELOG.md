@@ -7,6 +7,16 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `run_pipeline`: run up to 20 tools that take one PDF and write one (page, security,
+  stamping, form, layout, outline and clean-up tools) in one call, each on the result of
+  the one before, so a chain like decrypt → delete pages → optimize → encrypt is one
+  round trip. Every step's arguments are checked against its tool's own parameters
+  before any runs (unknown keys are refused); each step applies its tool's rules and the
+  file-size cap; the input's password carries through (cleared by `decrypt_pdf`), an
+  owner password keeps lifting restrictions, and `encrypt_pdf` may only be last. Steps
+  hand files over in a private temporary folder, each removed once used; only the final
+  file is saved (keeping an existing file's permissions), and nothing if a step fails or
+  the 5-minute limit passes.
 - `compare_pdfs` (read-only): compare two versions of a PDF page by page. Pages are
   matched first (anchored on pages identical and unique in both, then by how alike their
   words are), so an inserted or deleted page, or page-number footers, don't make every
@@ -174,6 +184,11 @@ All notable changes to this project are documented here. The format follows
   permission is always granted, per PDF 2.0).
 
 ### Fixed
+- Outputs of a PDF opened with its owner password keep that owner password, also when it
+  is the user password too (before, a random one replaced it).
+- `n_up` copies each page once however often it is placed (repeating a page multiplied the
+  file), and refuses pages that already draw their content many times over (an N-up of
+  an N-up of ... grows exponentially slower to display).
 - `search_text` counts a form's content once for every time a page draws it, and skips
   pages with forms nested more than 12 deep or drawing themselves (they could make one
   page cost minutes). "Could not open PDF" messages no longer include a memory address.

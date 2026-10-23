@@ -336,4 +336,25 @@ SCENARIOS: dict[str, dict] = {
                                     "was) to the right (green: where it is now)."},
         ],
     },
+    "pipeline": {
+        "title": "Run several steps in one go",
+        "subtitle": "Chain tools in a single call; only the finished file is saved.",
+        "files": ["report.pdf"],
+        "prompt": "Make a review copy of report.pdf: drop the last page, stamp DRAFT on "
+                  "it, number the pages, and make it smaller.",
+        "steps": [
+            {"type": "call", "tool": "run_pipeline",
+             "args": {"input_path": "report.pdf", "output_path": "report_review.pdf",
+                      "steps": [
+                          {"tool": "delete_pages", "args": {"pages": "3"}},
+                          {"tool": "add_watermark", "args": {"text": "DRAFT"}},
+                          {"tool": "add_page_numbers"},
+                          {"tool": "optimize_pdf"}]},
+             "show": {"before": "report.pdf", "after": "report_review.pdf"}},
+            {"type": "say", "text": "Done in one call: report_review.pdf has pages 1-2 with "
+                                    "the DRAFT watermark and page numbers, optimized. No "
+                                    "in-between files were left behind, and report.pdf is "
+                                    "unchanged."},
+        ],
+    },
 }

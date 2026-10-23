@@ -9,8 +9,9 @@ on Python < 3.12.
 """
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
+from pydantic import ConfigDict
 from typing_extensions import NotRequired, TypedDict
 
 
@@ -500,3 +501,31 @@ class CompareResult(TypedDict):
     complete: bool                         # false: limits stopped some pages being compared
     pages_skipped: list[CompareSkip]       # too much content to read safely
     images: list[DiffImage]                # the difference images returned, in order
+
+
+PipelineTool = Literal[
+    "rotate_pages", "delete_pages", "extract_pages", "rearrange_pages", "decrypt_pdf",
+    "encrypt_pdf", "optimize_pdf", "repair_pdf", "flatten_pdf", "set_metadata",
+    "sanitize_pdf", "add_watermark", "add_page_numbers", "fill_form", "crop_pages",
+    "resize_pages", "n_up", "insert_blank_pages", "set_outline"]
+
+
+class PipelineStepInput(TypedDict):
+    """One step of run_pipeline: a tool and its arguments (as for the tool itself)."""
+
+    # Other keys are refused, not dropped: a misspelled "args" would run the step with
+    # its defaults.
+    __pydantic_config__ = ConfigDict(extra="forbid")  # type: ignore[misc]
+
+    tool: PipelineTool
+    args: NotRequired[dict[str, Any]]
+
+
+class PipelineStepResult(TypedDict):
+    tool: str
+    result: dict[str, Any]                 # what the tool reports (without its file paths)
+
+
+class PipelineResult(Protected):
+    output: str
+    steps: list[PipelineStepResult]

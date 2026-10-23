@@ -62,6 +62,7 @@ INPUT_TOOLS = {
     "crop_pages": {"margins": [1, 1, 1, 1]}, "resize_pages": {"size": "a4"},
     "n_up": {}, "insert_blank_pages": {"after": [1]},
     "extract_tables": {}, "export_tables": {},
+    "run_pipeline": {"steps": [{"tool": "optimize_pdf"}]},
 }
 
 
@@ -120,6 +121,7 @@ def test_split_refuses_output_dir_outside_root(doc, outside):
     ("resize_pages", {"size": "a4"}, "_resized"),
     ("n_up", {"per_sheet": 4}, "_4up"),
     ("insert_blank_pages", {"after": [0]}, "_blanks"),
+    ("run_pipeline", {"steps": [{"tool": "optimize_pdf"}]}, "_processed"),
 ])
 def test_writers_default_to_a_suffixed_name_and_never_overwrite(tool, args, suffix, doc):
     res = getattr(S, tool)(input_path=str(doc), **args)

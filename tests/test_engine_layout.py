@@ -601,3 +601,21 @@ def test_documents_without_pages(tmp_path, settings, out):
 def test_watermarks_ignore_a_malformed_crop_box_too(tmp_path, settings, out):
     src = _odd_pdf(tmp_path / "c.pdf", lambda p: setattr(p, "CropBox", pikepdf.String("x")))
     assert E.add_watermark(src, out, settings, text="DRAFT")["pages"] == [1]
+
+
+def test_n_up_copies_a_repeated_page_once(marked, settings, out, tmp_path):
+    E.n_up(marked, out, settings, per_sheet=4, pages=",".join(["1"] * 40))
+    with pikepdf.open(out) as pdf:
+        forms = {obj.objgen for page in pdf.pages
+                 for _, obj in page.obj.Resources.XObject.items()}
+    assert len(forms) == 1                         # one copy of page 1, drawn 40 times
+
+
+def test_n_up_of_n_ups_is_refused_before_it_explodes(marked, settings, tmp_path, monkeypatch):
+    monkeypatch.setattr(layout, "N_UP_MAX_CONTENT", 200_000)
+    current = marked
+    with pytest.raises(PdfUserError, match="too much content .* nested drawings"):
+        for k in range(12):                   # each level draws the last one 4 times
+            nxt = tmp_path / f"level{k}.pdf"
+            E.n_up(current, nxt, settings, per_sheet=4, pages="1,1,1,1")
+            current = nxt
