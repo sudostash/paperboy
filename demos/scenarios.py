@@ -371,4 +371,20 @@ SCENARIOS: dict[str, dict] = {
                                     "the two contract versions, or get one ready to share?"},
         ],
     },
+    "ask-password": {
+        "title": "Type passwords yourself",
+        "subtitle": "The password goes from you to Paperboy, never into the chat.",
+        "files": ["taxes.pdf"],
+        "prompt": "taxes.pdf is password-protected. Make an unlocked copy - I'll type the "
+                  "password myself, don't ask me for it here.",
+        "steps": [
+            {"type": "call", "tool": "decrypt_pdf",
+             "args": {"input_path": "taxes.pdf", "password": "ask"},
+             "answers": [{"password": "Spring2026!"}],
+             "show": {"after": "taxes_decrypted.pdf"}},
+            {"type": "say", "text": "Done: taxes_decrypted.pdf opens without a password. You "
+                                    "typed the password on Paperboy's own page on this "
+                                    "computer, so it never appeared in our conversation."},
+        ],
+    },
 }

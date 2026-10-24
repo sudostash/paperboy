@@ -14,6 +14,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from mcp import types as mcp_types
 from mcp.types import ToolAnnotations
 from PIL import Image
 from pypdf import PdfReader
@@ -128,6 +129,8 @@ def test_hint_is_none_without_annotations():
 
 @pytest.mark.parametrize("slug", sorted(SCENARIOS))
 async def test_scenario_runs_against_real_server(slug, tmp_path):
+    if slug == "ask-password" and not hasattr(mcp_types, "UrlElicitationCapability"):
+        pytest.skip("the client opens the password page through URL-mode elicitation")
     transcript = await record.run_scenario(slug, SCENARIOS[slug], out=tmp_path)
 
     files = tmp_path / slug / "files"

@@ -89,6 +89,19 @@ def test_encrypt_rejects_unknown_algorithm(doc, tmp_path, settings):
         E.encrypt_pdf(doc, tmp_path / "e.pdf", "pw", settings, algorithm="aes-256")
 
 
+@pytest.mark.parametrize(("user", "owner"), [("пароль", None), ("pw", "密码")])
+def test_older_algorithms_refuse_passwords_they_cannot_hold(doc, tmp_path, settings,
+                                                            user, owner):
+    with pytest.raises(PdfUserError, match="use AES-256 for other characters"):
+        E.encrypt_pdf(doc, tmp_path / "e.pdf", user, settings, owner_password=owner,
+                      algorithm="AES-128")
+    assert not (tmp_path / "e.pdf").exists()
+    E.encrypt_pdf(doc, tmp_path / "e.pdf", user, settings, owner_password=owner)
+    with pikepdf.open(tmp_path / "e.pdf", password=user) as pdf:
+        assert pdf.is_encrypted
+    E.encrypt_pdf(doc, tmp_path / "l.pdf", "café", settings, algorithm="RC4-128")
+
+
 def test_reencrypt_with_current_password(make_encrypted, tmp_path, settings):
     old = make_encrypted(password="old")
     out = tmp_path / "new.pdf"

@@ -80,7 +80,33 @@ async def run_scenario(slug: str, scenario: dict, out: Path = OUT) -> dict:
                                    env=env, cwd=str(workspace))
     steps = []
     failure = None
-    async with stdio_client(params) as (r, w), ClientSession(r, w) as session:
+    pending: list[dict] = []   # what the user types on the page Paperboy opens
+    asked: list[dict] = []     # what it asked: shown as a dialog (never the password)
+
+    async def answer(context, params):
+        # The client opens Paperboy's local page (URL-mode elicitation); the user types
+        # the password there, so it reaches Paperboy without passing through the client.
+        import http.client
+        import urllib.parse
+
+        import anyio
+        from mcp import types
+        reply = pending.pop(0)
+        parts = urllib.parse.urlsplit(params.url)
+
+        def post():
+            conn = http.client.HTTPConnection(parts.hostname, parts.port, timeout=10)
+            conn.request("POST", parts.path, urllib.parse.urlencode(reply),
+                         {"Content-Type": "application/x-www-form-urlencoded"})
+            conn.getresponse().read()
+            conn.close()
+        await anyio.to_thread.run_sync(post)
+        asked.append({"message": params.message, "host": parts.netloc,
+                      "new": "confirm" in reply})
+        return types.ElicitResult(action="accept")
+
+    async with stdio_client(params) as (r, w), \
+            ClientSession(r, w, elicitation_callback=answer) as session:
         await session.initialize()
         for step in scenario["steps"]:
             if failure:
@@ -94,7 +120,10 @@ async def run_scenario(slug: str, scenario: dict, out: Path = OUT) -> dict:
                     "readOnly": bool(_hint(t.annotations, "readOnlyHint", "read_only_hint")),
                 } for t in listed.tools]
             elif step["type"] == "call":
+                pending[:] = step.pop("answers", [])
+                asked.clear()
                 result = await session.call_tool(step["tool"], step["args"])
+                step["asked"] = list(asked)
                 step["isError"] = bool(_field(result, "is_error", "isError", False))
                 step["result"] = _payload(result)
                 tool = next(t for t in (await session.list_tools()).tools

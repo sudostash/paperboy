@@ -442,12 +442,24 @@ def build_contract_v2(path: Path) -> Path:
     return _contract(path, "EUR 5,250", extra_page=True, stamp_x=360)
 
 
+def build_taxes(path: Path) -> Path:
+    """A password-protected copy of the report, opened with the password Spring2026!."""
+    import pikepdf
+
+    plain = build_report(path.with_name(".plain-" + path.name))
+    with pikepdf.open(plain) as pdf:
+        pdf.save(path, encryption=pikepdf.Encryption(user="Spring2026!", owner="Spring2026!",
+                                                     R=6))
+    plain.unlink()
+    return path
+
+
 BUILDERS = {"report.pdf": build_report, "scan.pdf": build_scan,
             "delivery-form.pdf": build_delivery_form, "proposal.pdf": build_proposal,
             "invoice.pdf": build_invoice, "brochure.pdf": build_brochure,
             "fronts.pdf": build_fronts, "backs.pdf": build_backs,
             "statement.pdf": build_statement, "contract-v1.pdf": build_contract_v1,
-            "contract-v2.pdf": build_contract_v2}
+            "contract-v2.pdf": build_contract_v2, "taxes.pdf": build_taxes}
 
 
 def build(names: list[str], workspace: Path) -> None:

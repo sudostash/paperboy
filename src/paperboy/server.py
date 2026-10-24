@@ -7,6 +7,7 @@ future streamable-HTTP transport can import the same engine unchanged.
 
 import base64
 import functools
+import inspect
 import json
 import logging
 import os
@@ -15,10 +16,11 @@ import time
 from pathlib import Path
 from typing import Annotated
 
+import anyio
 from mcp.types import CallToolResult, ImageContent, TextContent, ToolAnnotations
 from pydantic import Field
 
-from . import SERVER_NAME, __version__, engine
+from . import SERVER_NAME, __version__, engine, password_page
 from .config import Settings
 from .engine.base import KNOWN_USER_PASSWORD, known_user_password, open_pdf
 from .errors import PdfUserError
@@ -73,16 +75,23 @@ from .results import (
 )
 
 try:  # mcp >= 2.0 renamed FastMCP to MCPServer
+    from mcp.server.mcpserver import Context
     from mcp.server.mcpserver import MCPServer as _Server
     from mcp.server.mcpserver.exceptions import ToolError
 except ImportError:  # mcp 1.x
+    from mcp.server.fastmcp import Context
     from mcp.server.fastmcp import FastMCP as _Server
     from mcp.server.fastmcp.exceptions import ToolError
 
 logger = logging.getLogger("paperboy")
 
 SETTINGS = Settings.from_env()
-mcp = _Server(SERVER_NAME)
+mcp = _Server(SERVER_NAME, instructions=(
+    "Paperboy works on PDF files on the user's computer. For any password argument, "
+    "pass \"ask\": the user then types the password on a local page, so it never "
+    "passes through the chat. Prefer this over asking for passwords in messages. If a "
+    "tool replies with a link, show it to the user and, once they have typed the "
+    "password there, run the tool again with the \"ask:...\" value it gave."))
 
 
 def _guard(fn):
@@ -107,6 +116,236 @@ def _guard(fn):
                 f"Internal error in {fn.__name__}; details were logged by the server"
             ) from exc
     return wrapper
+
+
+# --- passwords typed by the user ------------------------------------------------------
+#
+# A password argument of "ask" has the user type the password on a local page (see
+# password_page), never in the chat: through URL-mode elicitation where the client
+# supports it, otherwise by replying with the link and taking the password on the next
+# call as "ask:<ref>". Everything else about the call is checked first, so no one is
+# asked for a password for a file that doesn't exist or a call that would fail anyway.
+# Tools taking passwords are registered through an async wrapper that does this, then
+# runs the tool in a worker thread; the module's functions stay plain calls.
+
+ASK = "ask"
+ASK_WAIT_S = 300          # how long a tool waits for the password to be typed
+MAX_ASKS = 5              # passwords one call may ask for
+# Passwords that open a file, and the argument naming the file each one opens.
+_OPEN_PASSWORDS = {"password": "input_path", "current_password": "input_path",
+                   "password_a": "path_a", "password_b": "path_b",
+                   "front_password": "front_path", "back_password": "back_path"}
+# Passwords a tool sets on its output.
+_NEW_PASSWORDS = {"user_password": "the password that opens it",
+                  "owner_password": "the owner password, which lifts its restrictions"}
+ASK_NOTE = (' Any password argument can be "ask": the user then types it on a local page, '
+            "so it never passes through the chat.")
+
+
+def _label(path) -> str:
+    """A file name fit to show the user: no control characters, not too long, quoted."""
+    name = "".join(c for c in Path(str(path)).name if c.isprintable())[:80] or "the PDF"
+    return f"\u201c{name}\u201d"
+
+
+def _plain(value) -> None:
+    if value not in (None, "") and SETTINGS.require_password_references:
+        raise ToolError("Passwords can't be given in tool arguments here "
+                        "(PAPERBOY_REQUIRE_PASSWORD_REFERENCES is on); pass \"ask\" to type "
+                        "it on a local page instead")
+
+
+def _is_ref(value) -> bool:
+    return isinstance(value, str) and value.startswith(ASK + ":")
+
+
+def _wants(kwargs: dict, tool: str) -> tuple[list, list]:
+    """Check the call, then list the passwords it asks for, as (where it goes, what it's
+    for, is it new, purpose), and the "ask:<ref>" values it passes, as (where, ref,
+    purpose). The purpose (tool, argument, file) binds a typed password to its use."""
+    asks, refs = [], []
+
+    def note(where: tuple, value, path, label: str, new: bool) -> None:
+        if value != ASK and not _is_ref(value):
+            _plain(value)
+            return
+        # The file must exist (and be allowed) before anyone is asked about it.
+        src = require_input(path or "", SETTINGS)
+        # A merge names the file by its path; a pipeline step by its place in the steps.
+        purpose = (tool, *(where[:1] if where[0] == "passwords" else where), str(src))
+        if value == ASK:
+            asks.append((where, label.format(file=_label(src)), new, purpose))
+        else:
+            refs.append((where, value[len(ASK) + 1:], purpose))
+
+    for name, file_arg in _OPEN_PASSWORDS.items():
+        if name in kwargs:
+            note((name,), kwargs[name], kwargs.get(file_arg), "opening {file}", False)
+    for name, what in _NEW_PASSWORDS.items():
+        if name in kwargs:
+            note((name,), kwargs[name], kwargs.get("input_path"),
+                 what + ", for a protected copy of {file}", True)
+    if "user_password" in kwargs:
+        _check_new_passwords(kwargs)
+    if kwargs.get("passwords"):  # merge_pdfs: only the inputs being merged
+        inputs = {resolve(p, SETTINGS) for p in kwargs.get("input_paths") or []}
+        for path, value in kwargs["passwords"].items():
+            if (value == ASK or _is_ref(value)) and resolve(path, SETTINGS) not in inputs:
+                raise ToolError(f"passwords names a file that isn't being merged: "
+                                f"{_label(path)}")
+            note(("passwords", path), value, path, "opening {file}", False)
+    if kwargs.get("steps"):  # run_pipeline: check the steps, then an encrypt step's passwords
+        runners = _step_runners()
+        plan = [_step_args(n, step, runners) for n, step in enumerate(kwargs["steps"], 1)]
+        for n, (step_tool, args) in enumerate(plan):
+            if step_tool != "encrypt_pdf":
+                continue
+            for name, what in _NEW_PASSWORDS.items():
+                if args.get(name) is not None:
+                    note(("steps", n, name), args[name], kwargs.get("input_path"),
+                         what + ", for the protected result of {file}", True)
+            _check_new_passwords(args)
+    if len(asks) > MAX_ASKS:
+        raise ToolError(f"A call can ask for at most {MAX_ASKS} passwords")
+    return asks, refs
+
+
+def _check_new_passwords(args: dict) -> None:
+    """Refuse a typed user password with an owner password given in the arguments under
+    the older schemes, where the owner password reveals the user password."""
+    user, owner = args.get("user_password"), args.get("owner_password")
+    typed = user == ASK or _is_ref(user)
+    if (typed and owner not in (None, "") and owner != ASK and not _is_ref(owner)
+            and args.get("algorithm", "AES-256") != "AES-256"):
+        raise ToolError("With a typed user password and an older algorithm, the owner "
+                        "password must be typed too (\"ask\") or left out: under those "
+                        "schemes the owner password reveals the user password")
+
+
+def _set(kwargs: dict, where: tuple, value: str) -> None:
+    if where[0] == "steps":
+        kwargs["steps"][where[1]]["args"][where[2]] = value
+    elif where[0] == "passwords":
+        kwargs["passwords"][where[1]] = value
+    else:
+        kwargs[where[0]] = value
+
+
+def _url_mode(ctx) -> bool:
+    """Can this client open a link for the user (URL-mode elicitation)?"""
+    if not hasattr(ctx, "elicit_url"):
+        return False  # an SDK older than URL-mode elicitation (mcp < 1.23)
+    params = getattr(ctx.session, "client_params", None)
+    elicitation = getattr(getattr(params, "capabilities", None), "elicitation", None)
+    return getattr(elicitation, "url", None) is not None
+
+
+def _request(label: str, new: bool, purpose: tuple, waited: bool):
+    try:
+        return password_page.PAGE.request(label, new, purpose, waited)
+    except RuntimeError:
+        raise ToolError("Too many password pages are waiting; try again in a few "
+                        "minutes") from None
+    except OSError as exc:
+        logger.warning("The password page couldn't start: %s", type(exc).__name__)
+        raise ToolError("The password page couldn't start on this computer") from None
+
+
+async def _typed_in_client(ctx, label: str, new: bool, purpose: tuple) -> str:
+    """Have the client open a page for one password and wait for it to be typed."""
+    entry = _request(label, new, purpose, waited=True)
+    try:
+        message = f"Paperboy needs {label}. Type it on this page, not in the chat."
+        try:
+            answer = await ctx.elicit_url(message=message, url=password_page.PAGE.url(entry),
+                                          elicitation_id=entry.ref)
+        except Exception as exc:  # the client failed to open it: say so, not its error
+            logger.warning("Opening the password page failed: %s", type(exc).__name__)
+            raise ToolError("The client couldn't open the password page") from None
+        if answer.action != "accept":
+            raise ToolError("No password was given, so nothing was done")
+        with anyio.move_on_after(ASK_WAIT_S):   # cancelling the call stops this too
+            while not entry.done.is_set():
+                await anyio.sleep(0.1)
+        value = password_page.PAGE.collect(entry)
+        if value is None:
+            raise ToolError("No password was typed in time, so nothing was done")
+        try:
+            await ctx.session.send_elicit_complete(entry.ref)
+        except Exception:  # only a courtesy to the client
+            pass
+        return value
+    finally:
+        password_page.PAGE.discard(entry)
+
+
+async def _resolve_passwords(ctx, kwargs: dict, tool: str = "") -> None:
+    """Check the call, then put in the passwords typed on the local page: those asked for
+    now ("ask") and those typed before ("ask:<ref>")."""
+    try:
+        asks, refs = _wants(kwargs, tool)
+    except PdfUserError as exc:
+        raise ToolError(str(exc)) from exc
+    typed = []
+    for where, ref, purpose in refs:
+        entry = password_page.PAGE.ready(ref, purpose)
+        if entry is None:
+            raise ToolError("No password has been typed on that page yet, the link "
+                            "expired, or it was for something else; ask for a new one")
+        typed.append((where, entry))
+    if asks and not _url_mode(ctx):
+        # The client can't open links itself: hand them over, take the passwords next time.
+        entries = [(where, _request(label, new, purpose, waited=False))
+                   for where, label, new, purpose in asks]
+        links = "; ".join(f"for {e.label}: {password_page.PAGE.url(e)} (then pass "
+                          f"\"ask:{e.ref}\" as {where[-1]})" for where, e in entries)
+        raise ToolError("Type the password on this computer, not in the chat. Open the "
+                        f"link {links}. Each link works once, for 10 minutes; then run "
+                        "this again with those values.")
+    values = [(where, await _typed_in_client(ctx, label, new, purpose))
+              for where, label, new, purpose in asks]
+    for where, entry in typed:   # taken only now, when the call goes ahead
+        value = password_page.PAGE.collect(entry)
+        if value is None:
+            raise ToolError("That password page's link expired; ask for a new one")
+        values.append((where, value))
+    for where, value in values:
+        _set(kwargs, where, value)
+
+
+def _asking(fn):
+    """The tool as registered: unchanged unless it takes passwords; then async, getting
+    any "ask" password from the user before running the tool in a worker thread."""
+    signature = inspect.signature(fn)
+    takes = set(signature.parameters) & (set(_OPEN_PASSWORDS) | set(_NEW_PASSWORDS)
+                                         | {"passwords", "steps"})
+    if not takes:
+        return fn
+
+    @functools.wraps(fn)
+    async def wrapper(*, paperboy_context: Context, **kwargs):
+        await _resolve_passwords(paperboy_context, kwargs, fn.__name__)
+        return await anyio.to_thread.run_sync(functools.partial(fn, **kwargs))
+
+    wrapper.__signature__ = signature.replace(parameters=[
+        *signature.parameters.values(),
+        inspect.Parameter("paperboy_context", inspect.Parameter.KEYWORD_ONLY,
+                          annotation=Context)])
+    wrapper.__annotations__ = {**fn.__annotations__, "paperboy_context": Context}
+    return wrapper
+
+
+def _tool(annotations: ToolAnnotations):
+    """Register a tool with MCP (through _asking); the module keeps the plain function.
+    Tools taking passwords say in their description that "ask" works."""
+    def register(fn):
+        registered = _asking(fn)
+        description = inspect.cleandoc(fn.__doc__ or "")
+        if registered is not fn:
+            description += "\n\n" + ASK_NOTE.strip()
+        mcp.tool(annotations=annotations, description=description)(registered)
+        return fn
+    return register
 
 
 def _reads(title: str) -> ToolAnnotations:
@@ -149,7 +388,7 @@ def _combined_output(output_path: str, inputs: list, overwrite: bool | None):
 # --------------------------------------------------------------------------- #
 
 
-@mcp.tool(annotations=_reads("PDF info"))
+@_tool(_reads("PDF info"))
 @_guard
 def pdf_info(input_path: str, password: str | None = None) -> InfoResult:
     """Report page count, file size, PDF version, encryption status and metadata.
@@ -159,21 +398,21 @@ def pdf_info(input_path: str, password: str | None = None) -> InfoResult:
     return engine.pdf_info(require_input(input_path, SETTINGS), SETTINGS, password)
 
 
-@mcp.tool(annotations=_reads("Get metadata"))
+@_tool(_reads("Get metadata"))
 @_guard
 def get_metadata(input_path: str, password: str | None = None) -> MetadataResult:
     """Read document metadata: title, author, subject, keywords, creator, producer."""
     return engine.get_metadata(require_input(input_path, SETTINGS), SETTINGS, password)
 
 
-@mcp.tool(annotations=_reads("Check PDF"))
+@_tool(_reads("Check PDF"))
 @_guard
 def check_pdf(input_path: str, password: str | None = None) -> CheckResult:
     """Validate structural integrity and report any problems found."""
     return engine.check_pdf(require_input(input_path, SETTINGS), SETTINGS, password)
 
 
-@mcp.tool(annotations=_reads("Extract text"))
+@_tool(_reads("Extract text"))
 @_guard
 def extract_text(
     input_path: str,
@@ -187,7 +426,7 @@ def extract_text(
     )
 
 
-@mcp.tool(annotations=_reads("Search text"))
+@_tool(_reads("Search text"))
 @_guard
 def search_text(
     input_path: str,
@@ -218,7 +457,7 @@ def search_text(
                               match_case, whole_word, max_results, password)
 
 
-@mcp.tool(annotations=_reads("Extract tables"))
+@_tool(_reads("Extract tables"))
 @_guard
 def extract_tables(
     input_path: str,
@@ -242,7 +481,7 @@ def extract_tables(
                                  strategy, max_tables, password)
 
 
-@mcp.tool(annotations=_writes("Export tables"))
+@_tool(_writes("Export tables"))
 @_guard
 def export_tables(
     input_path: str,
@@ -273,7 +512,7 @@ def export_tables(
 # --------------------------------------------------------------------------- #
 
 
-@mcp.tool(annotations=_writes("Encrypt PDF"))
+@_tool(_writes("Encrypt PDF"))
 @_guard
 def encrypt_pdf(
     input_path: str,
@@ -302,7 +541,7 @@ def encrypt_pdf(
     )
 
 
-@mcp.tool(annotations=_writes("Decrypt PDF"))
+@_tool(_writes("Decrypt PDF"))
 @_guard
 def decrypt_pdf(
     input_path: str,
@@ -321,7 +560,7 @@ def decrypt_pdf(
 # --------------------------------------------------------------------------- #
 
 
-@mcp.tool(annotations=_writes("Rearrange pages"))
+@_tool(_writes("Rearrange pages"))
 @_guard
 def rearrange_pages(
     input_path: str,
@@ -340,7 +579,7 @@ def rearrange_pages(
     return engine.rearrange_pages(src, out, page_order, SETTINGS, append_unlisted, password)
 
 
-@mcp.tool(annotations=_writes("Delete pages"))
+@_tool(_writes("Delete pages"))
 @_guard
 def delete_pages(
     input_path: str,
@@ -355,7 +594,7 @@ def delete_pages(
     return engine.delete_pages(src, out, pages, SETTINGS, password)
 
 
-@mcp.tool(annotations=_writes("Extract pages"))
+@_tool(_writes("Extract pages"))
 @_guard
 def extract_pages(
     input_path: str,
@@ -370,7 +609,7 @@ def extract_pages(
     return engine.extract_pages(src, out, pages, SETTINGS, password)
 
 
-@mcp.tool(annotations=_writes("Rotate pages"))
+@_tool(_writes("Rotate pages"))
 @_guard
 def rotate_pages(
     input_path: str,
@@ -386,7 +625,7 @@ def rotate_pages(
     return engine.rotate_pages(src, out, degrees, SETTINGS, pages, password)
 
 
-@mcp.tool(annotations=_writes("Merge PDFs"))
+@_tool(_writes("Merge PDFs"))
 @_guard
 def merge_pdfs(
     input_paths: list[str],
@@ -409,7 +648,7 @@ def merge_pdfs(
     return engine.merge_pdfs(srcs, out, SETTINGS, resolved_pw)
 
 
-@mcp.tool(annotations=_writes("Crop pages"))
+@_tool(_writes("Crop pages"))
 @_guard
 def crop_pages(
     input_path: str,
@@ -431,7 +670,7 @@ def crop_pages(
     return engine.crop_pages(src, out, SETTINGS, margins, unit, pages, reset, password)
 
 
-@mcp.tool(annotations=_writes("Resize pages"))
+@_tool(_writes("Resize pages"))
 @_guard
 def resize_pages(
     input_path: str,
@@ -459,7 +698,7 @@ def resize_pages(
                                pages, password)
 
 
-@mcp.tool(annotations=_writes("N-up"))
+@_tool(_writes("N-up"))
 @_guard
 def n_up(
     input_path: str,
@@ -483,7 +722,7 @@ def n_up(
     return engine.n_up(src, out, SETTINGS, per_sheet, size, pages, password)
 
 
-@mcp.tool(annotations=_writes("Insert blank pages"))
+@_tool(_writes("Insert blank pages"))
 @_guard
 def insert_blank_pages(
     input_path: str,
@@ -503,7 +742,7 @@ def insert_blank_pages(
     return engine.insert_blank_pages(src, out, SETTINGS, after, count, password)
 
 
-@mcp.tool(annotations=_writes("Interleave PDFs"))
+@_tool(_writes("Interleave PDFs"))
 @_guard
 def interleave_pdfs(
     front_path: str,
@@ -527,7 +766,7 @@ def interleave_pdfs(
                                   front_password, back_password)
 
 
-@mcp.tool(annotations=_writes("Split PDF"))
+@_tool(_writes("Split PDF"))
 @_guard
 def split_pdf(
     input_path: str,
@@ -556,7 +795,7 @@ def split_pdf(
 # --------------------------------------------------------------------------- #
 
 
-@mcp.tool(annotations=_writes("Optimize PDF"))
+@_tool(_writes("Optimize PDF"))
 @_guard
 def optimize_pdf(
     input_path: str,
@@ -572,7 +811,7 @@ def optimize_pdf(
     return engine.optimize_pdf(src, out, SETTINGS, linearize, compress, password)
 
 
-@mcp.tool(annotations=_writes("Repair PDF"))
+@_tool(_writes("Repair PDF"))
 @_guard
 def repair_pdf(
     input_path: str,
@@ -586,7 +825,7 @@ def repair_pdf(
     return engine.repair_pdf(src, out, SETTINGS, password)
 
 
-@mcp.tool(annotations=_writes("Flatten PDF"))
+@_tool(_writes("Flatten PDF"))
 @_guard
 def flatten_pdf(
     input_path: str,
@@ -605,7 +844,7 @@ def flatten_pdf(
 # --------------------------------------------------------------------------- #
 
 
-@mcp.tool(annotations=_writes("Set metadata"))
+@_tool(_writes("Set metadata"))
 @_guard
 def set_metadata(
     input_path: str,
@@ -627,7 +866,7 @@ def set_metadata(
 # --------------------------------------------------------------------------- #
 
 
-@mcp.tool(annotations=_writes("Convert to PDF"))
+@_tool(_writes("Convert to PDF"))
 @_guard
 def convert_to_pdf(
     input_path: str,
@@ -643,7 +882,7 @@ def convert_to_pdf(
     return engine.convert_to_pdf(src, out, SETTINGS)
 
 
-@mcp.tool(annotations=_writes("Images to PDF"))
+@_tool(_writes("Images to PDF"))
 @_guard
 def images_to_pdf(
     input_paths: list[str],
@@ -663,7 +902,7 @@ def images_to_pdf(
 # --------------------------------------------------------------------------- #
 
 
-@mcp.tool(annotations=_reads("List form fields"))
+@_tool(_reads("List form fields"))
 @_guard
 def list_form_fields(input_path: str, password: str | None = None) -> FormFieldsResult:
     """List a PDF form's fields: full name, type, current value, allowed options, flags, page.
@@ -675,7 +914,7 @@ def list_form_fields(input_path: str, password: str | None = None) -> FormFields
     return engine.list_form_fields(src, SETTINGS, password)
 
 
-@mcp.tool(annotations=_writes("Fill form"))
+@_tool(_writes("Fill form"))
 @_guard
 def fill_form(
     input_path: str,
@@ -705,7 +944,7 @@ def fill_form(
 # --------------------------------------------------------------------------- #
 
 
-@mcp.tool(annotations=_reads("Get bookmarks"))
+@_tool(_reads("Get bookmarks"))
 @_guard
 def get_outline(input_path: str, password: str | None = None) -> OutlineResult:
     """List a PDF's bookmarks (its outline) in reading order: each one's level (1 = top,
@@ -719,7 +958,7 @@ def get_outline(input_path: str, password: str | None = None) -> OutlineResult:
     return engine.get_outline(src, SETTINGS, password)
 
 
-@mcp.tool(annotations=_writes("Set bookmarks"))
+@_tool(_writes("Set bookmarks"))
 @_guard
 def set_outline(
     input_path: str,
@@ -761,7 +1000,7 @@ def _output_folder(src, output_dir: str | None, suffix: str):
     return folder
 
 
-@mcp.tool(annotations=_reads("List attachments"))
+@_tool(_reads("List attachments"))
 @_guard
 def list_attachments(input_path: str, password: str | None = None) -> AttachmentsResult:
     """List the files embedded in a PDF (attached to the document or to a page): name,
@@ -773,7 +1012,7 @@ def list_attachments(input_path: str, password: str | None = None) -> Attachment
     return engine.list_attachments(src, SETTINGS, password)
 
 
-@mcp.tool(annotations=_writes("Extract attachments"))
+@_tool(_writes("Extract attachments"))
 @_guard
 def extract_attachments(
     input_path: str,
@@ -799,7 +1038,7 @@ def extract_attachments(
                                       _overwrite(overwrite), allow_executables)
 
 
-@mcp.tool(annotations=_writes("Extract images"))
+@_tool(_writes("Extract images"))
 @_guard
 def extract_images(
     input_path: str,
@@ -832,7 +1071,7 @@ def extract_images(
 # --------------------------------------------------------------------------- #
 
 
-@mcp.tool(annotations=_reads("Inspect hidden data"))
+@_tool(_reads("Inspect hidden data"))
 @_guard
 def inspect_hidden_data(input_path: str, password: str | None = None) -> HiddenDataResult:
     """Report hidden data a PDF carries before sharing it: metadata (author, software),
@@ -843,7 +1082,7 @@ def inspect_hidden_data(input_path: str, password: str | None = None) -> HiddenD
     return engine.inspect_hidden_data(src, SETTINGS, password)
 
 
-@mcp.tool(annotations=_reads("Scan PDF"))
+@_tool(_reads("Scan PDF"))
 @_guard
 def scan_pdf(input_path: str, password: str | None = None,
              antivirus: bool = True) -> ScanResult:
@@ -857,7 +1096,7 @@ def scan_pdf(input_path: str, password: str | None = None,
     return engine.scan_pdf(src, SETTINGS, password, antivirus)
 
 
-@mcp.tool(annotations=_writes("Sanitize PDF"))
+@_tool(_writes("Sanitize PDF"))
 @_guard
 def sanitize_pdf(
     input_path: str,
@@ -889,7 +1128,7 @@ def sanitize_pdf(
 # --------------------------------------------------------------------------- #
 
 
-@mcp.tool(annotations=_writes("Add watermark"))
+@_tool(_writes("Add watermark"))
 @_guard
 def add_watermark(
     input_path: str,
@@ -922,7 +1161,7 @@ def add_watermark(
                                 rotation, font_size, scale, color, layer, password)
 
 
-@mcp.tool(annotations=_writes("Add page numbers"))
+@_tool(_writes("Add page numbers"))
 @_guard
 def add_page_numbers(
     input_path: str,
@@ -954,7 +1193,7 @@ def add_page_numbers(
 # --------------------------------------------------------------------------- #
 
 
-@mcp.tool(annotations=_reads("View pages"))
+@_tool(_reads("View pages"))
 @_guard
 def view_pages(
     input_path: str,
@@ -981,7 +1220,7 @@ def view_pages(
     )
 
 
-@mcp.tool(annotations=_reads("Compare PDFs"))
+@_tool(_reads("Compare PDFs"))
 @_guard
 def compare_pdfs(
     path_a: str,
@@ -1021,7 +1260,7 @@ def compare_pdfs(
     )
 
 
-@mcp.tool(annotations=_reads("Find blank pages"))
+@_tool(_reads("Find blank pages"))
 @_guard
 def find_blank_pages(
     input_path: str,
@@ -1041,7 +1280,7 @@ def find_blank_pages(
     return engine.find_blank_pages(src, SETTINGS, pages, ink_threshold_percent, password)
 
 
-@mcp.tool(annotations=_writes("Render pages to images"))
+@_tool(_writes("Render pages to images"))
 @_guard
 def render_pages(
     input_path: str,
@@ -1206,7 +1445,7 @@ def _publish(made, out, overwrite: bool) -> None:
         raise
 
 
-@mcp.tool(annotations=_writes("Run pipeline"))
+@_tool(_writes("Run pipeline"))
 @_guard
 def run_pipeline(
     input_path: str,
@@ -1292,7 +1531,7 @@ def run_pipeline(
 # --------------------------------------------------------------------------- #
 
 
-@mcp.tool(annotations=_reads("List PDFs"))
+@_tool(_reads("List PDFs"))
 @_guard
 def list_pdfs(
     folder: str | None = None,
