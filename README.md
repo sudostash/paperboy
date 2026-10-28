@@ -78,7 +78,7 @@ Output files are written back into your `--root` folder. Remove the server anyti
 | `interleave_pdfs` | Combine fronts and backs from a single-sided scanner into one PDF (backs reversed by default) |
 | `merge_pdfs` | Combine PDFs in order (per-file passwords supported) |
 | `split_pdf` | Split into ranges or one file per page |
-| `optimize_pdf` | Linearize ("fast web view") and recompress to shrink |
+| `optimize_pdf` | Linearize ("fast web view") and recompress to shrink; optionally lower picture resolution to a DPI (`max_image_dpi`) or step it down until the file fits a size (`target_size_mb`, keeping the smallest result and reporting `target_met`) |
 | `repair_pdf` | Rebuild a damaged file's structure |
 | `flatten_pdf` | Flatten form fields and annotations *(needs qpdf CLI)* |
 | `convert_to_pdf` | Image / text / Office / HTML → PDF *(Office needs LibreOffice)* |
@@ -259,6 +259,19 @@ All configuration is environment variables. Sensible defaults; nothing is requir
   file names (no folders, reserved or invisible characters); programs and scripts are skipped
   unless asked for; outputs never replace links, folders or the input; and a failed run
   removes what it wrote. Extracted files are not password-protected, even when the PDF is.
+- **Lowering picture resolution is conservative.** `optimize_pdf` works out each picture's
+  resolution from the largest size the pages draw it at (through forms, and `/UserUnit`), and
+  leaves alone any picture it can't account for: one a page or form it couldn't read may draw,
+  or one an annotation appearance, pattern or Type 3 glyph may draw. Only 8-bit grey and RGB
+  pictures (Flate or JPEG, with or without a soft mask) are re-encoded; palettes, CMYK, masks,
+  JPEG 2000 and very progressive JPEGs stay as they are, a shared soft mask is copied rather
+  than changed, and a picture is replaced only when that makes it smaller. Pictures pass the
+  same checks as `extract_images` before being decoded. Content is measured before it is
+  parsed (16 MB and 500,000 tokens per page or form, 64 MB and 1.5 million tokens per call),
+  the resources followed are counted, and a call stops trying smaller steps after 3 minutes, keeping the best result so
+  far. Attempts are saved in a private folder beside the output, which is replaced only at
+  the end, keeping its permissions. Text and vector drawings are never touched, but in scans the text is itself a
+  picture and can blur at the lowest steps (72 dpi).
 - **Tool annotations** tell clients what each tool does. The four inspection tools
   (`pdf_info`, `get_metadata`, `check_pdf`, `extract_text`) are marked `readOnlyHint`, so clients
   may run them without a prompt. Every tool that writes a file is marked `destructiveHint`

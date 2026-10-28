@@ -454,12 +454,44 @@ def build_taxes(path: Path) -> Path:
     return path
 
 
+def build_album(path: Path) -> Path:
+    """Three pages of large, finely detailed 'photos' (about 6 MB): too big to email."""
+    import io
+    import random
+
+    from PIL import Image
+    from reportlab.lib.utils import ImageReader
+
+    c = canvas.Canvas(str(path), pagesize=letter)
+    width, height = letter
+    captions = ["Harbour at dawn", "Old town market", "Hills after rain"]
+    for n, caption in enumerate(captions):
+        rnd = random.Random(n)
+        fractal = Image.effect_mandelbrot((2400, 1600), (-2.2 + n * 0.3, -1.2, 1.0, 1.2), 80)
+        tint = Image.new("RGB", fractal.size, (rnd.randrange(80, 200), rnd.randrange(80, 200),
+                                               rnd.randrange(80, 200)))
+        photo = Image.composite(tint, Image.new("RGB", fractal.size, "#14213d"), fractal)
+        grain = Image.frombytes("RGB", fractal.size, rnd.randbytes(2400 * 1600 * 3))
+        photo = Image.blend(photo, grain, 0.12)
+        buf = io.BytesIO()
+        photo.save(buf, "JPEG", quality=92)
+        c.drawImage(ImageReader(io.BytesIO(buf.getvalue())), 72, height - 72 - 312,
+                    width=width - 144, height=312)
+        c.setFillColor(INK)
+        c.setFont("Helvetica", 14)
+        c.drawString(72, height - 72 - 340, caption)
+        c.showPage()
+    c.save()
+    return path
+
+
 BUILDERS = {"report.pdf": build_report, "scan.pdf": build_scan,
             "delivery-form.pdf": build_delivery_form, "proposal.pdf": build_proposal,
             "invoice.pdf": build_invoice, "brochure.pdf": build_brochure,
             "fronts.pdf": build_fronts, "backs.pdf": build_backs,
             "statement.pdf": build_statement, "contract-v1.pdf": build_contract_v1,
-            "contract-v2.pdf": build_contract_v2, "taxes.pdf": build_taxes}
+            "contract-v2.pdf": build_contract_v2, "taxes.pdf": build_taxes,
+            "album.pdf": build_album}
 
 
 def build(names: list[str], workspace: Path) -> None:

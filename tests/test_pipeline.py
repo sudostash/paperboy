@@ -356,3 +356,20 @@ def test_the_schema_lists_the_steps_and_their_number():
     steps = schema["properties"]["steps"]
     assert (steps["minItems"], steps["maxItems"]) == (1, 20)
     assert '"n_up"' in json.dumps(schema) and '"merge_pdfs"' not in json.dumps(schema)
+
+
+def test_every_step_passes_on_all_its_arguments():
+    """A step argument the runner leaves out would be accepted and silently ignored."""
+    import inspect
+    import re
+    source = inspect.getsource(S._step_runners)
+    blocks = re.split(r'\n\s+"(\w+)": ', source)
+    runners = dict(zip(blocks[1::2], blocks[2::2], strict=True))
+    passed_otherwise = {"encrypt_pdf": {"current_password"},   # the pipeline's password
+                        "set_metadata": {"fields"}}            # through _fields(a)
+    for name, body in runners.items():
+        params = set(inspect.signature(getattr(S, name)).parameters) - {
+            "input_path", "output_path", "password", "overwrite"}
+        used = set(re.findall(r'a\["(\w+)"\]', body))
+        assert params - used == passed_otherwise.get(name, set()), name
+    assert len(runners) == len(S._step_runners())
