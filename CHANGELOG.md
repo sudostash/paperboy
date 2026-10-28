@@ -7,6 +7,18 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- Passwords typed by you, not given to the model: pass `"ask"` as any password argument
+  (open, owner or new passwords, per-file passwords in `merge_pdfs`, and an encrypt step
+  in `run_pipeline`) and Paperboy opens a one-time page on `127.0.0.1` where you type it;
+  it goes straight to Paperboy, not through the model or the client. Clients that support
+  URL-mode elicitation offer to open the page and the call carries on once you've typed
+  it; with other clients the tool replies with the link, and you run it again with the
+  `"ask:<ref>"` value it gives. Links are unguessable, work once and expire after 10
+  minutes; new passwords are typed twice; the file is checked before you're asked; a
+  typed password works only for the tool, argument and file it was asked for. `"ask"` and `"ask:..."` are therefore reserved and can't be used as
+  passwords. `PAPERBOY_REQUIRE_PASSWORD_REFERENCES=true` refuses passwords given directly.
+  Tools that take passwords now run in a worker thread.
+
 - `list_pdfs` (read-only) and the `paperboy://pdfs` resource: the PDFs under
   `PAPERBOY_ROOT` (or a folder in it), with size and last change, sorted by path. It
   needs a root; never descends links or junctions, and lists a linked file only if it
@@ -194,6 +206,9 @@ All notable changes to this project are documented here. The format follows
   permission is always granted, per PDF 2.0).
 
 ### Fixed
+- `encrypt_pdf` with `AES-128`, `RC4-128` or `RC4-40` and a password outside
+  PDFDocEncoding (e.g. Cyrillic or Chinese) now explains that only AES-256 takes such
+  passwords, instead of failing with an internal error.
 - Outputs of a PDF opened with its owner password keep that owner password, also when it
   is the user password too (before, a random one replaced it).
 - `n_up` copies each page once however often it is placed (repeating a page multiplied the

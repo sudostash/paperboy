@@ -202,6 +202,7 @@ All configuration is environment variables. Sensible defaults; nothing is requir
 | `PAPERBOY_MAX_PAGES` | `5000` | Reject documents with more pages than this. |
 | `PAPERBOY_SOFFICE_TIMEOUT` | `180` | Seconds before a LibreOffice conversion is killed. |
 | `PAPERBOY_ALLOW_OVERWRITE` | `false` | Default for the `overwrite` flag on every tool. |
+| `PAPERBOY_REQUIRE_PASSWORD_REFERENCES` | `false` | Refuse passwords given in tool arguments; only `"ask"` (typed on Paperboy's local page) is accepted. |
 | `PAPERBOY_SOFFICE` | *(auto)* | Path to the `soffice` binary. |
 | `PAPERBOY_QPDF` | *(auto)* | Path to the `qpdf` binary. |
 | `PAPERBOY_CLAMSCAN` | *(auto)* | Path to ClamAV's `clamscan`, used by `scan_pdf`. |
@@ -264,7 +265,26 @@ All configuration is environment variables. Sensible defaults; nothing is requir
   (`overwrite=true` can replace an existing file), so clients keep asking first. No tool
   touches the network (`openWorldHint: false`). Hints are advisory; the server-side checks
   above are what enforce safety.
-- **Passwords are tool arguments**, so they appear in the client's tool-call log. `decrypt_pdf` requires the real password; it does not crack anything.
+- **Passwords can stay out of the conversation.** Pass `"ask"` as any password argument and
+  Paperboy opens a one-time page on `127.0.0.1` where you type the password; it goes straight
+  to the server, never into the model's context, the client, or the tool-call log. Clients with
+  URL-mode elicitation offer to open the page and the call carries on once you've typed it
+  (the MCP spec forbids asking for passwords in a client form). With other clients the tool
+  replies with the link; open it, type the password, and run the tool again with the
+  `"ask:<ref>"` value from the reply. Each link has an unguessable token, works once, and
+  expires after 10 minutes; the page answers only on `127.0.0.1` with the exact `Host`
+  (no DNS rebinding) and is never logged. New passwords (`encrypt_pdf`, an encrypt step in
+  `run_pipeline`) are typed twice. The file is checked before you're asked, a call asks at
+  most 5 passwords, and file names on the page are shortened and stripped of control
+  characters. A typed password works only for the tool, argument and file it was asked for, so
+  an `"ask:<ref>"` can't be spent elsewhere; with a typed user password, `encrypt_pdf` under the
+  older algorithms (AES-128, RC4) refuses an owner password given in the arguments, since those
+  schemes let the owner password reveal the user password. Cancelling or declining forgets the
+  link. When the tool replies with a link, the model sees that link too, so open only links on
+  `127.0.0.1` and check the page names the file you expect. `"ask"` and `"ask:..."` are
+  reserved, not passwords. Passwords given directly
+  as arguments still work, and do appear in the log; `PAPERBOY_REQUIRE_PASSWORD_REFERENCES=true`
+  refuses them. `decrypt_pdf` requires the real password; it does not crack anything.
   Passwords handed to the qpdf CLI go over stdin, never the command line, so other local users
   can't read them from the process list, and `check_pdf` redacts the password qpdf echoes back.
 - **Internal errors stay on the server.** Anticipated problems (bad path, wrong password,

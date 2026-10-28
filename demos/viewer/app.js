@@ -252,6 +252,45 @@ function showTable(step) {
   stage.append(table);
 }
 
+async function askPassword(card, question) {
+  // The client offers to open Paperboy's local page; the password is typed there, so it
+  // never reaches the assistant or the client.
+  const box = el("div", "ask-box");
+  box.append(el("span", null, `🔗 ${question.message}`));
+  box.append(el("code", "link", `http://${question.host}/p/••••••••`));
+  const btns = el("div", "btns");
+  const open = el("button", "allow", "Open");
+  btns.append(el("button", null, "Cancel"), open);
+  box.append(btns);
+  card.append(box);
+  log.scrollTop = log.scrollHeight;
+  await sleep(1200);
+  open.classList.add("pressed");
+  await sleep(400);
+  box.replaceChildren();
+  const page = el("div", "local-page");
+  page.append(el("div", "bar", `🔒 ${question.host}`));
+  page.append(el("b", null, question.new ? "Choose a password" : "Enter the password"));
+  const fields = [el("div", "secret", "")];
+  if (question.new) fields.push(el("div", "secret", ""));
+  page.append(...fields);
+  const go = el("button", "allow", "Continue");
+  page.append(go);
+  box.append(page);
+  log.scrollTop = log.scrollHeight;
+  await sleep(600);
+  for (const field of fields) {
+    for (let i = 0; i < 10; i++) {   // a fixed count: the demo doesn't reveal the length
+      field.textContent += "•";
+      await sleep(80);
+    }
+    await sleep(250);
+  }
+  go.classList.add("pressed");
+  await sleep(450);
+  box.remove();
+}
+
 async function approve(card, title) {
   const bar = el("div", "approve");
   bar.append(el("span", null, `Allow Paperboy to run “${title}”?`));
@@ -277,6 +316,8 @@ async function call(step) {
   log.scrollTop = log.scrollHeight;
   await sleep(900);
   if (!step.readOnly) await approve(card, step.title);
+  // The tool asks while it runs, after it was allowed to.
+  for (const question of step.asked || []) await askPassword(card, question);
   await sleep(300);
   card.append(el("pre", "result", `✓ ${brief(step.result)}`));
   log.scrollTop = log.scrollHeight;

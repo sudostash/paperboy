@@ -58,6 +58,16 @@ def encrypt_pdf(
             f"algorithm must be one of {', '.join(_ALGORITHMS)}; got {algorithm!r}"
         )
     r, use_aes = _ALGORITHMS[algorithm]
+    if r < 6:
+        # The older schemes take passwords in PDFDocEncoding (roughly Latin-1) only.
+        for password in (user_password, owner_password or ""):
+            try:
+                password.encode("pdfdoc")
+            except UnicodeEncodeError:
+                raise PdfUserError(
+                    f"{algorithm} passwords can only use Latin letters, digits and common "
+                    "symbols; use AES-256 for other characters"
+                ) from None
     encryption = pikepdf.Encryption(
         user=user_password,
         owner=owner_password or user_password,

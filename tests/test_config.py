@@ -11,6 +11,7 @@ ENV_VARS = [
     "PAPERBOY_ROOT", "PAPERBOY_MAX_FILE_MB", "PAPERBOY_MAX_PAGES",
     "PAPERBOY_SOFFICE_TIMEOUT", "PAPERBOY_SOFFICE", "PAPERBOY_QPDF",
     "PAPERBOY_ALLOW_OVERWRITE", "PAPERBOY_CLAMSCAN", "PAPERBOY_CLAMSCAN_TIMEOUT",
+    "PAPERBOY_REQUIRE_PASSWORD_REFERENCES",
 ]
 
 
@@ -32,6 +33,12 @@ def test_defaults_without_environment(clean_env):
     assert s.qpdf_path is None
     assert s.default_overwrite is False
     assert s.clamscan_path is None and s.clamscan_timeout == 300
+
+
+def test_password_references_setting(clean_env):
+    assert Settings.from_env().require_password_references is False
+    clean_env.setenv("PAPERBOY_REQUIRE_PASSWORD_REFERENCES", "true")
+    assert Settings.from_env().require_password_references is True
 
 
 def test_clamav_settings(clean_env):
