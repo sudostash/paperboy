@@ -7,6 +7,13 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `optimize_pdf` can make files much smaller by lowering picture resolution:
+  `max_image_dpi` re-encodes pictures drawn sharper than that DPI, and `target_size_mb`
+  steps resolution and JPEG quality down (300 to 72 DPI) until the file fits, keeping the
+  smallest result if it can't. Results add `images_resampled`, `image_dpi`,
+  `target_size_bytes` and `target_met`. Resolution is measured from where pages actually
+  draw each picture; pictures it can't account for, and those other than 8-bit grey/RGB,
+  are left as they are. The `compress_for_email` prompt now uses `target_size_mb`.
 - Passwords typed by you, not given to the model: pass `"ask"` as any password argument
   (open, owner or new passwords, per-file passwords in `merge_pdfs`, and an encrypt step
   in `run_pipeline`) and Paperboy opens a one-time page on `127.0.0.1` where you type it;

@@ -804,11 +804,25 @@ def optimize_pdf(
     compress: bool = True,
     password: str | None = None,
     overwrite: bool | None = None,
+    max_image_dpi: Annotated[int | None, Field(ge=36, le=1200, description=(
+        "Lower the resolution of pictures drawn sharper than this many dots per inch "
+        "(150 suits screens, 300 print). Lossy; leave out to keep pictures as they are."
+    ))] = None,
+    target_size_mb: Annotated[float | None, Field(ge=0.01, le=100_000, description=(
+        "Keep lowering picture resolution and JPEG quality until the file is at most "
+        "this many MB (1 MB = 1,000,000 bytes). Lossy. The smallest result is saved even "
+        "if the target can't be met; check target_met."))] = None,
 ) -> OptimizeResult:
-    """Shrink a PDF: linearize ("fast web view") and recompress object streams."""
+    """Shrink a PDF: linearize ("fast web view"), recompress object streams and,
+    if asked, lower the resolution of its pictures (max_image_dpi), or keep lowering
+    it until the file fits a size (target_size_mb, down to 72 dpi). Text and drawings
+    stay sharp, except in scans, where the text is itself a picture and can become
+    hard to read at low resolutions. Pictures whose placement can't be worked out,
+    masks, palettes and CMYK are left as they are."""
     src = require_input(input_path, SETTINGS)
     out = prepare_output(src, output_path, "_optimized", _overwrite(overwrite), SETTINGS)
-    return engine.optimize_pdf(src, out, SETTINGS, linearize, compress, password)
+    return engine.optimize_pdf(src, out, SETTINGS, linearize, compress, password,
+                               max_image_dpi, target_size_mb)
 
 
 @_tool(_writes("Repair PDF"))
@@ -1335,8 +1349,9 @@ def _step_runners() -> dict:
         "encrypt_pdf": lambda s, o, a, pw: engine.encrypt_pdf(
             s, o, a["user_password"], S, a["owner_password"], a["algorithm"],
             a["allow_print"], a["allow_copy"], a["allow_modify"], pw),
-        "optimize_pdf": lambda s, o, a, pw: engine.optimize_pdf(s, o, S, a["linearize"],
-                                                                a["compress"], pw),
+        "optimize_pdf": lambda s, o, a, pw: engine.optimize_pdf(
+            s, o, S, a["linearize"], a["compress"], pw, a["max_image_dpi"],
+            a["target_size_mb"]),
         "repair_pdf": lambda s, o, a, pw: engine.repair_pdf(s, o, S, pw),
         "flatten_pdf": lambda s, o, a, pw: engine.flatten_pdf(s, o, S, pw),
         "set_metadata": lambda s, o, a, pw: engine.set_metadata(s, o, _fields(a), S, pw),
@@ -1608,12 +1623,14 @@ Make {path} small enough to email (under {max_mb:g} MB), using the Paperboy tool
 1. pdf_info: check its size and page count. Email encoding adds about a third, so aim for
    about 3/4 of {max_mb:g} MB on disk.
 2. If it is already small enough, say so and stop.
-3. optimize_pdf with linearize false (linearizing adds bytes), then pdf_info on the result
-   to check the new size. Paperboy doesn't shrink images, so scans may barely change.
-4. If it is still too big, don't remove content without asking: tell me the size, and offer
+3. optimize_pdf with linearize false (linearizing adds bytes) and target_size_mb set to
+   that aim. It lowers picture resolution only as far as it must. If the PDF is a scan,
+   its text is a picture too: check a page of the result with view_pages and tell me if
+   it is hard to read.
+4. If target_met is false, don't remove content without asking: tell me the size, and offer
    to split it with split_pdf (then check each part with pdf_info) or to drop pages I don't
    need with delete_pages.
-Tell me the final file's name and size.
+Tell me the final file's name and size, and the picture resolution used (image_dpi), if any.
 """, path, max_mb=max_mb)
 
 

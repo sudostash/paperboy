@@ -387,4 +387,22 @@ SCENARIOS: dict[str, dict] = {
                                     "computer, so it never appeared in our conversation."},
         ],
     },
+    "target-size": {
+        "title": "Shrink a PDF to a size",
+        "subtitle": "Lower picture resolution only as far as needed to fit an email.",
+        "files": ["album.pdf"],
+        "prompt": "album.pdf is too big to email. Get it under 2 MB.",
+        "steps": [
+            {"type": "call", "tool": "pdf_info", "args": {"input_path": "album.pdf"}},
+            {"type": "say", "text": "It's 3 pages of large photos. Email encoding adds about "
+                                    "a third, so I'll aim for 1.5 MB on disk."},
+            {"type": "call", "tool": "optimize_pdf",
+             "args": {"input_path": "album.pdf", "linearize": False,
+                      "target_size_mb": 1.5},
+             "show": {"before": "album.pdf", "after": "album_optimized.pdf"}},
+            {"type": "say", "text": "Done: album_optimized.pdf fits, with the photos at a "
+                                    "resolution that still looks sharp on screen. The text "
+                                    "is untouched."},
+        ],
+    },
 }

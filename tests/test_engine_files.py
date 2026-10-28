@@ -110,7 +110,8 @@ def test_the_resource_lists_the_same(tree, settings, monkeypatch):
     assert "needs PAPERBOY_ROOT" in json.loads(S.pdfs_resource())["error"]
 
 
-NOT_TOOLS = {"remove_comments", "active_content"}   # an argument and a verdict, named in text
+NOT_TOOLS = {"remove_comments", "active_content",   # an argument and a verdict, named in text
+             "target_size_mb", "target_met", "image_dpi"}  # an argument and result fields
 PROMPTS = {
     "prepare_for_signing": {"path": "contract.pdf"},
     "compress_for_email": {"path": "deck.pdf", "max_mb": 5},

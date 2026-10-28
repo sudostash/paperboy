@@ -108,6 +108,10 @@ class OptimizeResult(Protected):
     size_after: int
     saved_bytes: int
     linearized: bool
+    images_resampled: int           # pictures whose resolution was lowered
+    image_dpi: int | None           # the resolution they were lowered to
+    target_size_bytes: int | None   # the size asked for, if one was
+    target_met: bool | None         # whether the output is that size or smaller
 
 
 class RepairResult(Protected):
