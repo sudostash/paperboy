@@ -488,6 +488,56 @@ class DiffImage(TypedDict):
     pixel_change: float
 
 
+class RedactArea(TypedDict):
+    """An area of a page to redact (as search_text gives rectangles)."""
+
+    __pydantic_config__ = ConfigDict(extra="forbid")  # type: ignore[misc]
+
+    page: int                              # 1-based
+    rect: list[float]                      # [left, bottom, right, top] in PDF points
+
+
+class RedactMatch(TypedDict):
+    page: int                              # 1-based
+    source: str                            # the text or pattern that matched
+    text: str                              # what it matched (whitespace collapsed)
+
+
+class RedactedPage(TypedDict):
+    page: int                              # 1-based
+    areas: int                             # areas redacted on it (each match makes 1+)
+    # "edited": the content was rewritten without what was under the areas, and the
+    # rest of the page kept as it was; "rasterized": the page was replaced by a picture
+    # of itself with the areas painted over (its text can no longer be selected).
+    method: Literal["edited", "rasterized"]
+    reason: str | None                     # why it was rasterized
+    text_removed: int                      # characters
+    images_edited: int                     # pictures with pixels blanked (copies)
+    images_removed: int                    # pictures wholly under an area
+    drawings_removed: int                  # drawings and forms wholly under an area
+    annotations_removed: int               # comments, links, form fields touching an area
+
+
+class RedactResult(Protected):
+    output: str
+    pages_searched: int                    # pages searched for the texts and patterns
+    match_count: int
+    matches: list[RedactMatch]             # in page order (first 1,000)
+    matches_truncated: bool
+    pages: list[RedactedPage]              # every page with something redacted
+    pages_without_text: list[int]          # searched pages with no text, e.g. scans
+    # Where else in the file the texts or patterns were found and replaced: "document
+    # info", "XMP metadata", "bookmarks", "comments", "form fields", "accessibility
+    # structure", "other".
+    also_redacted_in: list[str]
+    alt_text_removed: int                  # structure elements whose alt text described
+    #                                        what was redacted
+    attachments_not_searched: int          # attached files, which can't be searched
+    # Pictures, forms or content redacted on a page that other content (another page,
+    # a form) still draws unredacted, so their originals stay in the file: look there.
+    originals_kept: int
+
+
 class CompareResult(TypedDict):
     path_a: str
     path_b: str
@@ -511,7 +561,7 @@ PipelineTool = Literal[
     "rotate_pages", "delete_pages", "extract_pages", "rearrange_pages", "decrypt_pdf",
     "encrypt_pdf", "optimize_pdf", "repair_pdf", "flatten_pdf", "set_metadata",
     "sanitize_pdf", "add_watermark", "add_page_numbers", "fill_form", "crop_pages",
-    "resize_pages", "n_up", "insert_blank_pages", "set_outline"]
+    "resize_pages", "n_up", "insert_blank_pages", "set_outline", "redact_pdf"]
 
 
 class PipelineStepInput(TypedDict):

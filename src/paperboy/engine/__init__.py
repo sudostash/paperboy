@@ -25,6 +25,7 @@ from .pages import (
     rotate_pages,
     split_pdf,
 )
+from .redact import redact_pdf
 from .render import find_blank_pages, render_pages, view_pages
 from .sanitize import inspect_hidden_data, sanitize_pdf
 from .scan import scan_pdf
@@ -50,5 +51,5 @@ __all__ = [
     "search_text",
     "crop_pages", "resize_pages", "n_up", "insert_blank_pages", "interleave_pdfs",
     "extract_tables", "export_tables",
-    "compare_pdfs", "list_pdfs",
+    "compare_pdfs", "list_pdfs", "redact_pdf",
 ]

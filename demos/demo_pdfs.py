@@ -485,13 +485,57 @@ def build_album(path: Path) -> Path:
     return path
 
 
+def build_case_file(path: Path) -> Path:
+    """A customer complaint file that names the customer, with their email, phone
+    number and a scanned signature: to be redacted before it goes to a supplier."""
+    import io
+    import math
+
+    from PIL import Image, ImageDraw
+    from reportlab.lib.utils import ImageReader
+
+    c = canvas.Canvas(str(path), pagesize=letter)
+    c.setTitle("Case 2291 - Maria Gonzalez")
+    width, height = letter
+    c.setFillColor(ACCENT)
+    c.rect(0, height - 14, width, 14, stroke=0, fill=1)
+    c.setFillColor(INK)
+    c.setFont("Helvetica-Bold", 24)
+    c.drawString(72, height - 100, "Complaint case 2291")
+    c.setFont("Helvetica", 12)
+    lines = [
+        "Customer: Maria Gonzalez",
+        "Email: maria.gonzalez@example.com    Phone: (555) 014-2290",
+        "",
+        "On 14 October, Maria Gonzalez reported that parcel NW-48213 arrived",
+        "with a crushed corner and a damaged lamp inside. The courier left it",
+        "at the door without a signature. Please review the depot handling",
+        "and confirm whether the supplier will replace the lamp.",
+    ]
+    for n, line in enumerate(lines):
+        c.drawString(72, height - 150 - n * 20, line)
+    pad = Image.new("L", (600, 160), 255)  # a pen signature, scanned
+    draw = ImageDraw.Draw(pad)
+    points = [(40 + x * 5, 90 + 40 * math.sin(x / 6) * math.cos(x / 17)) for x in range(105)]
+    draw.line(points, fill=20, width=5)
+    buf = io.BytesIO()
+    pad.save(buf, "PNG")
+    c.drawImage(ImageReader(io.BytesIO(buf.getvalue())), 72, height - 410, width=225,
+                height=60)
+    c.setFillColor(MUTED)
+    c.drawString(72, height - 425, "Customer signature")
+    c.showPage()
+    c.save()
+    return path
+
+
 BUILDERS = {"report.pdf": build_report, "scan.pdf": build_scan,
             "delivery-form.pdf": build_delivery_form, "proposal.pdf": build_proposal,
             "invoice.pdf": build_invoice, "brochure.pdf": build_brochure,
             "fronts.pdf": build_fronts, "backs.pdf": build_backs,
             "statement.pdf": build_statement, "contract-v1.pdf": build_contract_v1,
             "contract-v2.pdf": build_contract_v2, "taxes.pdf": build_taxes,
-            "album.pdf": build_album}
+            "album.pdf": build_album, "case-file.pdf": build_case_file}
 
 
 def build(names: list[str], workspace: Path) -> None:

@@ -7,6 +7,18 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `redact_pdf`: redact for real. Say what to redact with `texts` (found as `search_text`
+  finds them), `patterns` (regular expressions, e.g. email addresses) and `areas` (page
+  rectangles, e.g. a signature). Characters under an area are removed from the page (the
+  rest of the line stays put), pictures have those pixels blanked, drawings and annotations
+  there are removed (form fields with their values), areas are painted over (`fill`: black,
+  white or none), and the texts and patterns are replaced in metadata, bookmarks, comments,
+  form values and alt text too. Every rewritten page is read back to check nothing is left
+  under an area and nothing else changed; a page that can't be redacted exactly becomes a
+  picture of itself (`rasterize`: `if_needed`, `never`, `always`; `dpi`). Results list the
+  matches, what was removed on each page and how, pages without text (scans), where else
+  text was replaced, attachments that couldn't be searched, and originals still drawn
+  unredacted by other content (`originals_kept`). Also a `run_pipeline` step.
 - `optimize_pdf` can make files much smaller by lowering picture resolution:
   `max_image_dpi` re-encodes pictures drawn sharper than that DPI, and `target_size_mb`
   steps resolution and JPEG quality down (300 to 72 DPI) until the file fits, keeping the

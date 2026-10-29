@@ -405,4 +405,30 @@ SCENARIOS: dict[str, dict] = {
                                     "is untouched."},
         ],
     },
+    "redaction": {
+        "title": "Redact for real",
+        "subtitle": "Remove names, contact details and a signature from the file, not "
+                    "just cover them.",
+        "files": ["case-file.pdf"],
+        "prompt": "I need to send case-file.pdf to our supplier. Take out everything that "
+                  "identifies the customer: her name, email, phone and signature.",
+        "steps": [
+            {"type": "call", "tool": "search_text",
+             "args": {"input_path": "case-file.pdf", "query": "Customer signature"}},
+            {"type": "say", "text": "The signature sits just above its caption, so I'll "
+                                    "redact that area along with her name, email address "
+                                    "and phone number."},
+            {"type": "call", "tool": "redact_pdf",
+             "args": {"input_path": "case-file.pdf", "texts": ["Maria Gonzalez"],
+                      "patterns": [r"[\w.+-]+@[\w-]+\.[\w.]+", r"\(\d{3}\) \d{3}-\d{4}"],
+                      "areas": [{"page": 1, "rect": [68, 378, 302, 444]}]},
+             "show": {"before": "case-file.pdf", "after": "case-file_redacted.pdf"}},
+            {"type": "call", "tool": "search_text",
+             "args": {"input_path": "case-file_redacted.pdf", "query": "Gonzalez"}},
+            {"type": "say", "text": "Done. case-file_redacted.pdf no longer contains her "
+                                    "name, email, phone number or signature: they were "
+                                    "removed from the page and the document title, not "
+                                    "just painted over, and a search finds nothing."},
+        ],
+    },
 }
