@@ -7,6 +7,7 @@ skip cleanly without them.
 from __future__ import annotations
 
 import json
+import shutil
 import sys
 import urllib.error
 import urllib.request
@@ -131,6 +132,8 @@ def test_hint_is_none_without_annotations():
 async def test_scenario_runs_against_real_server(slug, tmp_path):
     if slug == "ask-password" and not hasattr(mcp_types, "UrlElicitationCapability"):
         pytest.skip("the client opens the password page through URL-mode elicitation")
+    if slug == "ocr" and not shutil.which("tesseract"):
+        pytest.skip("OCR needs Tesseract installed")
     transcript = await record.run_scenario(slug, SCENARIOS[slug], out=tmp_path)
 
     files = tmp_path / slug / "files"

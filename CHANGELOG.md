@@ -7,6 +7,15 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `ocr_pdf`: make scans searchable. Each page is rendered as displayed and read by
+  Tesseract OCR (an optional system dependency, `PAPERBOY_TESSERACT`), and its words are
+  placed over the page as invisible text, so `search_text`, `extract_text` and
+  `redact_pdf`'s texts work on scans; the pages look exactly as before. `language` takes
+  installed Tesseract codes (`"eng"`, `"eng+fra"`); pages that already have text are
+  skipped unless `skip_pages_with_text=false`; `dpi` 150-600 (default 300). Results give
+  each page's word count, mean confidence and dpi. Pages are rendered in a separate
+  process stopped at the 10-minute deadline; a PDF that forbids copying needs its owner
+  password. Also a `run_pipeline` step.
 - `redact_pdf`: redact for real. Say what to redact with `texts` (found as `search_text`
   finds them), `patterns` (regular expressions, e.g. email addresses) and `areas` (page
   rectangles, e.g. a signature). Characters under an area are removed from the page (the

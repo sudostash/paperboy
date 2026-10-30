@@ -45,6 +45,7 @@ class Settings:
     require_password_references: bool = False   # refuse plain passwords in tool arguments
     clamscan_path: str | None = None
     clamscan_timeout: int = 300
+    tesseract_path: str | None = None
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -63,4 +64,5 @@ class Settings:
                                                   False),
             clamscan_path=os.environ.get("PAPERBOY_CLAMSCAN") or shutil.which("clamscan"),
             clamscan_timeout=_int_env("PAPERBOY_CLAMSCAN_TIMEOUT", 300),
+            tesseract_path=os.environ.get("PAPERBOY_TESSERACT") or shutil.which("tesseract"),
         )

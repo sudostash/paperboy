@@ -96,6 +96,7 @@ Output files are written back into your `--root` folder. Remove the server anyti
 | `scan_pdf` | Risk report for a PDF you didn't make: scripts (especially ones that run on open), actions that run without a click, program-launching actions, attachments that are programs or disguise their type (attached PDFs are scanned too), disguised names, data hidden around the file, and known malware if ClamAV is installed. Verdict: no active content found / active content / suspicious, never "safe" *(read-only)* |
 | `sanitize_pdf` | Write a copy safe to share without that hidden data (comments optional); links, bookmarks and accessibility structure are kept |
 | `redact_pdf` | Redact for real: text (words, phrases or regular expressions such as email addresses) and areas of pages (a signature, a photo) are removed from the file, not just covered. Characters are taken out of the page, pictures have their pixels blanked, drawings and annotations there go, and the same text is replaced in metadata, bookmarks, comments and form values. Every page is checked afterwards; one that can't be redacted exactly becomes a picture of itself |
+| `ocr_pdf` | Make scans searchable: Tesseract OCR reads each page and an invisible text layer is placed over the words, so they can be searched, selected and copied; the pages look exactly as before. Pages that already have text are skipped; any installed language *(needs Tesseract)* |
 | `add_watermark` | Text ("CONFIDENTIAL", "DRAFT") or image watermark, or a corner stamp ("APPROVED"): position, size, colour, opacity, rotation, over or under the content |
 | `add_page_numbers` | Page numbers ("Page {n} of {total}") or Bates numbers ("ACME-{n:06}"), any corner or edge, with a start number and page selection |
 | `render_pages` | Save pages as PNG or JPEG files at 36-600 dpi (copy-protected PDFs need the owner password) |
@@ -140,6 +141,7 @@ pip install -e ".[dev]"
 |---|---|---|
 | **LibreOffice** (`soffice`) | `convert_to_pdf` for Office/HTML docs | `apt install libreoffice` / `brew install --cask libreoffice` |
 | **qpdf** CLI | `flatten_pdf` and deeper `check_pdf` | `apt install qpdf` / `brew install qpdf` |
+| **Tesseract** (`tesseract`) 4.1+ | `ocr_pdf`; English comes with it, other languages are separate packages | `apt install tesseract-ocr` (+ `tesseract-ocr-deu` …) / `brew install tesseract` (+ `tesseract-lang`) |
 | **ClamAV** (`clamscan`) | known-malware signatures in `scan_pdf` (encrypted files are also scanned as a decrypted copy in a private temporary folder, deleted afterwards) | `apt install clamav` / `brew install clamav`, then `freshclam` |
 
 Everything else (encryption, merge, split, optimize, repair, image/text conversion) works with no system binaries — pikepdf ships qpdf in its wheel.
@@ -208,13 +210,14 @@ All configuration is environment variables. Sensible defaults; nothing is requir
 | `PAPERBOY_QPDF` | *(auto)* | Path to the `qpdf` binary. |
 | `PAPERBOY_CLAMSCAN` | *(auto)* | Path to ClamAV's `clamscan`, used by `scan_pdf`. |
 | `PAPERBOY_CLAMSCAN_TIMEOUT` | `300` | Seconds before a ClamAV scan is stopped. |
+| `PAPERBOY_TESSERACT` | *(auto)* | Path to the `tesseract` binary, used by `ocr_pdf`. |
 | `PAPERBOY_LOG_LEVEL` | `INFO` | Logging verbosity (logs go to stderr). |
 
 ## Security
 
 - **Set `PAPERBOY_ROOT`.** Without it the server can read and write anywhere the OS user can; with it, every path is resolved (symlinks and `..` included) and rejected if it escapes the tree.
 - **File-size and page-count caps** keep a malicious or runaway PDF from exhausting memory.
-- **Subprocess timeouts** bound every LibreOffice and qpdf call.
+- **Subprocess timeouts** bound every LibreOffice, qpdf and Tesseract call.
 - **No silent overwrites** — a tool refuses to clobber an existing file unless you opt in.
 - **Protected stays protected.** Rotating, reordering, splitting, merging, optimizing,
   repairing, flattening, or editing the metadata of a password-protected PDF produces a
@@ -308,11 +311,33 @@ All configuration is environment variables. Sensible defaults; nothing is requir
   can't read (zero-width or overlapping duplicate glyphs) isn't found by texts or
   patterns, so check the result; a removed word leaves a gap of its width; text in
   pictures (scans) isn't text, so such pages are listed in `pages_without_text` and need
-  areas; `matches` lists the text matched. Patterns run in a separate process with a CPU
+  areas, or `ocr_pdf` first (then only what OCR read correctly is found, so check);
+  `matches` lists the text matched. Patterns run in a separate process with a CPU
   limit and a 30-second deadline, so a pattern that backtracks badly can't hang the server
   (memory is limited only on Linux); content is measured before it is parsed (16 MB and 1
   million tokens per page or form, 64 MB per call; fonts 64 MB), and a call stops after 3
   minutes, writing nothing. Signed PDFs are refused; Reader usage rights are dropped.
+- **OCR adds text and changes nothing else.** `ocr_pdf` checks and renders each page as
+  displayed (rotation and crop box applied) with PDFium in a separate process, from a
+  decrypted copy handed over in memory, with a CPU limit; it is killed at the call's
+  deadline, so a page that would take PDFium hours can't hang the server or block other
+  tools. Only the rendered picture goes to Tesseract, in a private temporary folder
+  deleted afterwards. Tesseract's text-only page is placed over the page as invisible
+  text (render mode 3), mapped back through the page's rotation and crop box (a page
+  whose boxes or rotation PDFium reads differently is refused rather than misplaced), and
+  isolated from the page's own graphics state; content is measured before it is parsed
+  for that (16 MB and 500,000 tokens per page). The page's content and pictures are kept
+  (JPEG scans byte for byte), one copy of Tesseract's font is shared by every page, and
+  protection and permissions are kept as for the other tools; a PDF that forbids copying
+  needs its owner password, since the text layer makes its words copyable. Language
+  codes are checked against the languages Tesseract reports as installed, Tesseract gets
+  settings rather than config-file names (which it would also look for in the current
+  directory), and nothing else reaches its command line. Pages are rendered at most 25
+  megapixels (fewer dpi for very large pages); at most 4 Tesseract processes run at once
+  across all calls (waiting for one counts toward the call's time); each run is stopped after 2 minutes (with anything it started), and
+  the whole call after 10 minutes, writing nothing. Signed PDFs are refused; Reader usage
+  rights are dropped. OCR is never perfect: `mean_confidence` per page says how sure
+  Tesseract was, and text printed sideways isn't read.
 - **Tool annotations** tell clients what each tool does. The four inspection tools
   (`pdf_info`, `get_metadata`, `check_pdf`, `extract_text`) are marked `readOnlyHint`, so clients
   may run them without a prompt. Every tool that writes a file is marked `destructiveHint`
@@ -374,8 +399,9 @@ ruff check .
 ```
 
 Every module has a test file (`tests/test_<module>.py`). Tests that need the qpdf CLI skip when
-it is absent; LibreOffice conversions are tested with a stand-in `soffice` script, so they run
-everywhere. CI also runs the suite against mcp 1.x.
+it is absent; LibreOffice conversions and OCR are tested with stand-in `soffice` and
+`tesseract` scripts, so they run everywhere (OCR tests also run the real Tesseract when it is
+installed). CI also runs the suite against mcp 1.x.
 
 Before opening a pull request, run the CI jobs locally (GitHub Actions is currently turned
 off for this repository):
@@ -404,7 +430,6 @@ python demos/record.py            # writes demos/out/videos/<scenario>.webm
 
 - Streamable-HTTP transport with OAuth + per-session file isolation (hosted mode)
 - PDF/A conversion
-- OCR for scanned documents
 
 ## License
 

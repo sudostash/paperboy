@@ -529,13 +529,88 @@ def build_case_file(path: Path) -> Path:
     return path
 
 
+LETTER_PAGES = [
+    ("Northwind Insurance", [
+        "12 October 2026",
+        "",
+        "Dear Mr Okafor,",
+        "",
+        "Thank you for your claim about the water damage at",
+        "14 Harbour Lane. We have opened a file for it.",
+        "",
+        "Policy number: NW-7731-0442",
+        "Claim reference: CL-20931",
+        "",
+        "An assessor will call you within five working days",
+        "to arrange a visit. Please keep any receipts for",
+        "emergency repairs; we will need copies of them.",
+    ]),
+    ("Northwind Insurance", [
+        "What happens next",
+        "",
+        "1. The assessor visits and photographs the damage.",
+        "2. We send you a settlement offer within 15 days.",
+        "3. Once you accept, payment follows in 3 days.",
+        "",
+        "Questions? Call us on 0800 555 0199 and quote",
+        "your claim reference.",
+        "",
+        "Yours sincerely,",
+        "Claims Team",
+    ]),
+]
+
+
+def build_scanned_letter(path: Path) -> Path:
+    """A two-page letter as a scanner makes it: each page a slightly grey, slightly
+    crooked JPEG picture, with no text to search."""
+    import io
+    import random
+
+    import pypdfium2 as pdfium
+    from PIL import Image, ImageFilter
+    from reportlab.lib.utils import ImageReader
+
+    width, height = letter
+    typed = io.BytesIO()
+    t = canvas.Canvas(typed, pagesize=letter)
+    for title, lines in LETTER_PAGES:
+        t.setFillColor(INK)
+        t.setFont("Helvetica-Bold", 22)
+        t.drawString(72, height - 100, title)
+        t.setFont("Times-Roman", 14)
+        for i, line in enumerate(lines):
+            t.drawString(72, height - 160 - i * 24, line)
+        t.showPage()
+    t.save()
+    doc = pdfium.PdfDocument(typed.getvalue())
+    rnd = random.Random(3)
+    c = canvas.Canvas(str(path), pagesize=letter)
+    for n in range(len(LETTER_PAGES)):
+        page = doc[n].render(scale=150 / 72, grayscale=True).to_pil()
+        page = page.rotate(0.6 if n == 0 else -0.4, fillcolor=255, resample=Image.BICUBIC)
+        page = page.filter(ImageFilter.GaussianBlur(0.6))
+        page = page.point(lambda v: min(255, int(v * 0.93) + 12))  # grey scanner paper
+        for _ in range(60):  # specks of dust
+            x, y = rnd.randrange(page.width), rnd.randrange(page.height)
+            page.putpixel((x, y), 90)
+        buf = io.BytesIO()
+        page.save(buf, "JPEG", quality=80)
+        c.drawImage(ImageReader(io.BytesIO(buf.getvalue())), 0, 0, width, height)
+        c.showPage()
+    doc.close()
+    c.save()
+    return path
+
+
 BUILDERS = {"report.pdf": build_report, "scan.pdf": build_scan,
             "delivery-form.pdf": build_delivery_form, "proposal.pdf": build_proposal,
             "invoice.pdf": build_invoice, "brochure.pdf": build_brochure,
             "fronts.pdf": build_fronts, "backs.pdf": build_backs,
             "statement.pdf": build_statement, "contract-v1.pdf": build_contract_v1,
             "contract-v2.pdf": build_contract_v2, "taxes.pdf": build_taxes,
-            "album.pdf": build_album, "case-file.pdf": build_case_file}
+            "album.pdf": build_album, "case-file.pdf": build_case_file,
+            "scanned-letter.pdf": build_scanned_letter}
 
 
 def build(names: list[str], workspace: Path) -> None:

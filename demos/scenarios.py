@@ -431,4 +431,27 @@ SCENARIOS: dict[str, dict] = {
                                     "just painted over, and a search finds nothing."},
         ],
     },
+    "ocr": {
+        "title": "Make a scan searchable",
+        "subtitle": "OCR adds an invisible text layer, so a scanned letter can be searched "
+                    "and copied.",
+        "files": ["scanned-letter.pdf"],
+        "prompt": "scanned-letter.pdf came from the post room scanner. What's the policy "
+                  "number in it?",
+        "steps": [
+            {"type": "call", "tool": "search_text",
+             "args": {"input_path": "scanned-letter.pdf", "query": "Policy number"}},
+            {"type": "say", "text": "Nothing found: both pages are scans, so their words are "
+                                    "pictures. I'll run OCR to give them a text layer."},
+            {"type": "call", "tool": "ocr_pdf",
+             "args": {"input_path": "scanned-letter.pdf"},
+             "show": {"before": "scanned-letter.pdf", "after": "scanned-letter_ocr.pdf"}},
+            {"type": "call", "tool": "search_text",
+             "args": {"input_path": "scanned-letter_ocr.pdf", "query": "Policy number"}},
+            {"type": "say", "text": "The policy number is NW-7731-0442 (claim reference "
+                                    "CL-20931). scanned-letter_ocr.pdf looks exactly like the "
+                                    "scan, but its text can now be searched, selected and "
+                                    "copied."},
+        ],
+    },
 }

@@ -22,6 +22,7 @@ Optional runtime binaries (not bundled, invoked if present on PATH):
 |---|---|---|
 | LibreOffice (`soffice`) | MPL-2.0 / LGPL-3.0 | Office/HTML document → PDF |
 | qpdf CLI | Apache-2.0 | Annotation flattening, deep validation |
+| Tesseract OCR (`tesseract`) | Apache-2.0 | OCR text layers (`ocr_pdf`) |
 
 MPL-2.0 is a file-level copyleft and does not impose copyleft on this project's
 own MIT-licensed source. If you redistribute modified copies of pikepdf or qpdf
