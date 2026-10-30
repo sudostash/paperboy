@@ -58,6 +58,8 @@ from .results import (
     PipelineResult,
     PipelineStepInput,
     RearrangeResult,
+    RedactArea,
+    RedactResult,
     RenderResult,
     RepairResult,
     ResizeResult,
@@ -1137,6 +1139,55 @@ def sanitize_pdf(
                                remove_attachments, remove_comments, password)
 
 
+@_tool(_writes("Redact PDF"))
+@_guard
+def redact_pdf(
+    input_path: str,
+    texts: list[str] | None = None,
+    patterns: list[str] | None = None,
+    areas: list[RedactArea] | None = None,
+    output_path: str | None = None,
+    pages: str | None = None,
+    match_case: bool = False,
+    whole_word: bool = False,
+    fill: str = "black",
+    rasterize: str = "if_needed",
+    dpi: int = 150,
+    password: str | None = None,
+    overwrite: bool | None = None,
+) -> RedactResult:
+    """Redact a PDF for real: write a copy (default "<name>_redacted.pdf") from which
+    the text, pictures and drawings under the redacted areas are removed, not just
+    covered. Say what to redact with any of:
+    - texts: words or phrases, found as search_text finds them (match_case, whole_word);
+    - patterns: Python regular expressions, e.g. "[\\w.+-]+@[\\w-]+\\.[\\w.]+" for email
+      addresses (ignoring case unless match_case);
+    - areas: [{"page": 1, "rect": [left, bottom, right, top]}] in PDF points, in the
+      page's own coordinates (as search_text gives rectangles), e.g. for a signature.
+    pages limits where texts and patterns are searched (default all). Every character
+    whose centre is in an area is removed; pictures have the pixels there blanked;
+    drawings wholly inside are removed; annotations touching an area are removed (a form
+    field entirely, with its value). Areas are painted over in fill ("black", "white",
+    or "none"). The texts and patterns are also replaced with "[redacted]" in metadata,
+    bookmarks, comments, form values and alt text anywhere in the file.
+
+    Each rewritten page is read back to confirm nothing is left under an area and
+    nothing else changed. A page that can't be redacted exactly (e.g. a font without
+    widths, a picture in JPEG 2000, JBIG2 or CCITT, or a failed check) is replaced by a
+    picture of itself at dpi (72-300) with the areas painted over, so its text can no
+    longer be selected; rasterize="never" refuses such pages instead, "always"
+    rasterizes every redacted page. pages_without_text lists searched pages with no
+    text (scans): their words are pictures, so redact them with areas. originals_kept
+    counts pictures or forms redacted here that other pages still show unredacted.
+    Attachments can't be searched; remove them with sanitize_pdf. Signed PDFs are
+    refused. Check the result with view_pages, and search_text on it, before sharing.
+    """
+    src = require_input(input_path, SETTINGS)
+    out = prepare_output(src, output_path, "_redacted", _overwrite(overwrite), SETTINGS)
+    return engine.redact_pdf(src, out, SETTINGS, texts, patterns, areas, pages, match_case,
+                             whole_word, fill, rasterize, dpi, password)
+
+
 # --------------------------------------------------------------------------- #
 # Watermarks and page numbers
 # --------------------------------------------------------------------------- #
@@ -1378,6 +1429,9 @@ def _step_runners() -> dict:
         "insert_blank_pages": lambda s, o, a, pw: engine.insert_blank_pages(
             s, o, S, a["after"], a["count"], pw),
         "set_outline": lambda s, o, a, pw: engine.set_outline(s, o, a["entries"], S, pw),
+        "redact_pdf": lambda s, o, a, pw: engine.redact_pdf(
+            s, o, S, a["texts"], a["patterns"], a["areas"], a["pages"], a["match_case"],
+            a["whole_word"], a["fill"], a["rasterize"], a["dpi"], pw),
     }
 
 
@@ -1479,8 +1533,8 @@ def run_pipeline(
     delete_pages, extract_pages, rearrange_pages, decrypt_pdf, encrypt_pdf (last step
     only), optimize_pdf, repair_pdf, flatten_pdf, set_metadata, sanitize_pdf,
     add_watermark, add_page_numbers, fill_form, crop_pages, resize_pages, n_up,
-    insert_blank_pages, set_outline; up to 20. password opens the input and is used by
-    every step (decrypt_pdf removes it). Every step's arguments are checked before any
+    insert_blank_pages, set_outline, redact_pdf; up to 20. password opens the input and
+    is used by every step (decrypt_pdf removes it). Every step's arguments are checked before any
     step runs, and each step applies its tool's own rules. Steps hand files to each other
     in a private temporary folder, deleted afterwards; if a step fails, nothing is saved.
     """
@@ -1644,7 +1698,8 @@ I want to share {path} outside my organisation. Using the Paperboy tools:
 3. inspect_hidden_data on the result, to check what's left.
 Tell me what was removed and the name of the copy to share (the original stays as it is).
 Also tell me what this doesn't remove: hidden layers, text hidden by colour or position, and
-form field values. This is not redaction.
+form field values. This is not redaction: for something on the pages that mustn't be shared
+(a name, an account number, a signature), offer redact_pdf.
 """, path)
 
 

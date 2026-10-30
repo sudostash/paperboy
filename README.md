@@ -95,6 +95,7 @@ Output files are written back into your `--root` folder. Remove the server anyti
 | `inspect_hidden_data` | Report what a PDF carries besides its pages: metadata (author, software), scripts and risky actions, attachments, comments, application data, earlier saved versions *(read-only)* |
 | `scan_pdf` | Risk report for a PDF you didn't make: scripts (especially ones that run on open), actions that run without a click, program-launching actions, attachments that are programs or disguise their type (attached PDFs are scanned too), disguised names, data hidden around the file, and known malware if ClamAV is installed. Verdict: no active content found / active content / suspicious, never "safe" *(read-only)* |
 | `sanitize_pdf` | Write a copy safe to share without that hidden data (comments optional); links, bookmarks and accessibility structure are kept |
+| `redact_pdf` | Redact for real: text (words, phrases or regular expressions such as email addresses) and areas of pages (a signature, a photo) are removed from the file, not just covered. Characters are taken out of the page, pictures have their pixels blanked, drawings and annotations there go, and the same text is replaced in metadata, bookmarks, comments and form values. Every page is checked afterwards; one that can't be redacted exactly becomes a picture of itself |
 | `add_watermark` | Text ("CONFIDENTIAL", "DRAFT") or image watermark, or a corner stamp ("APPROVED"): position, size, colour, opacity, rotation, over or under the content |
 | `add_page_numbers` | Page numbers ("Page {n} of {total}") or Bates numbers ("ACME-{n:06}"), any corner or edge, with a start number and page selection |
 | `render_pages` | Save pages as PNG or JPEG files at 36-600 dpi (copy-protected PDFs need the owner password) |
@@ -272,6 +273,46 @@ All configuration is environment variables. Sensible defaults; nothing is requir
   far. Attempts are saved in a private folder beside the output, which is replaced only at
   the end, keeping its permissions. Text and vector drawings are never touched, but in scans the text is itself a
   picture and can blur at the lowest steps (72 dpi).
+- **Redaction removes, then checks.** `redact_pdf` rewrites each page's content without
+  what lies under the areas. A character whose centre is in an area is taken out of its
+  string (the space it took is kept, so the rest of the line doesn't move); pictures
+  partly covered have those pixels set to zero in a copy (masks too); pictures, forms and
+  drawings wholly inside are dropped. Drawings crossing an area are cut exactly where they
+  can be: a filled rectangle (a background, a barcode bar) becomes the rectangles around
+  the area, and straight lines are cut at its edges (by half the line's width more, so
+  their ends don't reach back in). Anything else crossing an area (a signature, lettering
+  drawn as shapes or used as a clipping path, a dashed line, a pattern, a shading that can
+  hold a picture) can't be cut exactly. Annotations touching
+  an area are removed (a form field entirely, value included), as are the page's
+  thumbnail, editor data and page metadata, XMP page thumbnails, and replacement or alt
+  text (`/ActualText`, `/Alt`) describing what was removed. Texts and patterns are found in
+  page text and in what annotations show (every appearance state, up to 10,000), and are also replaced in metadata (XMP is
+  dropped if it matches), bookmarks, comments, form values, structure, scripts, rich text
+  and XFA data; attachments can't be searched, so the result counts them (`sanitize_pdf`
+  removes them). Shared pictures and forms are copied, so other pages keep theirs; then
+  every original redaction replaced or removed is cut from the file wherever else it's
+  referenced (shared or inherited resources, thumbnails, alternates, structure tree,
+  actions, `/CO`), unless content that can be read still draws it (another page or form,
+  or an annotation's appearance): those are counted in `originals_kept`, since that
+  content shows them unredacted; look there. Pictures, forms and property lists a
+  redacted page lists but never draws are removed from its resources. Renamed named
+  destinations and other name-tree keys are rebuilt into one sorted list, so links still
+  work. PDFium then
+  reads every rewritten page again: nothing may remain under an area, and nothing outside
+  it may change or move; the texts and patterns are searched for again too. A page that
+  fails those checks, or can't be followed exactly (fonts without widths, vertical writing,
+  CMaps it can't read, text used as a clipping path, a character mostly under an area,
+  Type 3 glyphs reaching under one, JPEG 2000, JBIG2, CCITT or CMYK JPEG pictures, an
+  `ActualText` only partly covered, too much content), is replaced by a picture of itself
+  with the areas painted over; `rasterize="never"` refuses instead. Limits: text PDFium
+  can't read (zero-width or overlapping duplicate glyphs) isn't found by texts or
+  patterns, so check the result; a removed word leaves a gap of its width; text in
+  pictures (scans) isn't text, so such pages are listed in `pages_without_text` and need
+  areas; `matches` lists the text matched. Patterns run in a separate process with a CPU
+  limit and a 30-second deadline, so a pattern that backtracks badly can't hang the server
+  (memory is limited only on Linux); content is measured before it is parsed (16 MB and 1
+  million tokens per page or form, 64 MB per call; fonts 64 MB), and a call stops after 3
+  minutes, writing nothing. Signed PDFs are refused; Reader usage rights are dropped.
 - **Tool annotations** tell clients what each tool does. The four inspection tools
   (`pdf_info`, `get_metadata`, `check_pdf`, `extract_text`) are marked `readOnlyHint`, so clients
   may run them without a prompt. Every tool that writes a file is marked `destructiveHint`
