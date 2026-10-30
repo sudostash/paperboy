@@ -51,6 +51,7 @@ from .results import (
     MergeResult,
     MetadataResult,
     NUpResult,
+    OcrResult,
     OptimizeResult,
     OutlineResult,
     PageNumbersResult,
@@ -450,10 +451,10 @@ def search_text(
     Emoji and other characters beyond U+FFFF can't be searched.
 
     Returns up to max_results (1-1000) in page order; truncated means there are more.
-    pages_without_text lists pages with no extractable text (e.g. scans); pages_skipped
-    lists pages with too much content to search safely; complete is false if the 60 s
-    time limit stopped the search early. Needs the owner password if the PDF forbids
-    copying.
+    pages_without_text lists pages with no extractable text (e.g. scans; ocr_pdf makes
+    them searchable); pages_skipped lists pages with too much content to search
+    safely; complete is false if the 60 s time limit stopped the search early. Needs
+    the owner password if the PDF forbids copying.
     """
     return engine.search_text(require_input(input_path, SETTINGS), query, SETTINGS, pages,
                               match_case, whole_word, max_results, password)
@@ -1177,7 +1178,8 @@ def redact_pdf(
     picture of itself at dpi (72-300) with the areas painted over, so its text can no
     longer be selected; rasterize="never" refuses such pages instead, "always"
     rasterizes every redacted page. pages_without_text lists searched pages with no
-    text (scans): their words are pictures, so redact them with areas. originals_kept
+    text (scans): their words are pictures, so redact them with areas, or run ocr_pdf
+    first so texts and patterns find them. originals_kept
     counts pictures or forms redacted here that other pages still show unredacted.
     Attachments can't be searched; remove them with sanitize_pdf. Signed PDFs are
     refused. Check the result with view_pages, and search_text on it, before sharing.
@@ -1186,6 +1188,43 @@ def redact_pdf(
     out = prepare_output(src, output_path, "_redacted", _overwrite(overwrite), SETTINGS)
     return engine.redact_pdf(src, out, SETTINGS, texts, patterns, areas, pages, match_case,
                              whole_word, fill, rasterize, dpi, password)
+
+
+@_tool(_writes("OCR PDF"))
+@_guard
+def ocr_pdf(
+    input_path: str,
+    output_path: str | None = None,
+    language: str = "eng",
+    pages: str | None = None,
+    skip_pages_with_text: bool = True,
+    dpi: int = 300,
+    password: str | None = None,
+    overwrite: bool | None = None,
+) -> OcrResult:
+    """Make a scanned PDF searchable: write a copy (default "<name>_ocr.pdf") whose pages
+    carry an invisible text layer recognised by Tesseract OCR, so text can be searched,
+    selected and copied (search_text, extract_text and redact_pdf's texts then work on
+    it). The pages look exactly as before: pictures are not re-rendered or re-compressed.
+    Needs the tesseract command installed.
+
+    language: Tesseract language codes joined by +, e.g. "eng" (default), "deu",
+    "eng+fra"; only installed languages work. pages: a page spec (default all).
+    skip_pages_with_text (default true) leaves pages that already have text (including
+    an earlier OCR layer) alone, listed in pages_with_text; false reads them too, which
+    can duplicate their text. dpi 150-600 (default 300, best for most scans; very large
+    pages are read at less). Each page reports its words and Tesseract's mean confidence
+    (0-100; below about 70, expect misread words: check with view_pages). Pages are read
+    upright as displayed; text printed sideways on a page isn't found. Pages with very
+    large content (over 16 MB or 500,000 tokens) are refused. Needs the owner password if
+    the PDF forbids copying. Signed PDFs are refused. At most 10 minutes per call,
+    including waiting while other calls use Tesseract (4 pages at a time in all): OCR a
+    long document in parts with pages.
+    """
+    src = require_input(input_path, SETTINGS)
+    out = prepare_output(src, output_path, "_ocr", _overwrite(overwrite), SETTINGS)
+    return engine.ocr_pdf(src, out, SETTINGS, language, pages, skip_pages_with_text, dpi,
+                          password)
 
 
 # --------------------------------------------------------------------------- #
@@ -1432,6 +1471,8 @@ def _step_runners() -> dict:
         "redact_pdf": lambda s, o, a, pw: engine.redact_pdf(
             s, o, S, a["texts"], a["patterns"], a["areas"], a["pages"], a["match_case"],
             a["whole_word"], a["fill"], a["rasterize"], a["dpi"], pw),
+        "ocr_pdf": lambda s, o, a, pw: engine.ocr_pdf(
+            s, o, S, a["language"], a["pages"], a["skip_pages_with_text"], a["dpi"], pw),
     }
 
 
@@ -1533,7 +1574,7 @@ def run_pipeline(
     delete_pages, extract_pages, rearrange_pages, decrypt_pdf, encrypt_pdf (last step
     only), optimize_pdf, repair_pdf, flatten_pdf, set_metadata, sanitize_pdf,
     add_watermark, add_page_numbers, fill_form, crop_pages, resize_pages, n_up,
-    insert_blank_pages, set_outline, redact_pdf; up to 20. password opens the input and
+    insert_blank_pages, set_outline, redact_pdf, ocr_pdf; up to 20. password opens the input and
     is used by every step (decrypt_pdf removes it). Every step's arguments are checked before any
     step runs, and each step applies its tool's own rules. Steps hand files to each other
     in a private temporary folder, deleted afterwards; if a step fails, nothing is saved.

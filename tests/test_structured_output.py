@@ -20,6 +20,7 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from PIL import Image
 from reportlab.pdfgen import canvas
+from test_engine_ocr import fake_tesseract, scan
 from test_server_stdio import EXPECTED_TOOLS
 
 from conftest import HAS_QPDF
@@ -193,6 +194,11 @@ CASES = [
     ("redact_pdf-locked", "redact_pdf",
      lambda d: {"input_path": _locked(d / "l.pdf"), "password": "pw", "texts": ["PAGE"],
                 "rasterize": "always", "dpi": 72}),
+    ("ocr_pdf", "ocr_pdf", lambda d: {"input_path": str(scan(d / "s.pdf", pages=2)),
+                                      "pages": "2"}),
+    ("ocr_pdf-locked", "ocr_pdf",
+     lambda d: {"input_path": _locked(d / "l.pdf"), "password": "pw",
+                "skip_pages_with_text": False, "dpi": 150}),
     ("add_page_numbers-bates", "add_page_numbers",
      lambda d: {"input_path": _pdf(d / "a.pdf"), "format": "X-{n:04}", "pages": "2-"}),
     ("list_form_fields-none", "list_form_fields", lambda d: {"input_path": _pdf(d / "a.pdf")}),
@@ -214,7 +220,8 @@ if HAS_QPDF:
 
 @pytest.fixture
 def server_env(tmp_path):
-    env = dict(os.environ, PAPERBOY_ROOT=str(tmp_path))
+    env = dict(os.environ, PAPERBOY_ROOT=str(tmp_path),
+               PAPERBOY_TESSERACT=fake_tesseract(tmp_path))  # the stand-in, from test_engine_ocr
     src = os.path.join(os.path.dirname(os.path.dirname(__file__)), "src")
     env["PYTHONPATH"] = src + os.pathsep + env.get("PYTHONPATH", "")
     if not HAS_QPDF:
