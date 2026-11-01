@@ -603,6 +603,52 @@ def build_scanned_letter(path: Path) -> Path:
     return path
 
 
+def build_minutes(path: Path) -> Path:
+    """Board minutes with embedded fonts, but carrying what PDF/A forbids: a script
+    that runs on opening and an attached spreadsheet."""
+    import os
+
+    import pikepdf
+    import reportlab
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+
+    fonts = os.path.join(os.path.dirname(reportlab.__file__), "fonts")
+    pdfmetrics.registerFont(TTFont("Vera", os.path.join(fonts, "Vera.ttf")))
+    pdfmetrics.registerFont(TTFont("VeraBd", os.path.join(fonts, "VeraBd.ttf")))
+    width, height = letter
+    c = canvas.Canvas(str(path), pagesize=letter, initialFontName="Vera")
+    c.setTitle("Board minutes - 14 October 2026")
+    c.setFillColor(ACCENT)
+    c.rect(0, height - 14, width, 14, stroke=0, fill=1)
+    c.setFillColor(INK)
+    c.setFont("VeraBd", 22)
+    c.drawString(72, height - 100, "Board minutes")
+    c.setFont("Vera", 12)
+    lines = [
+        "Meeting of 14 October 2026, Harbour Room. Present: 6 of 7 directors.",
+        "",
+        "1. The minutes of the September meeting were approved.",
+        "2. The board approved the 2027 budget of 4.8 million.",
+        "3. The audit committee will report on supplier contracts in December.",
+        "4. Next meeting: 11 November 2026.",
+    ]
+    for n, line in enumerate(lines):
+        c.drawString(72, height - 150 - n * 22, line)
+    c.setFont("Vera", 10)
+    c.setFillColor(MUTED)
+    c.drawString(72, 90, "Signed copy held by the company secretary.")
+    c.showPage()
+    c.save()
+    with pikepdf.open(path, allow_overwriting_input=True) as pdf:
+        pdf.Root.OpenAction = pikepdf.Dictionary(
+            S=pikepdf.Name.JavaScript, JS=pikepdf.String("app.alert('Confidential');"))
+        pdf.attachments["budget-2027.csv"] = pikepdf.AttachedFileSpec(
+            pdf, b"line,amount\nstaff,2.9m\noperations,1.9m\n", mime_type="text/csv")
+        pdf.save(path)
+    return path
+
+
 BUILDERS = {"report.pdf": build_report, "scan.pdf": build_scan,
             "delivery-form.pdf": build_delivery_form, "proposal.pdf": build_proposal,
             "invoice.pdf": build_invoice, "brochure.pdf": build_brochure,
@@ -610,7 +656,7 @@ BUILDERS = {"report.pdf": build_report, "scan.pdf": build_scan,
             "statement.pdf": build_statement, "contract-v1.pdf": build_contract_v1,
             "contract-v2.pdf": build_contract_v2, "taxes.pdf": build_taxes,
             "album.pdf": build_album, "case-file.pdf": build_case_file,
-            "scanned-letter.pdf": build_scanned_letter}
+            "scanned-letter.pdf": build_scanned_letter, "minutes.pdf": build_minutes}
 
 
 def build(names: list[str], workspace: Path) -> None:

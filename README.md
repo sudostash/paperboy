@@ -97,6 +97,7 @@ Output files are written back into your `--root` folder. Remove the server anyti
 | `sanitize_pdf` | Write a copy safe to share without that hidden data (comments optional); links, bookmarks and accessibility structure are kept |
 | `redact_pdf` | Redact for real: text (words, phrases or regular expressions such as email addresses) and areas of pages (a signature, a photo) are removed from the file, not just covered. Characters are taken out of the page, pictures have their pixels blanked, drawings and annotations there go, and the same text is replaced in metadata, bookmarks, comments and form values. Every page is checked afterwards; one that can't be redacted exactly becomes a picture of itself |
 | `ocr_pdf` | Make scans searchable: Tesseract OCR reads each page and an invisible text layer is placed over the words, so they can be searched, selected and copied; the pages look exactly as before. Pages that already have text are skipped; any installed language *(needs Tesseract)* |
+| `convert_to_pdfa` | PDF/A-2b copy for long-term archiving (courts, governments, archives): adds the sRGB colour profile and PDF/A metadata, removes what PDF/A forbids (scripts, attachments, encryption, hidden annotations), never redraws pages. Checked by veraPDF when installed and written only if it passes; refuses with reasons what it can't fix (fonts not embedded, CMYK colour) |
 | `add_watermark` | Text ("CONFIDENTIAL", "DRAFT") or image watermark, or a corner stamp ("APPROVED"): position, size, colour, opacity, rotation, over or under the content |
 | `add_page_numbers` | Page numbers ("Page {n} of {total}") or Bates numbers ("ACME-{n:06}"), any corner or edge, with a start number and page selection |
 | `render_pages` | Save pages as PNG or JPEG files at 36-600 dpi (copy-protected PDFs need the owner password) |
@@ -142,6 +143,7 @@ pip install -e ".[dev]"
 | **LibreOffice** (`soffice`) | `convert_to_pdf` for Office/HTML docs | `apt install libreoffice` / `brew install --cask libreoffice` |
 | **qpdf** CLI | `flatten_pdf` and deeper `check_pdf` | `apt install qpdf` / `brew install qpdf` |
 | **Tesseract** (`tesseract`) 4.1+ | `ocr_pdf`; English comes with it, other languages are separate packages | `apt install tesseract-ocr` (+ `tesseract-ocr-deu` …) / `brew install tesseract` (+ `tesseract-lang`) |
+| **veraPDF** (`verapdf`, needs Java) | checks `convert_to_pdfa`'s result against PDF/A-2b before it is written | `brew install verapdf` / installer from [verapdf.org](https://verapdf.org/software/) |
 | **ClamAV** (`clamscan`) | known-malware signatures in `scan_pdf` (encrypted files are also scanned as a decrypted copy in a private temporary folder, deleted afterwards) | `apt install clamav` / `brew install clamav`, then `freshclam` |
 
 Everything else (encryption, merge, split, optimize, repair, image/text conversion) works with no system binaries — pikepdf ships qpdf in its wheel.
@@ -211,13 +213,14 @@ All configuration is environment variables. Sensible defaults; nothing is requir
 | `PAPERBOY_CLAMSCAN` | *(auto)* | Path to ClamAV's `clamscan`, used by `scan_pdf`. |
 | `PAPERBOY_CLAMSCAN_TIMEOUT` | `300` | Seconds before a ClamAV scan is stopped. |
 | `PAPERBOY_TESSERACT` | *(auto)* | Path to the `tesseract` binary, used by `ocr_pdf`. |
+| `PAPERBOY_VERAPDF` | *(auto)* | Path to the `verapdf` launcher, used by `convert_to_pdfa`. |
 | `PAPERBOY_LOG_LEVEL` | `INFO` | Logging verbosity (logs go to stderr). |
 
 ## Security
 
 - **Set `PAPERBOY_ROOT`.** Without it the server can read and write anywhere the OS user can; with it, every path is resolved (symlinks and `..` included) and rejected if it escapes the tree.
 - **File-size and page-count caps** keep a malicious or runaway PDF from exhausting memory.
-- **Subprocess timeouts** bound every LibreOffice, qpdf and Tesseract call.
+- **Subprocess timeouts** bound every LibreOffice, qpdf, Tesseract and veraPDF call.
 - **No silent overwrites** — a tool refuses to clobber an existing file unless you opt in.
 - **Protected stays protected.** Rotating, reordering, splitting, merging, optimizing,
   repairing, flattening, or editing the metadata of a password-protected PDF produces a
@@ -338,6 +341,46 @@ All configuration is environment variables. Sensible defaults; nothing is requir
   the whole call after 10 minutes, writing nothing. Signed PDFs are refused; Reader usage
   rights are dropped. OCR is never perfect: `mean_confidence` per page says how sure
   Tesseract was, and text printed sideways isn't read.
+- **PDF/A is checked, not assumed.** `convert_to_pdfa` never redraws a page. It follows
+  the veraPDF rules for ISO 19005-2 level B:
+  - **adds** an sRGB output intent (made by LittleCMS through Pillow) unless the file has
+    a valid RGB or CMYK one, and fresh XMP metadata with the PDF/A identification, built
+    from the document info and eleven standard properties of the old XMP (title, authors,
+    description, subject, rights, language, keywords, producer, creator tool, and valid
+    creation and modification dates); others would need extension schemas;
+  - **removes** actions PDF/A doesn't allow (anything but go-to, link, thread, submit and
+    page-turning named actions; also inside link chains and form fields), event actions,
+    attached and associated files, encryption, annotations PDF/A doesn't allow or that are
+    hidden or have nothing to show (a hidden form widget alone; its field too once no
+    widget is left), rollover appearances, XFA, transfer functions and other printer
+    settings, picture alternates and smoothing, PostScript, and metadata on pages and
+    pictures; LZW data is re-compressed with Flate (measured first: up to 8 MB of LZW
+    decoding to 64 MB); text over 32,767 bytes is shortened;
+  - **fixes** print flags, button appearances, layer configuration names and order, and
+    draws form fields (with the resources they use) when the file asks the viewer to;
+  - **refuses** what it can't fix without changing how pages look: fonts drawn visibly
+    without being embedded, CMYK colour with an RGB profile (or RGB with a CMYK one),
+    PostScript drawings, data in other files, page boxes outside 3–14,400 units.
+
+  It reads page content (and the forms, patterns, soft masks, appearances and glyphs it
+  draws) to see what is actually drawn, measuring every stream before parsing it (a
+  stream listed many times is decoded once and counted each time) within one budget per
+  call (16 MB and 1 million tokens per stream, 128 MB and 4 million tokens in all, a
+  million forms entered); every walk over the file counts the dictionaries and arrays it
+  visits (a million; long arrays count per thousand items) and stops at 2 minutes; at
+  most 16 output intents are looked at, colour profiles, XMP and drawn fields are
+  measured before they are read, and the copy is saved without decoding streams, so data
+  that would inflate to gigabytes isn't inflated (streams nothing uses are copied as
+  they are). With veraPDF installed, the result is
+  checked against the PDF/A-2b profile in a private temporary folder (veraPDF gets a
+  minimal environment and 1 GB of memory, is killed after 5 minutes with its JVM, and its
+  report is cut off past 32 MB) and written only if it passes; its verdict wins over the
+  checks above. Without veraPDF the copy is written with `validated: false`: it carries
+  the PDF/A identification but may not conform, since some rules (such as glyph widths
+  matching the font program) need veraPDF. The copy has no password, so a protected PDF
+  that forbids copying needs its owner password; signed PDFs are refused; Reader usage
+  rights are dropped. Messages name fonts from the file only in printable characters, cut
+  short.
 - **Tool annotations** tell clients what each tool does. The four inspection tools
   (`pdf_info`, `get_metadata`, `check_pdf`, `extract_text`) are marked `readOnlyHint`, so clients
   may run them without a prompt. Every tool that writes a file is marked `destructiveHint`
@@ -401,7 +444,7 @@ ruff check .
 Every module has a test file (`tests/test_<module>.py`). Tests that need the qpdf CLI skip when
 it is absent; LibreOffice conversions and OCR are tested with stand-in `soffice` and
 `tesseract` scripts, so they run everywhere (OCR tests also run the real Tesseract when it is
-installed). CI also runs the suite against mcp 1.x.
+installed); PDF/A tests use a stand-in `verapdf`, and also the real one when installed. CI also runs the suite against mcp 1.x.
 
 Before opening a pull request, run the CI jobs locally (GitHub Actions is currently turned
 off for this repository):
@@ -429,7 +472,6 @@ python demos/record.py            # writes demos/out/videos/<scenario>.webm
 ## Roadmap
 
 - Streamable-HTTP transport with OAuth + per-session file isolation (hosted mode)
-- PDF/A conversion
 
 ## License
 

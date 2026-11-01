@@ -152,6 +152,28 @@ def test_a_scan_can_be_ocrd_and_redacted_in_a_pipeline(tmp_path, sandbox, monkey
     assert "W1275" not in text_of(res["output"], 1)
 
 
+def test_a_scan_can_be_ocrd_and_archived_in_a_pipeline(tmp_path, sandbox, monkeypatch):
+    import dataclasses
+
+    from test_engine_ocr import fake_tesseract, scan, text_of
+    from test_engine_pdfa import fake_verapdf
+    # The stand-in Tesseract writes its invisible text in a font it doesn't embed, which
+    # only veraPDF can tell is allowed (text that isn't drawn needs no font program).
+    monkeypatch.setattr(S, "SETTINGS", dataclasses.replace(
+        sandbox, tesseract_path=fake_tesseract(tmp_path), verapdf_path=fake_verapdf(tmp_path)))
+    res = S.run_pipeline(str(scan(tmp_path / "scan.pdf")), [
+        {"tool": "ocr_pdf"}, {"tool": "convert_to_pdfa"}])
+    assert res["steps"][1]["result"]["standard"] == "PDF/A-2b"
+    assert "W" in text_of(res["output"])
+    with pikepdf.open(res["output"]) as pdf:
+        assert pdf.open_metadata()["pdfaid:part"] == "2"
+
+
+def test_convert_to_pdfa_must_be_the_last_step(doc):
+    with pytest.raises(S.ToolError, match="Step 1: convert_to_pdfa must be the last step"):
+        S.run_pipeline(str(doc), [{"tool": "convert_to_pdfa"}, {"tool": "repair_pdf"}])
+
+
 def test_forms_can_be_filled_in_a_pipeline(tmp_path):
     from test_engine_forms import _form
     form = _form(tmp_path / "form.pdf")

@@ -55,6 +55,7 @@ from .results import (
     OptimizeResult,
     OutlineResult,
     PageNumbersResult,
+    PdfaResult,
     PdfListResult,
     PipelineResult,
     PipelineStepInput,
@@ -1227,6 +1228,34 @@ def ocr_pdf(
                           password)
 
 
+@_tool(_writes("Convert to PDF/A"))
+@_guard
+def convert_to_pdfa(
+    input_path: str,
+    output_path: str | None = None,
+    password: str | None = None,
+    overwrite: bool | None = None,
+) -> PdfaResult:
+    """Write a PDF/A-2b copy (default "<name>_pdfa.pdf") for long-term archiving, as
+    courts, governments and archives often require. Pages are never redrawn: it adds an
+    sRGB colour profile and PDF/A metadata, and removes what PDF/A forbids (scripts and
+    other actions, attached files, encryption, annotations that are hidden or have no
+    appearance; form fields lose their actions). changes lists what it changed.
+
+    If veraPDF is installed, the copy is checked against PDF/A-2b and written only if it
+    passes (validated=true); without it, the copy is written unchecked (validated=false:
+    it may not fully conform) unless a problem is found. It can't fix what would change
+    how pages look: text in fonts that aren't embedded (common in files from simple PDF
+    generators; re-export with fonts embedded), CMYK colour, pages larger than 200
+    inches; such PDFs are refused with the reasons and nothing is written. The copy has
+    no password: a protected PDF needs its owner password if it forbids copying. Signed
+    PDFs are refused.
+    """
+    src = require_input(input_path, SETTINGS)
+    out = prepare_output(src, output_path, "_pdfa", _overwrite(overwrite), SETTINGS)
+    return engine.convert_to_pdfa(src, out, SETTINGS, password)
+
+
 # --------------------------------------------------------------------------- #
 # Watermarks and page numbers
 # --------------------------------------------------------------------------- #
@@ -1473,6 +1502,7 @@ def _step_runners() -> dict:
             a["whole_word"], a["fill"], a["rasterize"], a["dpi"], pw),
         "ocr_pdf": lambda s, o, a, pw: engine.ocr_pdf(
             s, o, S, a["language"], a["pages"], a["skip_pages_with_text"], a["dpi"], pw),
+        "convert_to_pdfa": lambda s, o, a, pw: engine.convert_to_pdfa(s, o, S, pw),
     }
 
 
@@ -1574,7 +1604,8 @@ def run_pipeline(
     delete_pages, extract_pages, rearrange_pages, decrypt_pdf, encrypt_pdf (last step
     only), optimize_pdf, repair_pdf, flatten_pdf, set_metadata, sanitize_pdf,
     add_watermark, add_page_numbers, fill_form, crop_pages, resize_pages, n_up,
-    insert_blank_pages, set_outline, redact_pdf, ocr_pdf; up to 20. password opens the input and
+    insert_blank_pages, set_outline, redact_pdf, ocr_pdf, convert_to_pdfa (last step
+    only); up to 20. password opens the input and
     is used by every step (decrypt_pdf removes it). Every step's arguments are checked before any
     step runs, and each step applies its tool's own rules. Steps hand files to each other
     in a private temporary folder, deleted afterwards; if a step fails, nothing is saved.
@@ -1591,6 +1622,9 @@ def run_pipeline(
             # Later steps would open it with the new password and re-encrypt it, and
             # the owner password given here would be lost.
             raise ToolError(f"Step {n}: encrypt_pdf must be the last step")
+        if tool == "convert_to_pdfa" and n != len(plan):
+            # Any later change would leave a file that claims to be PDF/A but isn't.
+            raise ToolError(f"Step {n}: convert_to_pdfa must be the last step")
     replace = _overwrite(overwrite)
     out = prepare_output(src, output_path, "_processed", replace, SETTINGS)
     with open_pdf(src, SETTINGS, password) as first:

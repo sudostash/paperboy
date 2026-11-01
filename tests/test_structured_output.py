@@ -21,6 +21,7 @@ from mcp.client.stdio import stdio_client
 from PIL import Image
 from reportlab.pdfgen import canvas
 from test_engine_ocr import fake_tesseract, scan
+from test_engine_pdfa import embedded
 from test_server_stdio import EXPECTED_TOOLS
 
 from conftest import HAS_QPDF
@@ -199,6 +200,8 @@ CASES = [
     ("ocr_pdf-locked", "ocr_pdf",
      lambda d: {"input_path": _locked(d / "l.pdf"), "password": "pw",
                 "skip_pages_with_text": False, "dpi": 150}),
+    ("convert_to_pdfa", "convert_to_pdfa",
+     lambda d: {"input_path": str(embedded(d / "e.pdf"))}),
     ("add_page_numbers-bates", "add_page_numbers",
      lambda d: {"input_path": _pdf(d / "a.pdf"), "format": "X-{n:04}", "pages": "2-"}),
     ("list_form_fields-none", "list_form_fields", lambda d: {"input_path": _pdf(d / "a.pdf")}),

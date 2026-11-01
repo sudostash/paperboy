@@ -454,4 +454,21 @@ SCENARIOS: dict[str, dict] = {
                                     "copied."},
         ],
     },
+    "pdfa": {
+        "title": "Archive as PDF/A",
+        "subtitle": "A PDF/A-2b copy for a court or an archive, checked by veraPDF.",
+        "files": ["minutes.pdf"],
+        "prompt": "The records office only accepts PDF/A. Can you make minutes.pdf "
+                  "archive-ready?",
+        "steps": [
+            {"type": "call", "tool": "convert_to_pdfa", "args": {"input_path": "minutes.pdf"},
+             "show": {"before": "minutes.pdf", "after": "minutes_pdfa.pdf"}},
+            {"type": "say", "text": "Done: minutes_pdfa.pdf is PDF/A-2b, and veraPDF, the "
+                                    "standard checker, confirms it complies. The pages are "
+                                    "unchanged; I added the colour profile and archive "
+                                    "metadata, and removed a script that ran when the file "
+                                    "opened and an attached spreadsheet, which PDF/A doesn't "
+                                    "allow. Send the spreadsheet separately if they need it."},
+        ],
+    },
 }

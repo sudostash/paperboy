@@ -31,6 +31,7 @@ EXPECTED_TOOLS = {
     "crop_pages", "resize_pages", "n_up", "insert_blank_pages", "interleave_pdfs",
     "extract_tables", "export_tables",
     "compare_pdfs", "run_pipeline", "list_pdfs", "redact_pdf", "ocr_pdf",
+    "convert_to_pdfa",
 }
 
 

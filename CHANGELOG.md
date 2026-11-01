@@ -7,6 +7,13 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `convert_to_pdfa`: a PDF/A-2b copy for long-term archiving, without redrawing pages. It
+  adds an sRGB output intent and PDF/A metadata, removes what PDF/A forbids (scripts and
+  other actions, attached files, encryption, annotations that are hidden or can't be shown,
+  XFA, printer settings), and refuses, with the reasons, what it can't fix (fonts that
+  aren't embedded, CMYK colour). When veraPDF is installed (`PAPERBOY_VERAPDF`), the result
+  is checked against PDF/A-2b and written only if it passes (`validated`). `changes` lists
+  what was changed. Also a `run_pipeline` step (last step only).
 - `ocr_pdf`: make scans searchable. Each page is rendered as displayed and read by
   Tesseract OCR (an optional system dependency, `PAPERBOY_TESSERACT`), and its words are
   placed over the page as invisible text, so `search_text`, `extract_text` and
