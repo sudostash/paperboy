@@ -1,6 +1,7 @@
 """Page-level operations: reorder, delete, extract, rotate, merge, split."""
 from __future__ import annotations
 
+import io
 from pathlib import Path
 
 import pikepdf
@@ -17,6 +18,7 @@ from ..results import (
     SplitResult,
 )
 from .base import combine_protections, copy_docinfo, inherit_protection, open_pdf
+from .extract import _check_all, _Writer
 
 
 def rearrange_pages(
@@ -140,8 +142,10 @@ def split_pdf(
     password: str | None = None,
     overwrite: bool = False,
 ) -> SplitResult:
-    """Split into one file per range (``"1-3;4-6;7-"``) or one file per page."""
-    out_dir.mkdir(parents=True, exist_ok=True)
+    """Split into one file per range (``"1-3;4-6;7-"``) or one file per page.
+
+    Every name is checked before anything is written, the folder is made only for
+    the first file, and if a part fails the parts already written are removed."""
     with open_pdf(path, settings, password) as src:
         total = len(src.pages)
         groups = (
@@ -151,17 +155,19 @@ def split_pdf(
         )
         if not groups:
             raise PdfUserError("No ranges to split")
+        if out_dir.exists() and not out_dir.is_dir():
+            raise PdfUserError(f"{out_dir} exists and is not a folder")
+        targets = [out_dir / f"{path.stem}_part{n:03d}.pdf" for n in range(1, len(groups) + 1)]
+        _check_all(targets, path, overwrite)
         protection = inherit_protection(src, password)
-        outputs = []
-        for n, idx in enumerate(groups, 1):
-            out = out_dir / f"{path.stem}_part{n:03d}.pdf"
-            if out.exists() and not overwrite:
-                raise PdfUserError(f"{out} already exists (pass overwrite=true to replace)")
-            dst = pikepdf.new()
-            for i in idx:
-                dst.pages.append(src.pages[i])
-            copy_docinfo(src, dst)
-            dst.save(str(out), encryption=protection.encryption)
-            dst.close()
-            outputs.append(str(out))
-    return protection.report({"output_dir": str(out_dir), "files": outputs, "count": len(outputs)})
+        with _Writer(out_dir) as writer:
+            for out, idx in zip(targets, groups, strict=True):
+                with pikepdf.new() as dst:
+                    for i in idx:
+                        dst.pages.append(src.pages[i])
+                    copy_docinfo(src, dst)
+                    data = io.BytesIO()
+                    dst.save(data, encryption=protection.encryption)
+                writer.write(out, data.getvalue())
+    return protection.report({"output_dir": str(out_dir), "files": [str(t) for t in targets],
+                              "count": len(targets)})

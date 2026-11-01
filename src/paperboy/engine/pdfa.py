@@ -39,6 +39,7 @@ from ..config import Settings
 from ..errors import DependencyError, PdfUserError
 from ..results import PdfaResult
 from .base import open_pdf, require_copy_permission, signature_state
+from .extract import _write
 from .pdfa_content import TooComplex, Usage
 from .redact import _field_of
 from .streams import _DAMAGED as DAMAGED
@@ -923,8 +924,7 @@ def convert_to_pdfa(path: Path, out: Path, settings: Settings,
                           f"{found + '. ' if found else ''}veraPDF's report: {failed}.")
     elif fixer.problems:
         raise _refuse(f"This PDF can't be made PDF/A-2b here: {found}.")
-    with open(out, "wb") as f:
-        f.write(data)
+    _write(out, data)  # via a temporary file: never through a link, never half-written
     return {"output": str(out), "standard": STANDARD, "validated": validator is not None,
             "validator": validator,
             "changes": [f"{what} ({n})" if n > 1 else what

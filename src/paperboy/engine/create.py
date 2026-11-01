@@ -1,12 +1,15 @@
 """Create PDFs from images, plain text, and Office/HTML documents."""
 from __future__ import annotations
 
+import io
+import os
 import shutil
 import subprocess
 import tempfile
 import warnings
 from pathlib import Path
 
+import pikepdf
 from pypdf import PdfReader
 
 from ..config import Settings
@@ -16,6 +19,7 @@ from ..results import ConvertResult, ImagesResult
 IMAGE_FORMATS = ("PNG", "JPEG", "GIF", "BMP", "TIFF", "WEBP")
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tif", ".tiff", ".webp"}
 TEXT_EXTS = {".txt", ".md", ".log", ".csv", ".json", ".xml", ".yaml", ".yml"}
+MAX_TOTAL_PIXELS = 400_000_000  # per images_to_pdf call, like render_pages
 OFFICE_EXTS = {
     ".doc", ".docx", ".odt", ".rtf", ".xls", ".xlsx", ".ods",
     ".ppt", ".pptx", ".odp", ".html", ".htm",
@@ -82,27 +86,53 @@ def _open_image(p: Path):
     raise error from cause
 
 
+def _pixels(paths: list[Path]) -> None:
+    """Refuse a call whose images add up to too many pixels, from their headers alone."""
+    from PIL import Image, UnidentifiedImageError
+
+    total = 0
+    for p in paths:
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("error", Image.DecompressionBombWarning)
+                with Image.open(p, formats=IMAGE_FORMATS) as img:  # reads the header only
+                    total += img.width * img.height
+        except (Image.DecompressionBombError, Image.DecompressionBombWarning) as exc:
+            raise PdfUserError(f"{p.name} is too large to convert safely") from exc
+        except (UnidentifiedImageError, OSError) as exc:
+            raise PdfUserError(f"{p.name} is not a readable image: {exc}") from exc
+    if total > MAX_TOTAL_PIXELS:
+        raise PdfUserError(f"These images have {total / 1e6:.0f} million pixels, over the "
+                           f"{MAX_TOTAL_PIXELS / 1e6:.0f} million limit per call; convert "
+                           "fewer at a time")
+
+
 def _images_to_pdf(paths: list[Path], out: Path) -> None:
+    """One page per image. Each is decoded, made into a page and let go before the
+    next, so memory doesn't grow with the number of images."""
     from PIL import Image
 
-    imgs = []
-    try:
+    _pixels(paths)
+    with pikepdf.new() as pdf:
         for p in paths:
             img = _open_image(p)
-            if img.mode in ("RGBA", "LA", "P"):
-                rgb = Image.new("RGB", img.size, "white")
-                rgba = img.convert("RGBA")
-                rgb.paste(rgba, mask=rgba.split()[-1])
-                rgba.close()
-            else:
-                rgb = img.convert("RGB")
-            if rgb is not img:
+            try:
+                if img.mode in ("RGBA", "LA", "P"):
+                    rgb = Image.new("RGB", img.size, "white")
+                    rgba = img.convert("RGBA")
+                    rgb.paste(rgba, mask=rgba.split()[-1])
+                    rgba.close()
+                else:
+                    rgb = img.convert("RGB")
+                page = io.BytesIO()
+                rgb.save(page, "PDF", resolution=150.0)
+                if rgb is not img:
+                    rgb.close()
+            finally:
                 img.close()
-            imgs.append(rgb)
-        imgs[0].save(out, "PDF", resolution=150.0, save_all=True, append_images=imgs[1:])
-    finally:
-        for img in imgs:
-            img.close()
+            with pikepdf.open(page) as one:
+                pdf.pages.extend(one.pages)
+        pdf.save(out)
 
 
 def _office_to_pdf(src: Path, out: Path, settings: Settings) -> None:
@@ -132,26 +162,45 @@ def _office_to_pdf(src: Path, out: Path, settings: Settings) -> None:
         shutil.move(str(produced), str(out))
 
 
+def _made(out: Path, settings: Settings, make) -> int:
+    """Have *make* write the PDF in a private folder beside *out*, check it against the
+    size and page limits any input meets, then move it into place: never written
+    through a link at *out*, never left half-written. Returns its page count."""
+    folder = Path(tempfile.mkdtemp(prefix=".paperboy-", dir=out.parent))
+    try:
+        made = folder / "out.pdf"
+        make(made)
+        size = made.stat().st_size
+        if size > settings.max_file_bytes:
+            raise PdfUserError(f"The PDF would be {size / 1024 / 1024:.1f} MB, over the "
+                               f"{settings.max_file_bytes / 1024 / 1024:.0f} MB limit")
+        pages = _page_count(made)
+        if pages > settings.max_pages:
+            raise PdfUserError(f"The PDF would have {pages} pages, over the "
+                               f"{settings.max_pages} page limit")
+        os.replace(made, out)
+        return pages
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+
+
 def convert_to_pdf(path: Path, out: Path, settings: Settings) -> ConvertResult:
     """Create a PDF from an image, a text file, or an Office/HTML document."""
     ext = path.suffix.lower()
     if ext == ".pdf":
         raise PdfUserError("Input is already a PDF")
     if ext in IMAGE_EXTS:
-        _images_to_pdf([path], out)
-        kind = "image"
+        kind, make = "image", lambda made: _images_to_pdf([path], made)
     elif ext in TEXT_EXTS:
-        _text_to_pdf(path, out, settings.max_pages)
-        kind = "text"
+        kind, make = "text", lambda made: _text_to_pdf(path, made, settings.max_pages)
     elif ext in OFFICE_EXTS:
-        _office_to_pdf(path, out, settings)
-        kind = "office"
+        kind, make = "office", lambda made: _office_to_pdf(path, made, settings)
     else:
         raise PdfUserError(
             f"Unsupported file type {ext!r}. Supported: images, "
             f"text ({', '.join(sorted(TEXT_EXTS))}), and Office/HTML documents"
         )
-    return {"output": str(out), "pages": _page_count(out), "source_kind": kind}
+    return {"output": str(out), "pages": _made(out, settings, make), "source_kind": kind}
 
 
 def images_to_pdf(paths: list[Path], out: Path, settings: Settings) -> ImagesResult:
@@ -165,5 +214,5 @@ def images_to_pdf(paths: list[Path], out: Path, settings: Settings) -> ImagesRes
         raise PdfUserError(
             f"{len(paths)} images is over the {settings.max_pages} page limit"
         )
-    _images_to_pdf(paths, out)
-    return {"output": str(out), "pages": len(paths)}
+    return {"output": str(out), "pages": _made(out, settings,
+                                               lambda made: _images_to_pdf(paths, made))}

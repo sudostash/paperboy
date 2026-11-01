@@ -174,7 +174,10 @@ def flatten_pdf(
     # Password and page cap are checked before qpdf does any work.
     with open_pdf(path, settings, password) as src:
         protection = inherit_protection(src, password)
-    flattened = out.with_name(f".{out.name}.flattening")
+    # qpdf writes into a private folder (no one can plant a link there); pikepdf's
+    # save replaces the output only once the result is complete.
+    work = Path(tempfile.mkdtemp(prefix=".paperboy-", dir=out.parent))
+    flattened = work / "flattened.pdf"
     try:
         proc = run_qpdf(
             settings,
@@ -190,10 +193,7 @@ def flatten_pdf(
         with open_pdf(flattened, settings, password) as pdf:
             pages = len(pdf.pages)
             pdf.save(str(out), encryption=protection.encryption)
-    except BaseException:
-        out.unlink(missing_ok=True)
-        raise
     finally:
-        flattened.unlink(missing_ok=True)
+        shutil.rmtree(work, ignore_errors=True)
     return protection.report(
         {"output": str(out), "pages": pages, "warnings": proc.returncode == 3})

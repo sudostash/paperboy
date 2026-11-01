@@ -423,7 +423,9 @@ async def test_the_registered_tool_runs_in_a_worker_thread():
     assert await wrapped(input_path="x.pdf", password=None,
                          paperboy_context=_Ctx()) == {"ok": True}
     assert seen == [False]
-    assert S._asking(S.list_pdfs) is S.list_pdfs
+    plain = S._asking(S.list_pdfs)  # no passwords: run in a thread, no context needed
+    assert inspect.iscoroutinefunction(plain)
+    assert "paperboy_context" not in str(inspect.signature(plain))
 
 
 @pytest.fixture

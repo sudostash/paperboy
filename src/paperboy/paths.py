@@ -67,7 +67,8 @@ def prepare_output(
     if output_path:
         out = resolve(output_path, settings)
     else:
-        out = input_path.with_name(f"{input_path.stem}{suffix}{ext}")
+        # Resolved too, so a link planted at the default name can't redirect the output.
+        out = resolve(str(input_path.with_name(f"{input_path.stem}{suffix}{ext}")), settings)
     if same_file(out, input_path):
         raise PdfUserError(
             "Output path is the same as the input; choose a different output_path"
@@ -77,11 +78,3 @@ def prepare_output(
     out.parent.mkdir(parents=True, exist_ok=True)
     return out
 
-
-def prepare_output_dir(path: str, settings: Settings) -> Path:
-    """Resolve and create an output directory under the configured root."""
-    d = resolve(path, settings)
-    if d.exists() and not d.is_dir():
-        raise PdfUserError(f"{d} exists and is not a folder")
-    d.mkdir(parents=True, exist_ok=True)
-    return d
