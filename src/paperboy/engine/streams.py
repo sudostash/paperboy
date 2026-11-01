@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import binascii
 import re
+import time
 import zlib
 
 import pikepdf
@@ -137,3 +138,42 @@ def within(stream, cap: int) -> bool:
     that can't be measured is refused (see decoded_size)."""
     size = decoded_size(stream, cap)
     return size is not None and size <= cap
+
+
+def lzw(data: bytes, limit: int, early_change: int = 1,
+        deadline: float | None = None) -> bytes | None:
+    """LZW-decoded *data* (as PDF's LZWDecode), or None once it passes *limit* bytes or
+    *deadline* (time.monotonic), or is malformed. Pure Python, so it can stop early."""
+    table = [bytes([i]) for i in range(256)] + [b"", b""]  # 256: clear, 257: end
+    out = bytearray()
+    width, previous = 9, None
+    bits = value = 0
+    for n, byte in enumerate(data):
+        if deadline is not None and not n & 0xFFFF and time.monotonic() > deadline:
+            return None
+        value = (value << 8) | byte
+        bits += 8
+        while bits >= width:
+            bits -= width
+            code = (value >> bits) & ((1 << width) - 1)
+            value &= (1 << bits) - 1
+            if code == 256:
+                table, width, previous = table[:258], 9, None
+                continue
+            if code == 257:
+                return bytes(out)
+            if code < len(table) and code not in (256, 257):
+                entry = table[code]
+            elif code == len(table) and previous is not None:
+                entry = previous + previous[:1]
+            else:
+                return None
+            out += entry
+            if len(out) > limit:
+                return None
+            if previous is not None and len(table) < 4096:
+                table.append(previous + entry[:1])
+            previous = entry
+            if len(table) + early_change >= (1 << width) and width < 12:
+                width += 1
+    return bytes(out)

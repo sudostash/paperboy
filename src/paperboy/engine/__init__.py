@@ -26,6 +26,7 @@ from .pages import (
     rotate_pages,
     split_pdf,
 )
+from .pdfa import convert_to_pdfa
 from .redact import redact_pdf
 from .render import find_blank_pages, render_pages, view_pages
 from .sanitize import inspect_hidden_data, sanitize_pdf
@@ -53,4 +54,5 @@ __all__ = [
     "crop_pages", "resize_pages", "n_up", "insert_blank_pages", "interleave_pdfs",
     "extract_tables", "export_tables",
     "compare_pdfs", "list_pdfs", "redact_pdf", "ocr_pdf",
+    "convert_to_pdfa",
 ]

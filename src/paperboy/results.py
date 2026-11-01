@@ -573,11 +573,21 @@ class OcrResult(Protected):
     words: int                             # total over pages
 
 
+class PdfaResult(TypedDict):
+    output: str
+    standard: str                          # "PDF/A-2b"
+    validated: bool                        # checked by veraPDF and compliant
+    validator: str | None                  # e.g. "veraPDF 1.30.3"; None if not installed
+    changes: list[str]                     # what was changed to comply, with counts
+    protection_removed: bool               # the input's password and restrictions are gone
+
+
 PipelineTool = Literal[
     "rotate_pages", "delete_pages", "extract_pages", "rearrange_pages", "decrypt_pdf",
     "encrypt_pdf", "optimize_pdf", "repair_pdf", "flatten_pdf", "set_metadata",
     "sanitize_pdf", "add_watermark", "add_page_numbers", "fill_form", "crop_pages",
-    "resize_pages", "n_up", "insert_blank_pages", "set_outline", "redact_pdf", "ocr_pdf"]
+    "resize_pages", "n_up", "insert_blank_pages", "set_outline", "redact_pdf", "ocr_pdf",
+    "convert_to_pdfa"]
 
 
 class PipelineStepInput(TypedDict):
