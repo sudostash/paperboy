@@ -258,7 +258,7 @@ All configuration is environment variables. Sensible defaults; nothing is requir
   Digitally signed PDFs are refused by every tool that would rewrite the signed document
   (and so invalidate its signature); Reader usage rights are dropped, since they break once
   the file changes. A new document made from a signed PDF's pages (extract, split, merge,
-  ...) is not signed: copied signature fields lose their value. Outputs that keep the input's protection (rotate, merge, split, ...) keep
+  ...) is not signed: copied signature fields lose their value and their signed appearance. Outputs that keep the input's protection (rotate, merge, split, ...) keep
   its restrictions too.
 - **Non-ASCII passwords work with every encryption scheme.** RC4/AES-128 files store passwords
   in PDFDocEncoding and AES-256 in UTF-8; every tool opens files the same way (through pikepdf)

@@ -467,6 +467,51 @@ def _read_text(stream) -> tuple[str | None, str]:
         return data.decode("latin-1"), "latin-1"
 
 
+# Keys an annotation or field reaches other objects by that aren't part of it.
+_NOT_ANNOTATION = {"/P", "/AP", "/Resources", "/Dest", "/D", "/StructParent"}
+
+
+def _annotation_dictionaries(pdf: pikepdf.Pdf) -> list:
+    """Every dictionary that belongs to an annotation or form field: reached from the
+    pages' /Annots and the form's /Fields through their parents, kids, actions,
+    popups and replies, but not into pages or appearances."""
+    acro = pdf.Root.get("/AcroForm")
+    stack = [acro.get("/Fields")] if isinstance(acro, pikepdf.Dictionary) else []
+    stack += [page.obj.get("/Annots") for page in pdf.pages]
+    found, seen = [], set()
+    while stack and len(found) < 100_000:
+        obj = stack.pop()
+        if isinstance(obj, (pikepdf.Dictionary, pikepdf.Array)) and obj.is_indirect:
+            if obj.objgen in seen:
+                continue
+            seen.add(obj.objgen)
+        if isinstance(obj, pikepdf.Array):
+            stack.extend(obj)
+        elif isinstance(obj, pikepdf.Dictionary) and obj.get("/Type") not in (
+                pikepdf.Name.Page, pikepdf.Name.Pages):
+            found.append(obj)
+            stack.extend(v for k, v in obj.items() if k not in _NOT_ANNOTATION)
+    return found
+
+
+def _matches_in_annotations(pdf: pikepdf.Pdf, literal: list, patterns: list[str],
+                            match_case: bool, deadline: float) -> bool:
+    """Whether scrubbing would change any annotation or form field: a text of theirs
+    matches, or holds a stream that can't be read (and would be removed)."""
+    texts = []
+    for d in _annotation_dictionaries(pdf):
+        texts += [unicodedata.normalize("NFKC", str(v)) for _, _, v in _strings(d)]
+        for *_, stream, _ in _text_streams(d):
+            text, _ = _read_text(stream)
+            if text is None:
+                return True
+            texts += [text, html.unescape(text)]
+    if any(r.search(t) for r in literal for t in texts):
+        return True
+    return bool(patterns and texts and _run_patterns(patterns, texts, not match_case,
+                                                     deadline))
+
+
 def _scrub(pdf: pikepdf.Pdf, texts: list[str], patterns: list[str], match_case: bool,
            whole_word: bool, deadline: float) -> tuple[list[str], int]:
     """Replace the text found in strings and XMP metadata anywhere in the document.
@@ -521,7 +566,10 @@ def _scrub(pdf: pikepdf.Pdf, texts: list[str], patterns: list[str], match_case: 
     touched = {entries[i][3] for i in spans} | {
         streams[i][2] for i in range(len(streams))
         if stream_spans.get(i) or i in hidden or streams[i][3] is None}
-    if touched & {"comments", "form fields", "XFA form data"}:
+    forbidden = pdf.is_encrypted and not pdf.owner_password_matched and \
+        not pdf.allow.modify_annotation  # (the walk below only matters then)
+    if touched & {"comments", "form fields", "XFA form data"} or forbidden and \
+            _matches_in_annotations(pdf, literal, patterns, match_case, deadline):
         require_annotation_permission(pdf, "replacing the text in its comments and form "
                                            "fields")
     places = set()

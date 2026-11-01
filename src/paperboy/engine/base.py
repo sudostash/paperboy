@@ -266,21 +266,57 @@ def refuse_signed(pdf: pikepdf.Pdf, action: str) -> bool:
     return usage_rights
 
 
+def _is_signature(value) -> bool:
+    return isinstance(value, pikepdf.Dictionary) and (
+        "/ByteRange" in value or value.get("/Type") == pikepdf.Name.Sig)
+
+
+def _field_type(d: pikepdf.Dictionary):
+    """A field's type, its own or inherited from its parents."""
+    for _ in range(32):
+        if "/FT" in d:
+            return d.FT
+        d = d.get("/Parent")
+        if not isinstance(d, pikepdf.Dictionary):
+            return None
+    return None
+
+
+def _direct_container(value) -> bool:
+    return isinstance(value, (pikepdf.Dictionary, pikepdf.Array)) and not value.is_indirect
+
+
 def drop_copied_signatures(pdf: pikepdf.Pdf) -> None:
-    """Remove the signature values that signature fields brought along with copied
-    pages. A new document made from a signed PDF's pages isn't signed: the old
-    signature (and the signer's certificate) would only show as broken."""
-    for page in pdf.pages:
-        annots = page.obj.get("/Annots")
-        for annot in annots if isinstance(annots, pikepdf.Array) else []:
-            field, depth = annot, 0
-            # The field is the widget itself or, up its parents, the one that has /FT.
-            while isinstance(field, pikepdf.Dictionary) and "/FT" not in field and depth < 32:
-                field, depth = field.get("/Parent"), depth + 1
-            if isinstance(field, pikepdf.Dictionary) and field.get("/FT") == pikepdf.Name.Sig:
-                for key in ("/V", "/Lock", "/SV"):
-                    if key in field:
-                        del field[key]
+    """Remove the signatures that came along with copied pages: a new document made
+    from a signed PDF's pages isn't signed, and the old signature (with the signer's
+    certificate) would only show as broken. Signature fields lose their value and
+    their signed appearance, and every other reference to a signature goes too."""
+    containers, stack = [], list(pdf.objects)
+    while stack and len(containers) < 1_000_000:  # the direct ones inside objects too
+        obj = stack.pop()
+        if isinstance(obj, pikepdf.Dictionary):
+            containers.append(obj)
+            stack.extend(v for _, v in obj.items() if _direct_container(v))
+        elif isinstance(obj, pikepdf.Array):
+            containers.append(obj)
+            stack.extend(v for v in obj if _direct_container(v))
+    for c in containers:
+        if isinstance(c, pikepdf.Array):
+            for i in reversed(range(len(c))):
+                if _is_signature(c[i]):
+                    del c[i]
+            continue
+        if "/V" in c and _field_type(c) == pikepdf.Name.Sig:
+            for key in ("/Lock", "/SV"):
+                if key in c:
+                    del c[key]
+            kids = c.get("/Kids")
+            for widget in [c, *(kids if isinstance(kids, pikepdf.Array) else [])]:
+                if isinstance(widget, pikepdf.Dictionary) and "/AP" in widget:
+                    del widget["/AP"]  # it shows the signer's name and the date
+            del c["/V"]
+        for key in [k for k, v in c.items() if _is_signature(v)]:
+            del c[key]
 
 
 def has_annotations(pdf: pikepdf.Pdf, pages=None) -> bool:

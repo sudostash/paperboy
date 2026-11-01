@@ -240,7 +240,7 @@ All notable changes to this project are documented here. The format follows
   the file changes. Tools that build a new document from some pages (`extract_pages`,
   `delete_pages`, `rearrange_pages`, `split_pdf`, `merge_pdfs`, `interleave_pdfs`) leave
   the signature behind: copied signature fields lose their value (and the signer's
-  certificate), so the new document isn't shown as signed with a broken signature.
+  certificate) and their signed appearance, so the new document isn't shown as signed with a broken signature.
 - Copy-restricted PDFs: `extract_text`, `decrypt_pdf`, and `encrypt_pdf` with
   `current_password` now need the owner password when the PDF forbids copying (as
   `render_pages` already did); the open password is enough when copying is allowed.

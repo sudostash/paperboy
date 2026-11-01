@@ -13,7 +13,12 @@ import pytest
 from pikepdf import Dictionary, Name
 
 from paperboy import engine as E
-from paperboy.engine.base import has_annotations, require_no_restrictions, signature_state
+from paperboy.engine.base import (
+    drop_copied_signatures,
+    has_annotations,
+    require_no_restrictions,
+    signature_state,
+)
 from paperboy.errors import PdfUserError
 
 from conftest import HAS_QPDF, page_labels
@@ -313,6 +318,76 @@ def test_redacting_text_found_in_a_comment_needs_permission_to_change_it(lock, t
         assert str(pdf.pages[1].obj.Annots[0].Contents) == "reminder: [redacted]"
 
 
+def _strings_with_secret(pdf):
+    """The text to redact, only in annotation and form places that aren't drawn."""
+    link = pdf.make_indirect(Dictionary(
+        Type=Name.Annot, Subtype=Name.Link, Rect=[10, 10, 20, 20],
+        A=Dictionary(S=Name.URI, URI=pikepdf.String("mailto:SECRET42@example.com"))))
+    parent = pdf.make_indirect(Dictionary(T=pikepdf.String("SECRET42 group")))
+    field = pdf.make_indirect(Dictionary(
+        Type=Name.Annot, Subtype=Name.Widget, FT=Name.Tx, Rect=[30, 30, 40, 40],
+        Parent=parent, T=pikepdf.String("f"),
+        AA=Dictionary(K=Dictionary(S=Name.JavaScript, JS=pikepdf.String("x='SECRET42'")))))
+    parent.Kids = pikepdf.Array([field])
+    pdf.pages[1].obj.Annots = pikepdf.Array([link, field])
+    pdf.Root.AcroForm = Dictionary(Fields=pikepdf.Array([parent]))
+
+
+@pytest.mark.parametrize("pattern", [False, True])
+def test_redacting_text_anywhere_in_annotations_needs_permission(pattern, lock, tmp_path,
+                                                                 settings):
+    from reportlab.pdfgen import canvas
+    plain = tmp_path / "secret.pdf"
+    c = canvas.Canvas(str(plain))
+    c.drawString(72, 720, "code SECRET42")
+    c.showPage()
+    c.showPage()
+    c.save()
+    src = lock(NO_ANNOTATIONS, src=_edit(plain, _strings_with_secret))
+    what = {"patterns": ["SECRET\\d+"]} if pattern else {"texts": ["SECRET42"]}
+    with pytest.raises(PdfUserError, match="replacing the text in its comments"):
+        E.redact_pdf(src, tmp_path / "r.pdf", settings, pages="1", password="user", **what)
+    E.redact_pdf(src, tmp_path / "r.pdf", settings, pages="1", password="owner", **what)
+
+
+def _two_pages_with_secret(tmp_path, edit):
+    from reportlab.pdfgen import canvas
+    plain = tmp_path / "secret.pdf"
+    c = canvas.Canvas(str(plain))
+    c.drawString(72, 720, "code SECRET42")
+    c.showPage()
+    c.showPage()
+    c.save()
+    return _edit(plain, edit)
+
+
+def test_redact_looks_into_the_text_streams_of_annotations(lock, tmp_path, settings):
+    def edit(pdf):  # a link whose URI matches, beside a comment with rich text that doesn't
+        link = Dictionary(Type=Name.Annot, Subtype=Name.Link, Rect=[10, 10, 20, 20],
+                          A=Dictionary(S=Name.URI, URI=pikepdf.String("x/SECRET42")))
+        note = Dictionary(Type=Name.Annot, Subtype=Name.FreeText, Rect=[30, 30, 90, 50],
+                          RC=pdf.make_stream(b"<body>hello</body>"))
+        pdf.pages[1].obj.Annots = pikepdf.Array([pdf.make_indirect(note),
+                                                 pdf.make_indirect(link)])
+    src = lock(NO_ANNOTATIONS, src=_two_pages_with_secret(tmp_path, edit))
+    with pytest.raises(PdfUserError, match="replacing the text in its comments"):
+        E.redact_pdf(src, tmp_path / "r.pdf", settings, texts=["SECRET42"], pages="1",
+                     password="user")
+
+
+def test_redact_counts_an_unreadable_script_in_an_annotation_as_a_change(lock, tmp_path,
+                                                                        settings):
+    def edit(pdf):  # scrubbing removes streams it can't read
+        js = pdf.make_stream(b"not flate at all", Filter=Name.FlateDecode)
+        pdf.pages[1].obj.Annots = pikepdf.Array([pdf.make_indirect(Dictionary(
+            Type=Name.Annot, Subtype=Name.Link, Rect=[10, 10, 20, 20],
+            A=Dictionary(S=Name.JavaScript, JS=js)))])
+    src = lock(NO_ANNOTATIONS, src=_two_pages_with_secret(tmp_path, edit))
+    with pytest.raises(PdfUserError, match="replacing the text in its comments"):
+        E.redact_pdf(src, tmp_path / "r.pdf", settings, texts=["SECRET42"], pages="1",
+                     password="user")
+
+
 def test_sanitizing_annotations_needs_permission_to_change_them(make_pdf, lock, tmp_path,
                                                                 settings):
     src = lock(NO_ANNOTATIONS, src=_edit(make_pdf("noted.pdf", 1), _note))
@@ -405,6 +480,85 @@ def test_new_documents_made_from_a_signed_pdfs_pages_are_not_signed(tool, make_p
                    if isinstance(o, Dictionary))
     with pikepdf.open(src) as pdf:  # the input stays signed
         assert signature_state(pdf)[0]
+
+
+def _sig_value(pdf):
+    return pdf.make_indirect(Dictionary(Type=Name.Sig, ByteRange=[0, 1, 2, 3],
+                                        Contents=pikepdf.String(b"\x30\x82PKCS7")))
+
+
+def _inherited_type(pdf):
+    """/FT on a parent field, /V on its kid (both are inherited, so this is allowed)."""
+    parent = pdf.make_indirect(Dictionary(FT=Name.Sig, T=pikepdf.String("sigs")))
+    widget = pdf.make_indirect(Dictionary(
+        Type=Name.Annot, Subtype=Name.Widget, Rect=[72, 72, 272, 122], F=4, Parent=parent,
+        T=pikepdf.String("one"), V=_sig_value(pdf),
+        AP=Dictionary(N=pdf.make_stream(b"BT ET", Type=Name.XObject, Subtype=Name.Form,
+                                        BBox=[0, 0, 200, 50]))))
+    parent.Kids = pikepdf.Array([widget])
+    pdf.pages[0].obj.Annots = pikepdf.Array([widget])
+    pdf.Root.AcroForm = Dictionary(Fields=pikepdf.Array([parent]), SigFlags=3)
+
+
+def _signed_sibling(pdf):
+    """A text field on page 1 whose parent also holds a signed field shown on page 2."""
+    form = pdf.make_indirect(Dictionary(T=pikepdf.String("form")))
+    text = pdf.make_indirect(Dictionary(Type=Name.Annot, Subtype=Name.Widget, FT=Name.Tx,
+                                        T=pikepdf.String("name"), Rect=[72, 600, 272, 620],
+                                        Parent=form))
+    sig = pdf.make_indirect(Dictionary(Type=Name.Annot, Subtype=Name.Widget, FT=Name.Sig,
+                                       T=pikepdf.String("sig"), Rect=[72, 72, 272, 122],
+                                       Parent=form, V=_sig_value(pdf)))
+    form.Kids = pikepdf.Array([text, sig])
+    pdf.pages[0].obj.Annots = pikepdf.Array([text])
+    pdf.pages[1].obj.Annots = pikepdf.Array([sig])
+    pdf.Root.AcroForm = Dictionary(Fields=pikepdf.Array([form]), SigFlags=3)
+
+
+@pytest.mark.parametrize("sign", [_signed_field, _inherited_type, _signed_sibling],
+                         ids=["field", "inherited-type", "sibling"])
+def test_no_signature_travels_with_extracted_pages(sign, make_pdf, tmp_path, settings):
+    src = _edit(make_pdf("signed.pdf", 2), sign)
+    E.extract_pages(src, tmp_path / "out.pdf", "1", settings)
+    with pikepdf.open(tmp_path / "out.pdf") as pdf:
+        assert signature_state(pdf) == (False, False)
+        assert not any("/ByteRange" in o for o in pdf.objects if isinstance(o, Dictionary))
+        for annot in pdf.pages[0].obj.get("/Annots", []):
+            if annot.get("/FT") == Name.Sig or annot.get("/Parent", {}).get("/FT") == Name.Sig:
+                assert "/AP" not in annot  # no "Digitally signed by ..." left showing
+
+
+def test_every_reference_to_a_signature_is_removed():
+    with pikepdf.new() as pdf:
+        pdf.add_blank_page()
+        sig = _sig_value(pdf)
+        field = pdf.make_indirect(Dictionary(
+            Type=Name.Annot, Subtype=Name.Widget, FT=Name.Sig, Rect=[0, 0, 9, 9], V=sig,
+            Lock=Dictionary(Action=Name.All), SV=Dictionary(Ff=0)))
+        stray = pdf.make_indirect(Dictionary(Type=Name.Annot, Subtype=Name.Square,
+                                             Rect=[0, 0, 9, 9], Keep=sig,
+                                             List=pikepdf.Array([1, sig, 2])))
+        loose = pdf.make_indirect(Dictionary(Type=Name.Annot, Subtype=Name.Widget,
+                                             V=pikepdf.String("x"), Parent=5))
+        pdf.pages[0].obj.Annots = pikepdf.Array([field, stray, loose])
+        drop_copied_signatures(pdf)
+        assert not {"/V", "/Lock", "/SV"} & set(field.keys())
+        assert "/Keep" not in stray and list(stray.List) == [1, 2]
+        assert str(loose.V) == "x"  # not a signature field: its value stays
+
+
+def test_a_field_type_is_inherited_from_at_most_32_parents():
+    with pikepdf.new() as pdf:
+        pdf.add_blank_page()
+        top = parent = pdf.make_indirect(Dictionary(FT=Name.Sig))
+        for _ in range(40):
+            parent = pdf.make_indirect(Dictionary(Parent=parent))
+        widget = pdf.make_indirect(Dictionary(Type=Name.Annot, Subtype=Name.Widget,
+                                              Rect=[0, 0, 9, 9], Parent=parent,
+                                              V=pikepdf.String("x")))
+        pdf.pages[0].obj.Annots = pikepdf.Array([widget])
+        drop_copied_signatures(pdf)
+        assert "/V" in widget and "/FT" in top  # too far up to count as its type
 
 
 # --- lifting the restrictions ------------------------------------------------------------
