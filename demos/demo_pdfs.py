@@ -649,6 +649,42 @@ def build_minutes(path: Path) -> Path:
     return path
 
 
+def build_lease(path: Path) -> Path:
+    """A four-page lease that opens without a password but forbids changing its pages
+    (the landlord holds the owner password)."""
+    import pikepdf
+
+    plain = path.with_name(f".plain-{path.name}")
+    c = canvas.Canvas(str(plain), pagesize=letter)
+    c.setTitle("Residential Lease")
+    width, height = letter
+    pages = [("Residential Lease", ["Flat 3B, 14 Harbour Street", "Term: 12 months from 1 Dec"]),
+             ("Rent and deposit", ["Rent: EUR 1,250 per month", "Deposit: two months' rent"]),
+             ("Signatures", ["Landlord: ____________", "Tenant: ____________"]),
+             ("Draft notes (remove before sending)", ["Check the pet clause with legal.",
+                                                      "Deposit was three months in v1."])]
+    for n, (title, lines) in enumerate(pages, start=1):
+        c.setFillColor(ACCENT)
+        c.rect(0, height - 14, width, 14, stroke=0, fill=1)
+        c.setFillColor(INK)
+        c.setFont("Helvetica-Bold", 28)
+        c.drawString(72, height - 110, title)
+        c.setFont("Helvetica", 15)
+        for i, line in enumerate(lines):
+            c.drawString(90, height - 170 - i * 30, line)
+        c.setFillColor(MUTED)
+        c.setFont("Helvetica", 10)
+        c.drawRightString(width - 72, 48, f"Page {n} of {len(pages)}")
+        c.showPage()
+    c.save()
+    with pikepdf.open(plain) as pdf:  # AES-128, so the (empty) open password is kept
+        pdf.save(path, encryption=pikepdf.Encryption(
+            user="", owner="Landlord-2026", R=4, aes=True, allow=pikepdf.Permissions(
+                modify_assembly=False, modify_other=False)))
+    plain.unlink()
+    return path
+
+
 BUILDERS = {"report.pdf": build_report, "scan.pdf": build_scan,
             "delivery-form.pdf": build_delivery_form, "proposal.pdf": build_proposal,
             "invoice.pdf": build_invoice, "brochure.pdf": build_brochure,
@@ -656,7 +692,8 @@ BUILDERS = {"report.pdf": build_report, "scan.pdf": build_scan,
             "statement.pdf": build_statement, "contract-v1.pdf": build_contract_v1,
             "contract-v2.pdf": build_contract_v2, "taxes.pdf": build_taxes,
             "album.pdf": build_album, "case-file.pdf": build_case_file,
-            "scanned-letter.pdf": build_scanned_letter, "minutes.pdf": build_minutes}
+            "scanned-letter.pdf": build_scanned_letter, "minutes.pdf": build_minutes,
+            "lease.pdf": build_lease}
 
 
 def build(names: list[str], workspace: Path) -> None:

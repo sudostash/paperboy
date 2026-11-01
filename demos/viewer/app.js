@@ -319,7 +319,9 @@ async function call(step) {
   // The tool asks while it runs, after it was allowed to.
   for (const question of step.asked || []) await askPassword(card, question);
   await sleep(300);
-  card.append(el("pre", "result", `✓ ${brief(step.result)}`));
+  card.append(step.isError
+    ? el("pre", "result refused", `✕ ${String(step.result).replace(/^Error executing tool \S+: /, "")}`)
+    : el("pre", "result", `✓ ${brief(step.result)}`));
   log.scrollTop = log.scrollHeight;
   if (step.showSchema) {
     showSchema(step);

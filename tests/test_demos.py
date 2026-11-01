@@ -198,6 +198,26 @@ async def test_run_scenario_fails_loudly_when_a_tool_errors(tmp_path):
         await record.run_scenario("broken", scenario, out=tmp_path)
 
 
+async def test_run_scenario_can_show_an_expected_refusal(tmp_path):
+    scenario = {"title": "t", "subtitle": "", "files": ["lease.pdf"], "prompt": "p",
+                "steps": [{"type": "call", "tool": "delete_pages", "expectError": True,
+                           "args": {"input_path": "lease.pdf", "pages": "1"}}]}
+
+    transcript = await record.run_scenario("refused", scenario, out=tmp_path)
+
+    assert transcript["steps"][0]["isError"]
+    assert "owner password" in transcript["steps"][0]["result"]
+
+
+async def test_run_scenario_fails_when_an_expected_refusal_doesnt_happen(tmp_path):
+    scenario = {"title": "t", "subtitle": "", "files": ["report.pdf"], "prompt": "p",
+                "steps": [{"type": "call", "tool": "pdf_info", "expectError": True,
+                           "args": {"input_path": "report.pdf"}}]}
+
+    with pytest.raises(RuntimeError, match="expected to be refused"):
+        await record.run_scenario("allowed", scenario, out=tmp_path)
+
+
 async def test_run_scenario_stops_at_the_first_failed_step(tmp_path):
     scenario = {"title": "t", "subtitle": "", "files": ["report.pdf"], "prompt": "p",
                 "steps": [
