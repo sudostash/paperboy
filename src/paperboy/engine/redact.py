@@ -334,6 +334,15 @@ def _drop_annotations(pdf: pikepdf.Pdf, wanted: dict) -> tuple[dict[int, int], s
     shows). Returns how many were removed from each page, and what was removed."""
     doomed: set = set()
     fields = []
+    for page in pdf.pages:
+        # Annotations stored inline in /Annots get an object of their own, so each can
+        # be told apart (a pikepdf wrapper's id() doesn't last).
+        annots = page.obj.get("/Annots")
+        if isinstance(annots, pikepdf.Array) and any(
+                isinstance(a, pikepdf.Dictionary) and not a.is_indirect for a in annots):
+            page.obj.Annots = pikepdf.Array(
+                [pdf.make_indirect(a) if isinstance(a, pikepdf.Dictionary)
+                 and not a.is_indirect else a for a in annots])
     for index, areas in wanted.items():
         annots = pdf.pages[index].obj.get("/Annots")
         for annot in annots if isinstance(annots, pikepdf.Array) else []:
@@ -345,7 +354,7 @@ def _drop_annotations(pdf: pikepdf.Pdf, wanted: dict) -> tuple[dict[int, int], s
                     (rect[0], rect[1], max(rect[2], rect[0] + 0.01),
                      max(rect[3], rect[1] + 0.01)), areas):
                 continue
-            doomed.add(annot.objgen if annot.is_indirect else id(annot))
+            doomed.add(annot.objgen)
             if annot.get("/Subtype") == pikepdf.Name.Widget:
                 field = _field_of(annot)
                 fields.append(field)
@@ -372,7 +381,7 @@ def _drop_annotations(pdf: pikepdf.Pdf, wanted: dict) -> tuple[dict[int, int], s
         def gone(a) -> bool:
             if not isinstance(a, pikepdf.Dictionary):
                 return False
-            if (a.objgen if a.is_indirect else id(a)) in doomed:
+            if a.is_indirect and a.objgen in doomed:
                 return True
             for key in ("/Parent", "/IRT"):  # a popup or reply to a removed annotation
                 other = a.get(key)
@@ -388,7 +397,7 @@ def _drop_annotations(pdf: pikepdf.Pdf, wanted: dict) -> tuple[dict[int, int], s
             removed[index] = sum(1 for a in items if gone(a)
                                  and a.get("/Subtype") != pikepdf.Name.Popup)
             doomed.update(a.objgen for a in items if gone(a) and a.is_indirect)
-    return removed, {k for k in doomed if isinstance(k, tuple)}
+    return removed, doomed
 
 
 # --- text elsewhere in the document -----------------------------------------------------
