@@ -229,3 +229,36 @@ def test_a_pipeline_checks_a_watermark_image_before_any_step_runs(doc, tmp_path)
             {"tool": "rotate_pages", "args": {"degrees": 90}},
             {"tool": "add_watermark", "args": {"image_path": str(tmp_path / "gone.png")}}])
     assert not (tmp_path / "doc_processed.pdf").exists()
+
+
+# --- file modes ----------------------------------------------------------------------
+
+WRITERS = {
+    "split_pdf": lambda doc, out, **kw: S.split_pdf(input_path=str(doc), ranges="1",
+                                                    output_dir=str(out.parent), **kw),
+    "convert_to_pdf": lambda doc, out, **kw: S.convert_to_pdf(
+        input_path=str(_text(doc.parent)), output_path=str(out), **kw),
+    "images_to_pdf": lambda doc, out, **kw: S.images_to_pdf(
+        input_paths=[str(_png(doc.parent))], output_path=str(out), **kw),
+}
+
+
+def _png(folder):
+    path = folder / "dot.png"
+    Image.new("RGB", (10, 10), "red").save(path)
+    return path
+
+
+@pytest.mark.parametrize("tool", sorted(WRITERS))
+def test_outputs_get_the_usual_mode_and_replaced_files_keep_theirs(tool, doc, tmp_path):
+    folder = tmp_path / "out"
+    folder.mkdir()
+    out = folder / ("doc_part001.pdf" if tool == "split_pdf" else "made.pdf")
+    umask = os.umask(0)
+    os.umask(umask)
+    WRITERS[tool](doc, out)
+    assert out.stat().st_mode & 0o777 == 0o666 & ~umask  # not a temporary file's 0600
+    out.chmod(0o640)
+    WRITERS[tool](doc, out, overwrite=True)
+    assert out.stat().st_mode & 0o777 == 0o640
+    assert not [p for p in folder.iterdir() if p.name.startswith(".paperboy-")]

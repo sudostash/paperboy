@@ -264,6 +264,10 @@ All notable changes to this project are documented here. The format follows
   other tool error, never as raw exception text.
 - `run_pipeline` checks a watermark step's `image_path` before any step runs, as its
   description says.
+- Outputs written by Paperboy itself (split parts, PDF/A copies, converted files,
+  extracted attachments and images) get the usual file mode for a new file, not a
+  temporary file's owner-only one, and a file they replace keeps its mode. The
+  `paperboy://pdfs` resource is read in a worker thread too.
 - `redact_pdf` removed the wrong annotation, or none, when annotations were stored
   directly in a page's `/Annots` (not as objects of their own), so a visible annotation
   inside a redacted area could survive. Such annotations are now given objects of their

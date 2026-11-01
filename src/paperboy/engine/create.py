@@ -15,6 +15,7 @@ from pypdf import PdfReader
 from ..config import Settings
 from ..errors import DependencyError, PdfUserError
 from ..results import ConvertResult, ImagesResult
+from .extract import keep_mode
 
 IMAGE_FORMATS = ("PNG", "JPEG", "GIF", "BMP", "TIFF", "WEBP")
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tif", ".tiff", ".webp"}
@@ -178,6 +179,7 @@ def _made(out: Path, settings: Settings, make) -> int:
         if pages > settings.max_pages:
             raise PdfUserError(f"The PDF would have {pages} pages, over the "
                                f"{settings.max_pages} page limit")
+        keep_mode(made, out)
         os.replace(made, out)
         return pages
     finally:

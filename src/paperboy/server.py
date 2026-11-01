@@ -1706,7 +1706,12 @@ def list_pdfs(
 @mcp.resource("paperboy://pdfs", name="pdfs", description=(
     "The PDFs under the folder the server may use (PAPERBOY_ROOT), as JSON: path, size "
     "and when each last changed."), mime_type="application/json")
-def pdfs_resource() -> str:
+async def pdfs_resource() -> str:
+    # In a worker thread: mcp 1.x would list on the event loop, holding up every call.
+    return await anyio.to_thread.run_sync(_list_pdfs_json)
+
+
+def _list_pdfs_json() -> str:
     try:
         return json.dumps(engine.list_pdfs(SETTINGS), indent=2)
     except PdfUserError as exc:  # e.g. no root set: say so rather than fail the read

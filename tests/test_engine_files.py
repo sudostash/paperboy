@@ -7,6 +7,7 @@ import json
 import os
 import re
 
+import anyio
 import pytest
 
 import paperboy.server as S
@@ -105,9 +106,9 @@ def test_the_tool_is_confined_to_the_root(tree, tmp_path_factory):
 
 
 def test_the_resource_lists_the_same(tree, settings, monkeypatch):
-    assert _rel(json.loads(S.pdfs_resource())) == _rel(E.list_pdfs(settings))
+    assert _rel(json.loads(anyio.run(S.pdfs_resource))) == _rel(E.list_pdfs(settings))
     monkeypatch.setattr(S, "SETTINGS", dataclasses.replace(settings, root=None))
-    assert "needs PAPERBOY_ROOT" in json.loads(S.pdfs_resource())["error"]
+    assert "needs PAPERBOY_ROOT" in json.loads(anyio.run(S.pdfs_resource))["error"]
 
 
 NOT_TOOLS = {"remove_comments", "active_content",   # an argument and a verdict, named in text
@@ -223,7 +224,7 @@ def test_an_unexpected_error_in_the_resource_stays_in_the_log(monkeypatch, caplo
     def boom(*args, **kwargs):
         raise RuntimeError("/secret/outside/path")
     monkeypatch.setattr(S.engine, "list_pdfs", boom)
-    text = S.pdfs_resource()
+    text = anyio.run(S.pdfs_resource)
     assert "secret" not in text and "Internal error" in json.loads(text)["error"]
     assert "secret" in caplog.text
 

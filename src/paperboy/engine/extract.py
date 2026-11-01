@@ -14,6 +14,8 @@ import io
 import logging
 import os
 import re
+import shutil
+import stat
 import tempfile
 import unicodedata
 from pathlib import Path
@@ -100,16 +102,26 @@ def _check_all(paths: list[Path], src: Path, overwrite: bool) -> None:
         _check_target(path, src, overwrite)
 
 
+def keep_mode(made: Path, path: Path) -> None:
+    """Give *made*, about to replace *path*, the mode of the file it replaces (a new
+    file keeps the usual mode it was created with)."""
+    if os.path.lexists(path) and not path.is_symlink():
+        os.chmod(made, stat.S_IMODE(os.stat(path).st_mode))
+
+
 def _write(path: Path, data: bytes) -> None:
-    """Write via a temporary file and os.replace: never through a link, never in place."""
-    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.stem}.", suffix=path.suffix)
+    """Write via a temporary file and os.replace: never through a link, never in place.
+    The file is made in a private folder beside *path*, so it gets the usual mode (not
+    a temporary file's private one), and a file it replaces keeps its mode."""
+    folder = tempfile.mkdtemp(prefix=".paperboy-", dir=path.parent)
     try:
-        with os.fdopen(fd, "wb") as fh:
+        made = Path(folder) / "file"
+        with open(made, "xb") as fh:
             fh.write(data)
-        os.replace(tmp, path)
-    except BaseException:
-        Path(tmp).unlink(missing_ok=True)
-        raise
+        keep_mode(made, path)
+        os.replace(made, path)
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
 
 
 class _Writer:
