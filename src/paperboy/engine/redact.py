@@ -467,8 +467,10 @@ def _read_text(stream) -> tuple[str | None, str]:
         return data.decode("latin-1"), "latin-1"
 
 
-# Keys an annotation or field reaches other objects by that aren't part of it.
-_NOT_ANNOTATION = {"/P", "/AP", "/Resources", "/Dest", "/D", "/StructParent"}
+# Keys an annotation or field reaches other objects by that aren't part of it (/D and
+# /Dest are not among them: in /AA, /D is the mouse-down action).
+_NOT_ANNOTATION = {"/P", "/AP", "/Resources", "/StructParent", "/OC"}
+MAX_ANNOTATION_OBJECTS = 100_000
 
 
 def _annotation_dictionaries(pdf: pikepdf.Pdf) -> list:
@@ -478,8 +480,12 @@ def _annotation_dictionaries(pdf: pikepdf.Pdf) -> list:
     acro = pdf.Root.get("/AcroForm")
     stack = [acro.get("/Fields")] if isinstance(acro, pikepdf.Dictionary) else []
     stack += [page.obj.get("/Annots") for page in pdf.pages]
+    pages = {page.obj.objgen for page in pdf.pages}  # by identity: /Type can lie
     found, seen = [], set()
-    while stack and len(found) < 100_000:
+    while stack:
+        if len(found) >= MAX_ANNOTATION_OBJECTS:
+            raise PdfUserError("This PDF's comments and form fields are too large to check "
+                               "against its restrictions; nothing was written")
         obj = stack.pop()
         if isinstance(obj, (pikepdf.Dictionary, pikepdf.Array)) and obj.is_indirect:
             if obj.objgen in seen:
@@ -487,8 +493,9 @@ def _annotation_dictionaries(pdf: pikepdf.Pdf) -> list:
             seen.add(obj.objgen)
         if isinstance(obj, pikepdf.Array):
             stack.extend(obj)
-        elif isinstance(obj, pikepdf.Dictionary) and obj.get("/Type") not in (
-                pikepdf.Name.Page, pikepdf.Name.Pages):
+        elif isinstance(obj, pikepdf.Dictionary) and not (
+                obj.is_indirect and obj.objgen in pages) and obj.get("/Type") != \
+                pikepdf.Name.Pages:
             found.append(obj)
             stack.extend(v for k, v in obj.items() if k not in _NOT_ANNOTATION)
     return found

@@ -388,6 +388,52 @@ def test_redact_counts_an_unreadable_script_in_an_annotation_as_a_change(lock, t
                      password="user")
 
 
+def _mouse_down_script(pdf):  # /D in /AA is the mouse-down action
+    pdf.pages[1].obj.Annots = pikepdf.Array([pdf.make_indirect(Dictionary(
+        Type=Name.Annot, Subtype=Name.Widget, FT=Name.Tx, Rect=[10, 10, 90, 30],
+        AA=Dictionary(D=Dictionary(S=Name.JavaScript,
+                                   JS=pikepdf.String("app.alert('SECRET42')")))))])
+
+
+def _claims_to_be_a_page(pdf):  # an annotation can't hide behind /Type /Page
+    pdf.pages[1].obj.Annots = pikepdf.Array([pdf.make_indirect(Dictionary(
+        Type=Name.Page, Subtype=Name.Link, Rect=[10, 10, 20, 20],
+        A=Dictionary(S=Name.URI, URI=pikepdf.String("x/SECRET42"))))])
+
+
+@pytest.mark.parametrize("edit", [_mouse_down_script, _claims_to_be_a_page],
+                         ids=["mouse-down", "typed-page"])
+def test_redact_finds_text_in_every_part_of_an_annotation(edit, lock, tmp_path, settings):
+    src = lock(NO_ANNOTATIONS, src=_two_pages_with_secret(tmp_path, edit))
+    with pytest.raises(PdfUserError, match="replacing the text in its comments"):
+        E.redact_pdf(src, tmp_path / "r.pdf", settings, texts=["SECRET42"], pages="1",
+                     password="user")
+
+
+def test_a_layer_named_like_the_text_is_not_an_annotation_change(lock, tmp_path, settings):
+    def edit(pdf):
+        layer = pdf.make_indirect(Dictionary(Type=Name.OCG, Name=pikepdf.String("SECRET42")))
+        pdf.pages[1].obj.Annots = pikepdf.Array([pdf.make_indirect(Dictionary(
+            Type=Name.Annot, Subtype=Name.Square, Rect=[10, 10, 20, 20], OC=layer))])
+    src = lock(NO_ANNOTATIONS, src=_two_pages_with_secret(tmp_path, edit))
+    E.redact_pdf(src, tmp_path / "r.pdf", settings, texts=["SECRET42"], pages="1",
+                 password="user")
+
+
+def test_redact_refuses_when_annotations_are_too_many_to_check(lock, tmp_path, settings,
+                                                               monkeypatch):
+    from paperboy.engine import redact
+    monkeypatch.setattr(redact, "MAX_ANNOTATION_OBJECTS", 3)
+    def edit(pdf):
+        pdf.pages[1].obj.Annots = pikepdf.Array([pdf.make_indirect(Dictionary(
+            Type=Name.Annot, Subtype=Name.Square, Rect=[n, 0, n + 5, 5])) for n in range(5)])
+    src = lock(NO_ANNOTATIONS, src=_two_pages_with_secret(tmp_path, edit))
+    with pytest.raises(PdfUserError, match="too large to check"):
+        E.redact_pdf(src, tmp_path / "r.pdf", settings, texts=["SECRET42"], pages="1",
+                     password="user")
+    assert not (tmp_path / "r.pdf").exists()
+
+
 def test_sanitizing_annotations_needs_permission_to_change_them(make_pdf, lock, tmp_path,
                                                                 settings):
     src = lock(NO_ANNOTATIONS, src=_edit(make_pdf("noted.pdf", 1), _note))
@@ -545,6 +591,16 @@ def test_every_reference_to_a_signature_is_removed():
         assert not {"/V", "/Lock", "/SV"} & set(field.keys())
         assert "/Keep" not in stray and list(stray.List) == [1, 2]
         assert str(loose.V) == "x"  # not a signature field: its value stays
+
+
+def test_too_many_objects_to_check_for_signatures_is_refused(make_pdf, tmp_path, settings,
+                                                             monkeypatch):
+    from paperboy.engine import base
+    monkeypatch.setattr(base, "MAX_SIGNATURE_SCAN", 5)
+    with pytest.raises(PdfUserError, match="too many objects"):
+        E.extract_pages(_edit(make_pdf("signed.pdf", 2), _signed_field), tmp_path / "o.pdf",
+                        "1", settings)
+    assert not (tmp_path / "o.pdf").exists()
 
 
 def test_a_field_type_is_inherited_from_at_most_32_parents():

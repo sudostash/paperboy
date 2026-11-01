@@ -266,6 +266,9 @@ def refuse_signed(pdf: pikepdf.Pdf, action: str) -> bool:
     return usage_rights
 
 
+MAX_SIGNATURE_SCAN = 1_000_000  # dictionaries and arrays checked for copied signatures
+
+
 def _is_signature(value) -> bool:
     return isinstance(value, pikepdf.Dictionary) and (
         "/ByteRange" in value or value.get("/Type") == pikepdf.Name.Sig)
@@ -292,7 +295,10 @@ def drop_copied_signatures(pdf: pikepdf.Pdf) -> None:
     certificate) would only show as broken. Signature fields lose their value and
     their signed appearance, and every other reference to a signature goes too."""
     containers, stack = [], list(pdf.objects)
-    while stack and len(containers) < 1_000_000:  # the direct ones inside objects too
+    while stack:  # the direct ones inside objects too
+        if len(containers) >= MAX_SIGNATURE_SCAN:
+            raise PdfUserError("The pages hold too many objects to make sure no digital "
+                               "signature comes along; nothing was written")
         obj = stack.pop()
         if isinstance(obj, pikepdf.Dictionary):
             containers.append(obj)
