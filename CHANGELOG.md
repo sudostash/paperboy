@@ -234,6 +234,10 @@ All notable changes to this project are documented here. The format follows
   permission is always granted, per PDF 2.0).
 
 ### Fixed
+- `redact_pdf` removed the wrong annotation, or none, when annotations were stored
+  directly in a page's `/Annots` (not as objects of their own), so a visible annotation
+  inside a redacted area could survive. Such annotations are now given objects of their
+  own first, so the one in the area is always the one removed.
 - `encrypt_pdf` with `AES-128`, `RC4-128` or `RC4-40` and a password outside
   PDFDocEncoding (e.g. Cyrillic or Chinese) now explains that only AES-256 takes such
   passwords, instead of failing with an internal error.

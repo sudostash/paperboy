@@ -1034,6 +1034,25 @@ def test_annotations_touching_an_area_are_removed(tmp_path, settings):
         assert [str(f.T) for f in pdf.Root.AcroForm.Fields] == ["kept"]
 
 
+def test_annotations_stored_inline_are_removed_where_the_area_is(tmp_path, settings):
+    """Annotations written directly into /Annots (no object of their own) must be told
+    apart reliably: only the one inside the area goes, every time."""
+    def edit(pdf):
+        ap = pdf.make_stream(b"0 0 1 rg 0 0 50 20 re f", Type=Name.XObject,
+                             Subtype=Name.Form, BBox=[0, 0, 50, 20])
+        pdf.pages[0].obj.Annots = pikepdf.Array([pikepdf.Dictionary(
+            Type=Name.Annot, Subtype=Name.Square, Rect=[100 + 60 * n, 100, 150 + 60 * n, 120],
+            NM=pikepdf.String(f"a{n}"), F=4, AP=pikepdf.Dictionary(N=ap)) for n in range(6)])
+    src = build(tmp_path / "in.pdf", LINE, edit=edit)
+    for run in range(4):
+        out = tmp_path / f"out{run}.pdf"
+        r = E.redact_pdf(src, out, settings, areas=[{"page": 1, "rect": [210, 90, 280, 130]}])
+        assert r["pages"][0]["annotations_removed"] == 1
+        with pikepdf.open(out) as pdf:
+            assert [str(a.NM) for a in pdf.pages[0].obj.Annots] == ["a0", "a1", "a3", "a4",
+                                                                    "a5"]
+
+
 def test_field_in_a_hierarchy(tmp_path, settings):
     def edit(pdf):
         parent = pdf.make_indirect(pikepdf.Dictionary(T=pikepdf.String("person")))
