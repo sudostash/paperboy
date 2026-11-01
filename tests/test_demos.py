@@ -130,7 +130,8 @@ def test_hint_is_none_without_annotations():
 
 @pytest.mark.parametrize("slug", sorted(SCENARIOS))
 async def test_scenario_runs_against_real_server(slug, tmp_path):
-    if slug == "ask-password" and not hasattr(mcp_types, "UrlElicitationCapability"):
+    if slug in ("ask-password", "permissions") and \
+            not hasattr(mcp_types, "UrlElicitationCapability"):
         pytest.skip("the client opens the password page through URL-mode elicitation")
     if slug == "ocr" and not shutil.which("tesseract"):
         pytest.skip("OCR needs Tesseract installed")
@@ -139,9 +140,12 @@ async def test_scenario_runs_against_real_server(slug, tmp_path):
     files = tmp_path / slug / "files"
     for step in transcript["steps"]:
         if step["type"] == "call":
-            assert not step["isError"], step
+            assert step["isError"] == bool(step.get("expectError")), step
             assert step["title"]
             assert step["schema"]["type"] == "object"  # every tool publishes outputSchema
+            if step["isError"]:  # a refusal shown on purpose: its message
+                assert isinstance(step["result"], str) and step["result"]
+                continue
             assert set(step["result"]) == set(step["schema"]["properties"])
             for name in step["images"]:  # saved exactly as the tool returned them
                 with Image.open(tmp_path / slug / name) as im:
