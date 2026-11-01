@@ -557,11 +557,27 @@ class CompareResult(TypedDict):
     images: list[DiffImage]                # the difference images returned, in order
 
 
+class OcrPage(TypedDict):
+    page: int                              # 1-based
+    words: int                             # words recognised; 0 adds no text layer
+    mean_confidence: float | None          # Tesseract's 0-100 (None without words);
+    #                                        below about 70, expect many misread words
+    dpi: int                               # resolution the page was read at
+
+
+class OcrResult(Protected):
+    output: str
+    language: str
+    pages: list[OcrPage]                   # every page read, in page order
+    pages_with_text: list[int]             # skipped: they already have text
+    words: int                             # total over pages
+
+
 PipelineTool = Literal[
     "rotate_pages", "delete_pages", "extract_pages", "rearrange_pages", "decrypt_pdf",
     "encrypt_pdf", "optimize_pdf", "repair_pdf", "flatten_pdf", "set_metadata",
     "sanitize_pdf", "add_watermark", "add_page_numbers", "fill_form", "crop_pages",
-    "resize_pages", "n_up", "insert_blank_pages", "set_outline", "redact_pdf"]
+    "resize_pages", "n_up", "insert_blank_pages", "set_outline", "redact_pdf", "ocr_pdf"]
 
 
 class PipelineStepInput(TypedDict):

@@ -17,4 +17,4 @@ class PdfUserError(PdfError):
 
 
 class DependencyError(PdfUserError):
-    """A required optional binary (LibreOffice, qpdf CLI) is not available."""
+    """A required optional binary (LibreOffice, qpdf CLI, Tesseract) is not available."""

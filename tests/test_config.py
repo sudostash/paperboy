@@ -11,7 +11,7 @@ ENV_VARS = [
     "PAPERBOY_ROOT", "PAPERBOY_MAX_FILE_MB", "PAPERBOY_MAX_PAGES",
     "PAPERBOY_SOFFICE_TIMEOUT", "PAPERBOY_SOFFICE", "PAPERBOY_QPDF",
     "PAPERBOY_ALLOW_OVERWRITE", "PAPERBOY_CLAMSCAN", "PAPERBOY_CLAMSCAN_TIMEOUT",
-    "PAPERBOY_REQUIRE_PASSWORD_REFERENCES",
+    "PAPERBOY_REQUIRE_PASSWORD_REFERENCES", "PAPERBOY_TESSERACT",
 ]
 
 
@@ -33,6 +33,7 @@ def test_defaults_without_environment(clean_env):
     assert s.qpdf_path is None
     assert s.default_overwrite is False
     assert s.clamscan_path is None and s.clamscan_timeout == 300
+    assert s.tesseract_path is None
 
 
 def test_password_references_setting(clean_env):
@@ -48,6 +49,13 @@ def test_clamav_settings(clean_env):
     clean_env.setenv("PAPERBOY_CLAMSCAN_TIMEOUT", "60")
     s = Settings.from_env()
     assert (s.clamscan_path, s.clamscan_timeout) == ("/opt/clamav/clamscan", 60)
+
+
+def test_tesseract_setting(clean_env):
+    clean_env.setattr("shutil.which", lambda name: f"/usr/bin/{name}")
+    assert Settings.from_env().tesseract_path == "/usr/bin/tesseract"
+    clean_env.setenv("PAPERBOY_TESSERACT", "/opt/ocr/tesseract")
+    assert Settings.from_env().tesseract_path == "/opt/ocr/tesseract"
 
 
 def test_root_is_expanded_and_resolved(clean_env, tmp_path):

@@ -135,6 +135,23 @@ def test_every_runnable_step_works(doc, tmp_path):
         assert len(pdf.pages) == 3          # 5 pages, blank added: 5 sheets of 2 -> 3
 
 
+def test_a_scan_can_be_ocrd_and_redacted_in_a_pipeline(tmp_path, sandbox, monkeypatch):
+    import dataclasses
+
+    from test_engine_ocr import fake_tesseract, scan, text_of
+    monkeypatch.setattr(S, "SETTINGS", dataclasses.replace(
+        sandbox, tesseract_path=fake_tesseract(tmp_path)))
+    src = scan(tmp_path / "scan.pdf", pages=2)
+    res = S.run_pipeline(str(src), [
+        {"tool": "ocr_pdf", "args": {"pages": "2", "dpi": 150}},
+        {"tool": "redact_pdf", "args": {"texts": ["W1275"]}},
+    ])
+    ocr_step, redact_step = (s["result"] for s in res["steps"])
+    assert [p["page"] for p in ocr_step["pages"]] == [2]
+    assert redact_step["match_count"] == 1
+    assert "W1275" not in text_of(res["output"], 1)
+
+
 def test_forms_can_be_filled_in_a_pipeline(tmp_path):
     from test_engine_forms import _form
     form = _form(tmp_path / "form.pdf")
