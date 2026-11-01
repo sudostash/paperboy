@@ -14,7 +14,15 @@ from ..config import Settings
 from ..errors import DependencyError, PdfUserError
 from ..results import FlattenResult, OptimizeResult, RepairResult
 from . import images
-from .base import inherit_protection, open_pdf, open_with_password, run_qpdf
+from .base import (
+    inherit_protection,
+    open_pdf,
+    open_with_password,
+    refuse_signed,
+    require_annotation_permission,
+    require_modify_permission,
+    run_qpdf,
+)
 
 MAX_IMAGE_DPI_RANGE = (36, 1200)
 MIN_TARGET_MB = 0.01
@@ -172,7 +180,11 @@ def flatten_pdf(
             "(install qpdf, or set PAPERBOY_QPDF)"
         )
     # Password and page cap are checked before qpdf does any work.
+    # Flattening removes the annotations and form fields and draws them into the pages.
     with open_pdf(path, settings, password) as src:
+        require_annotation_permission(src, "flattening its comments and form fields")
+        require_modify_permission(src, "flattening its comments and form fields")
+        usage_rights = refuse_signed(src, "flattening it")
         protection = inherit_protection(src, password)
     flattened = out.with_name(f".{out.name}.flattening")
     try:
@@ -189,6 +201,8 @@ def flatten_pdf(
         # the same protection every other tool gives its output.
         with open_pdf(flattened, settings, password) as pdf:
             pages = len(pdf.pages)
+            if usage_rights and "/Perms" in pdf.Root:  # they break once the file changes
+                del pdf.Root.Perms
             pdf.save(str(out), encryption=protection.encryption)
     except BaseException:
         out.unlink(missing_ok=True)

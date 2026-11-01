@@ -801,7 +801,8 @@ def test_files_without_layers_or_forms_are_fine(tmp_path, settings):
 def test_a_password_protected_pdf_loses_its_password(tmp_path, settings):
     locked = tmp_path / "locked.pdf"
     with pikepdf.open(embedded(tmp_path / "in.pdf")) as pdf:
-        pdf.save(locked, encryption=pikepdf.Encryption(user="pw", owner="own", R=6))
+        pdf.save(locked, encryption=pikepdf.Encryption(
+            user="pw", owner="own", R=6, allow=pikepdf.Permissions(modify_assembly=True)))
     with pytest.raises(PdfUserError, match="password protected"):
         E.convert_to_pdfa(locked, tmp_path / "out.pdf", settings)
     res, out = convert(locked, tmp_path, settings, password="pw")

@@ -40,7 +40,8 @@ def _locked(path, user="pw", owner="owner"):
     plain = _pdf(path.with_name("plain-" + path.name))
     with pikepdf.open(plain) as pdf:
         pdf.save(path, encryption=pikepdf.Encryption(
-            user=user, owner=owner, R=6, allow=pikepdf.Permissions(print_highres=False)))
+            user=user, owner=owner, R=6,
+            allow=pikepdf.Permissions(print_highres=False, modify_assembly=True)))
     return str(path)
 
 
@@ -116,7 +117,7 @@ CASES = [
     ("encrypt_pdf", "encrypt_pdf",
      lambda d: {"input_path": _pdf(d / "a.pdf"), "user_password": "x"}),
     ("decrypt_pdf", "decrypt_pdf",
-     lambda d: {"input_path": _locked(d / "l.pdf"), "password": "pw"}),
+     lambda d: {"input_path": _locked(d / "l.pdf"), "password": "owner"}),
     ("rearrange_pages", "rearrange_pages",
      lambda d: {"input_path": _pdf(d / "a.pdf"), "page_order": "3,1"}),
     ("delete_pages", "delete_pages", lambda d: {"input_path": _pdf(d / "a.pdf"), "pages": "1"}),

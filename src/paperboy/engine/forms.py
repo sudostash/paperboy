@@ -284,7 +284,8 @@ def fill_form(
             raise PdfUserError(
                 "This PDF does not allow filling in its form; that needs its owner password"
             )
-        if flatten and restricted and not (pdf.allow.modify_annotation or pdf.allow.modify_other):
+        # Flattening removes the fields and draws them into the pages: both permissions.
+        if flatten and restricted and not (pdf.allow.modify_annotation and pdf.allow.modify_other):
             raise PdfUserError(
                 "This PDF does not allow flattening its form (only filling it in); that "
                 "needs its owner password"

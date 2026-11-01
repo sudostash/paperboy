@@ -10,7 +10,9 @@ from paperboy.errors import PdfUserError
 
 from conftest import HAS_QPDF, page_labels
 
-RESTRICTED = pikepdf.Permissions(print_lowres=False, print_highres=False, modify_other=False)
+# Printing is forbidden, which no tool here needs: the tools work and must keep it.
+RESTRICTED = pikepdf.Permissions(print_lowres=False, print_highres=False,
+                                 modify_assembly=True)
 
 
 @pytest.fixture
@@ -99,7 +101,8 @@ def test_merge_never_exposes_a_password_protected_input(make_pdf, locked, tmp_pa
     # the merged output, which contains a password-protected file, open freely.
     owner_only = tmp_path / "owner-only.pdf"
     with pikepdf.open(make_pdf("o.pdf", 1)) as pdf:
-        pdf.save(owner_only, encryption=pikepdf.Encryption(user="", owner="boss", R=6))
+        pdf.save(owner_only, encryption=pikepdf.Encryption(
+            user="", owner="boss", R=6, allow=pikepdf.Permissions(modify_assembly=True)))
     out = tmp_path / "m.pdf"
     res = E.merge_pdfs([owner_only, locked], out, settings, {str(locked): "userpw"})
     assert res["password_protected"] is True
@@ -134,7 +137,8 @@ def test_flatten_upgrades_old_encryption_to_aes256(make_pdf, tmp_path, settings)
 
 
 def test_decrypt_still_removes_protection(locked, tmp_path, settings):
-    E.decrypt_pdf(locked, tmp_path / "plain.pdf", "userpw", settings)
+    # It restricts printing, so lifting its protection takes the owner password.
+    E.decrypt_pdf(locked, tmp_path / "plain.pdf", "ownerpw", settings)
     with pikepdf.open(tmp_path / "plain.pdf") as pdf:
         assert not pdf.is_encrypted
 

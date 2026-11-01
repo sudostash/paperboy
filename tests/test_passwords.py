@@ -24,7 +24,7 @@ def _encrypt(make_pdf, tmp_path, name, user, owner, revision=6, aes=True, allow=
     with pikepdf.open(make_pdf(f"plain-{name}", 2)) as pdf:
         pdf.save(out, encryption=pikepdf.Encryption(
             user=user, owner=owner, R=revision, aes=aes, metadata=aes,
-            allow=allow or pikepdf.Permissions()))
+            allow=allow or pikepdf.Permissions(modify_assembly=True)))
     return out
 
 
@@ -82,7 +82,7 @@ def test_aes256_unicode_password_beyond_latin1(make_pdf, tmp_path, settings):
 # --- copy permission -------------------------------------------------------------------
 
 
-NO_COPY = pikepdf.Permissions(extract=False)
+NO_COPY = pikepdf.Permissions(extract=False, modify_assembly=True)  # only copying
 
 
 @pytest.fixture
@@ -106,7 +106,7 @@ def test_extract_text_with_user_password_when_copying_is_allowed(copy_ok, settin
 
 
 def test_decrypt_needs_owner_password_when_copying_is_forbidden(no_copy, tmp_path, settings):
-    with pytest.raises(PdfUserError, match="does not allow copying.*owner password"):
+    with pytest.raises(PdfUserError, match="restricts what can be done.*owner password"):
         E.decrypt_pdf(no_copy, tmp_path / "plain.pdf", "user", settings)
     assert not (tmp_path / "plain.pdf").exists()
     E.decrypt_pdf(no_copy, tmp_path / "plain.pdf", "owner", settings)
@@ -120,7 +120,7 @@ def test_decrypt_with_user_password_when_copying_is_allowed(copy_ok, tmp_path, s
 
 def test_reencrypting_needs_owner_password_when_copying_is_forbidden(no_copy, tmp_path,
                                                                      settings):
-    with pytest.raises(PdfUserError, match="does not allow copying.*owner password"):
+    with pytest.raises(PdfUserError, match="restricts what can be done.*owner password"):
         E.encrypt_pdf(no_copy, tmp_path / "re.pdf", "new", settings, current_password="user")
     assert not (tmp_path / "re.pdf").exists()
     E.encrypt_pdf(no_copy, tmp_path / "re.pdf", "new", settings, current_password="owner")
@@ -131,7 +131,7 @@ def test_owner_only_copy_restricted_file_needs_owner_password(make_pdf, tmp_path
     restricted = _encrypt(make_pdf, tmp_path, "oo.pdf", "", "boss", allow=NO_COPY)
     with pytest.raises(PdfUserError, match="does not allow copying"):
         E.extract_text(restricted, settings)
-    with pytest.raises(PdfUserError, match="does not allow copying"):
+    with pytest.raises(PdfUserError, match="restricts what can be done"):
         E.decrypt_pdf(restricted, tmp_path / "plain.pdf", "", settings)
     assert "PAGE-1" in E.extract_text(restricted, settings, password="boss")["text"]
 

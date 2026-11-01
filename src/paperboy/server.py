@@ -535,7 +535,8 @@ def encrypt_pdf(
     user_password opens the file; owner_password (defaults to it) controls
     permissions. algorithm: AES-256 (default), AES-128, RC4-128, RC4-40.
     allow_print/copy/modify set viewer-enforced restrictions. Use current_password
-    if the input is already encrypted.
+    if the input is already encrypted; re-encrypting a PDF that restricts anything
+    needs its owner password (new permissions would lift the old ones).
     """
     src = require_input(input_path, SETTINGS)
     out = prepare_output(src, output_path, "_encrypted", _overwrite(overwrite), SETTINGS)
@@ -553,7 +554,9 @@ def decrypt_pdf(
     output_path: str | None = None,
     overwrite: bool | None = None,
 ) -> DecryptResult:
-    """Remove the password from a PDF, given its correct password. Not a cracker."""
+    """Remove the password from a PDF, given its correct password. Not a cracker.
+    A PDF that restricts anything (printing, copying, changes) needs its owner
+    password, since the copy has no restrictions."""
     src = require_input(input_path, SETTINGS)
     out = prepare_output(src, output_path, "_decrypted", _overwrite(overwrite), SETTINGS)
     return engine.decrypt_pdf(src, out, password, SETTINGS)
@@ -577,6 +580,7 @@ def rearrange_pages(
     """Reorder/duplicate/reverse pages. page_order e.g. "3,1,2", "5-1" (reverse), "last,1-4".
 
     Unlisted pages are dropped unless append_unlisted=true. Pages may repeat to duplicate.
+    Needs the owner password if the PDF forbids document assembly.
     """
     src = require_input(input_path, SETTINGS)
     out = prepare_output(src, output_path, "_reordered", _overwrite(overwrite), SETTINGS)
@@ -592,7 +596,8 @@ def delete_pages(
     password: str | None = None,
     overwrite: bool | None = None,
 ) -> DeleteResult:
-    """Delete pages, e.g. pages="2,5-7"."""
+    """Delete pages, e.g. pages="2,5-7". Needs the owner password if the PDF forbids
+    document assembly."""
     src = require_input(input_path, SETTINGS)
     out = prepare_output(src, output_path, "_trimmed", _overwrite(overwrite), SETTINGS)
     return engine.delete_pages(src, out, pages, SETTINGS, password)
@@ -607,7 +612,8 @@ def extract_pages(
     password: str | None = None,
     overwrite: bool | None = None,
 ) -> ExtractResult:
-    """Save only the given pages as a new PDF, e.g. pages="1-3,10"."""
+    """Save only the given pages as a new PDF, e.g. pages="1-3,10".
+    Needs the owner password if the PDF forbids document assembly."""
     src = require_input(input_path, SETTINGS)
     out = prepare_output(src, output_path, "_extract", _overwrite(overwrite), SETTINGS)
     return engine.extract_pages(src, out, pages, SETTINGS, password)
@@ -623,7 +629,8 @@ def rotate_pages(
     password: str | None = None,
     overwrite: bool | None = None,
 ) -> RotateResult:
-    """Rotate pages clockwise by 90/180/270 degrees (all pages if pages omitted)."""
+    """Rotate pages clockwise by 90/180/270 degrees (all pages if pages omitted).
+    Needs the owner password if the PDF forbids document assembly. Signed PDFs are refused."""
     src = require_input(input_path, SETTINGS)
     out = prepare_output(src, output_path, "_rotated", _overwrite(overwrite), SETTINGS)
     return engine.rotate_pages(src, out, degrees, SETTINGS, pages, password)
@@ -640,6 +647,7 @@ def merge_pdfs(
     """Merge PDFs in the given order into output_path.
 
     passwords optionally maps an input path to its password for encrypted inputs.
+    An input that forbids document assembly needs its owner password.
     """
     if not isinstance(input_paths, list) or len(input_paths) < 2:
         raise ToolError("Provide at least two input PDFs to merge")
@@ -668,6 +676,7 @@ def crop_pages(
     seen (rotation applied), in unit "pt" (points), "in" or "mm"; all pages or a page
     spec. reset=true instead shows the whole page again. Cropping only hides the
     margins: the content stays in the file (use sanitize or redaction to remove it).
+    Needs the owner password if the PDF forbids changes. Signed PDFs are refused.
     """
     src = require_input(input_path, SETTINGS)
     out = prepare_output(src, output_path, "_cropped", _overwrite(overwrite), SETTINGS)
@@ -694,7 +703,8 @@ def resize_pages(
     pages get a landscape sheet), or force "portrait"/"landscape". Links, form fields
     and comments move with the content (ones outside a crop stay hidden); scroll
     positions of bookmarks and links that point into resized pages are not adjusted.
-    Needs the owner password if the PDF forbids changes.
+    Needs the owner password if the PDF forbids changes, or forbids changing comments
+    and pages being resized have any. Signed PDFs are refused.
     """
     src = require_input(input_path, SETTINGS)
     out = prepare_output(src, output_path, "_resized", _overwrite(overwrite), SETTINGS)
@@ -719,7 +729,7 @@ def n_up(
     The result is for printing and reading: only page content is placed, so links,
     comments, stamps, form fields (and their filled-in values) and visible signatures
     don't appear; use flatten_pdf first to keep them. Document info is copied, bookmarks
-    are not. Needs the owner password if the PDF forbids changes.
+    are not. Needs the owner password if the PDF forbids changes or document assembly.
     """
     src = require_input(input_path, SETTINGS)
     out = prepare_output(src, output_path, f"_{per_sheet}up", _overwrite(overwrite), SETTINGS)
@@ -739,7 +749,8 @@ def insert_blank_pages(
     """Insert count blank pages (1-100) after each page number in after; 0 inserts
     before the first page. E.g. after=[3, 7] adds a blank page after pages 3 and 7.
     Each blank page is the size of the page before it. inserted lists the new pages'
-    numbers in the output.
+    numbers in the output. Needs the owner password if the PDF forbids document
+    assembly. Signed PDFs are refused.
     """
     src = require_input(input_path, SETTINGS)
     out = prepare_output(src, output_path, "_blanks", _overwrite(overwrite), SETTINGS)
@@ -761,7 +772,8 @@ def interleave_pdfs(
     scanner into one PDF: front 1, back 1, front 2, back 2, ... Turning the stack over
     to scan the backs puts them last page first, so they are reversed; pass
     reverse_backs=false if they were scanned in order. The backs must have as many
-    pages as the fronts, or one fewer.
+    pages as the fronts, or one fewer. A scan that forbids document assembly needs its
+    owner password.
     """
     fronts = require_input(front_path, SETTINGS)
     backs = require_input(back_path, SETTINGS)
@@ -782,7 +794,8 @@ def split_pdf(
     """Split a PDF into several files.
 
     ranges: semicolon-separated page specs, one file each, e.g. "1-3;4-6;7-".
-    If omitted, every page becomes its own file.
+    If omitted, every page becomes its own file. Needs the owner password if the PDF
+    forbids document assembly.
     """
     src = require_input(input_path, SETTINGS)
     out_dir = (
@@ -851,7 +864,9 @@ def flatten_pdf(
     password: str | None = None,
     overwrite: bool | None = None,
 ) -> FlattenResult:
-    """Flatten form fields and annotations into page content (requires the qpdf CLI)."""
+    """Flatten form fields and annotations into page content (requires the qpdf CLI).
+    Needs the owner password if the PDF forbids changing comments or changing it.
+    Signed PDFs are refused."""
     src = require_input(input_path, SETTINGS)
     out = prepare_output(src, output_path, "_flattened", _overwrite(overwrite), SETTINGS)
     return engine.flatten_pdf(src, out, SETTINGS, password)
@@ -871,7 +886,8 @@ def set_metadata(
     password: str | None = None,
     overwrite: bool | None = None,
 ) -> SetMetadataResult:
-    """Set metadata. fields keys: title, author, subject, keywords, creator, producer."""
+    """Set metadata. fields keys: title, author, subject, keywords, creator, producer.
+    Needs the owner password if the PDF forbids changes. Signed PDFs are refused."""
     if not fields:
         raise ToolError("Provide at least one metadata field to set")
     src = require_input(input_path, SETTINGS)
@@ -949,8 +965,9 @@ def fill_form(
     take a single value. Every value is checked first and nothing is written if any is
     invalid. If unrenderable_fields is not empty, the form's font can't draw those values:
     they are stored, and most viewers redraw them correctly. flatten=true makes the result
-    static (no longer editable). Signed PDFs are refused because filling would break the
-    signature.
+    static (no longer editable), which needs the owner password if the PDF forbids
+    changing comments or changing it. Signed PDFs are refused because filling would
+    break the signature.
     """
     src = require_input(input_path, SETTINGS)
     out = prepare_output(src, output_path, "_filled", _overwrite(overwrite), SETTINGS)
@@ -1133,7 +1150,8 @@ def sanitize_pdf(
     accessibility structure are kept. Not removed: hidden layers, text hidden by colour or
     position, form field values, and the second half of an encrypted copy's ID (set by
     the PDF library from the time). removed is measured on the result; if anything asked
-    for can't be removed, nothing is written. Signed PDFs are refused.
+    for can't be removed, nothing is written. Needs the owner password if the PDF
+    forbids changes, or forbids changing comments and has any. Signed PDFs are refused.
     """
     src = require_input(input_path, SETTINGS)
     out = prepare_output(src, output_path, "_sanitized", _overwrite(overwrite), SETTINGS)
@@ -1182,8 +1200,10 @@ def redact_pdf(
     text (scans): their words are pictures, so redact them with areas, or run ocr_pdf
     first so texts and patterns find them. originals_kept
     counts pictures or forms redacted here that other pages still show unredacted.
-    Attachments can't be searched; remove them with sanitize_pdf. Signed PDFs are
-    refused. Check the result with view_pages, and search_text on it, before sharing.
+    Attachments can't be searched; remove them with sanitize_pdf. Needs the owner
+    password if the PDF forbids changes, or forbids changing comments and one is in an
+    area. Signed PDFs are refused. Check the result with view_pages, and search_text on
+    it, before sharing.
     """
     src = require_input(input_path, SETTINGS)
     out = prepare_output(src, output_path, "_redacted", _overwrite(overwrite), SETTINGS)
@@ -1248,8 +1268,8 @@ def convert_to_pdfa(
     how pages look: text in fonts that aren't embedded (common in files from simple PDF
     generators; re-export with fonts embedded), CMYK colour, pages larger than 200
     inches; such PDFs are refused with the reasons and nothing is written. The copy has
-    no password: a protected PDF needs its owner password if it forbids copying. Signed
-    PDFs are refused.
+    no password: a protected PDF needs its owner password if it restricts anything.
+    Signed PDFs are refused.
     """
     src = require_input(input_path, SETTINGS)
     out = prepare_output(src, output_path, "_pdfa", _overwrite(overwrite), SETTINGS)
@@ -1286,6 +1306,7 @@ def add_watermark(
     degrees (default 45 at the center, 0 elsewhere); font_size auto-fits if omitted; scale is the
     image width as a share of the page. color: #rrggbb, black, gray, red, blue, green.
     layer: over (default) or under the content. Text is Latin characters only.
+    Needs the owner password if the PDF forbids changes. Signed PDFs are refused.
     """
     src = require_input(input_path, SETTINGS)
     image = require_input(image_path, SETTINGS) if image_path else None
@@ -1314,6 +1335,7 @@ def add_page_numbers(
     format uses {n} (required), {total} and zero padding like {n:06}. Page k shows
     n = k + start - 1, so start=0 with pages="2-" skips a cover page and numbers the
     next page 1. position: top-/bottom- left/center/right (default bottom-center).
+    Needs the owner password if the PDF forbids changes. Signed PDFs are refused.
     """
     src = require_input(input_path, SETTINGS)
     out = prepare_output(src, output_path, "_numbered", _overwrite(overwrite), SETTINGS)

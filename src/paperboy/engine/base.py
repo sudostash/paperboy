@@ -220,12 +220,59 @@ def _signed_field(pdf: pikepdf.Pdf) -> bool:
     return False
 
 
-def require_modify_permission(pdf: pikepdf.Pdf) -> None:
-    """Refuse changing page content when the PDF forbids it, unless opened as owner."""
-    if pdf.is_encrypted and not pdf.owner_password_matched and not pdf.allow.modify_other:
-        raise PdfUserError(
-            "This PDF does not allow changing its pages; that needs its owner password"
-        )
+def _restricted(pdf: pikepdf.Pdf) -> bool:
+    """Opened without the owner password, so the file's permissions apply."""
+    return pdf.is_encrypted and not pdf.owner_password_matched
+
+
+def require_modify_permission(pdf: pikepdf.Pdf, action: str = "changing its pages") -> None:
+    """Refuse changing the document (page content, document information) when the PDF
+    forbids it, unless opened as owner."""
+    if _restricted(pdf) and not pdf.allow.modify_other:
+        raise PdfUserError(f"This PDF does not allow {action}; that needs its owner password")
+
+
+def require_assembly_permission(pdf: pikepdf.Pdf, action: str) -> None:
+    """Refuse adding, removing, reordering or rotating pages ("document assembly") when
+    the PDF forbids it, unless opened as owner."""
+    if _restricted(pdf) and not pdf.allow.modify_assembly:
+        raise PdfUserError(f"This PDF does not allow {action}; that needs its owner password")
+
+
+def require_annotation_permission(pdf: pikepdf.Pdf, action: str) -> None:
+    """Refuse adding, changing or removing annotations (comments, links, form fields)
+    when the PDF forbids it, unless opened as owner."""
+    if _restricted(pdf) and not pdf.allow.modify_annotation:
+        raise PdfUserError(f"This PDF does not allow {action}; that needs its owner password")
+
+
+def require_no_restrictions(pdf: pikepdf.Pdf, action: str) -> None:
+    """Refuse *action*, which leaves the output without the file's restrictions (or
+    lets them be replaced), unless opened as owner or the file restricts nothing."""
+    # PDF 2.0 tells readers to ignore the accessibility bit, so it restricts nothing.
+    if _restricted(pdf) and not all(pdf.allow._replace(accessibility=True)):
+        raise PdfUserError(f"This PDF restricts what can be done with it; {action} needs "
+                           "its owner password")
+
+
+def refuse_signed(pdf: pikepdf.Pdf, action: str) -> bool:
+    """Refuse changing a digitally signed PDF, which would invalidate the signature.
+    Returns whether it has Reader usage rights, which the caller drops: they break
+    once the file changes."""
+    signed, usage_rights = signature_state(pdf)
+    if signed:
+        raise PdfUserError(f"This PDF is digitally signed; {action} would invalidate the "
+                           "signature")
+    return usage_rights
+
+
+def has_annotations(pdf: pikepdf.Pdf, pages=None) -> bool:
+    """Whether any of *pages* (indexes; all by default) lists an annotation."""
+    for i in range(len(pdf.pages)) if pages is None else pages:
+        annots = pdf.pages[i].obj.get("/Annots")
+        if isinstance(annots, pikepdf.Array) and len(annots):
+            return True
+    return False
 
 
 def is_encrypted(path: Path) -> bool:

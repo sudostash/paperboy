@@ -39,6 +39,7 @@ from ..results import RedactResult
 from .base import (
     inherit_protection,
     open_pdf,
+    require_annotation_permission,
     require_copy_permission,
     require_modify_permission,
     signature_state,
@@ -1170,6 +1171,9 @@ def redact_pdf(
                 touched[obj.objgen] = redactor.mcids
 
             annotations, dropped = _drop_annotations(pdf, wanted)
+            if any(annotations.values()):  # nothing is written yet
+                require_annotation_permission(pdf, "removing the comments, links or form "
+                                                   "fields in the areas to redact")
             gone |= dropped
             places, attachments = (_scrub(pdf, texts, patterns, match_case, whole_word,
                                           deadline) if texts or patterns else ([], 0))
