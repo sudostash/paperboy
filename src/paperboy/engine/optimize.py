@@ -88,6 +88,10 @@ def optimize_pdf(
     def attempt(dpi: int | None, quality: int, jpeg_all: bool) -> dict:
         dest = trials / f"{next(made)}.pdf"
         with open_pdf(path, settings, password) as pdf:
+            if max_image_dpi is not None or target is not None:  # pictures may change
+                require_modify_permission(pdf, "lowering the resolution of its pictures")
+            if refuse_signed(pdf, "optimizing it"):  # Reader extensions break: drop them
+                del pdf.Root.Perms
             protection = inherit_protection(pdf, password)
             counts, lowest = {"resampled": 0}, 0.0
             if dpi is not None:
@@ -165,6 +169,8 @@ def repair_pdf(
             raise PdfUserError(
                 f"Document has {pages} pages, over the {settings.max_pages} page limit"
             )
+        if refuse_signed(pdf, "repairing it"):  # Reader extensions break: drop them
+            del pdf.Root.Perms
         protection = inherit_protection(pdf, password)
         pdf.save(str(out), encryption=protection.encryption)
     return protection.report({"output": str(out), "pages": pages})

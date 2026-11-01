@@ -536,7 +536,8 @@ def encrypt_pdf(
     permissions. algorithm: AES-256 (default), AES-128, RC4-128, RC4-40.
     allow_print/copy/modify set viewer-enforced restrictions. Use current_password
     if the input is already encrypted; re-encrypting a PDF that restricts anything
-    needs its owner password (new permissions would lift the old ones).
+    needs its owner password (new permissions would lift the old ones). Signed PDFs are
+    refused.
     """
     src = require_input(input_path, SETTINGS)
     out = prepare_output(src, output_path, "_encrypted", _overwrite(overwrite), SETTINGS)
@@ -556,7 +557,7 @@ def decrypt_pdf(
 ) -> DecryptResult:
     """Remove the password from a PDF, given its correct password. Not a cracker.
     A PDF that restricts anything (printing, copying, changes) needs its owner
-    password, since the copy has no restrictions."""
+    password, since the copy has no restrictions. Signed PDFs are refused."""
     src = require_input(input_path, SETTINGS)
     out = prepare_output(src, output_path, "_decrypted", _overwrite(overwrite), SETTINGS)
     return engine.decrypt_pdf(src, out, password, SETTINGS)
@@ -835,7 +836,8 @@ def optimize_pdf(
     it until the file fits a size (target_size_mb, down to 72 dpi). Text and drawings
     stay sharp, except in scans, where the text is itself a picture and can become
     hard to read at low resolutions. Pictures whose placement can't be worked out,
-    masks, palettes and CMYK are left as they are."""
+    masks, palettes and CMYK are left as they are. Lowering resolution needs the owner
+    password if the PDF forbids changes. Signed PDFs are refused."""
     src = require_input(input_path, SETTINGS)
     out = prepare_output(src, output_path, "_optimized", _overwrite(overwrite), SETTINGS)
     return engine.optimize_pdf(src, out, SETTINGS, linearize, compress, password,
@@ -850,7 +852,8 @@ def repair_pdf(
     password: str | None = None,
     overwrite: bool | None = None,
 ) -> RepairResult:
-    """Rebuild a damaged PDF's structure by reading and rewriting it."""
+    """Rebuild a damaged PDF's structure by reading and rewriting it. Signed PDFs are
+    refused (rewriting invalidates the signature)."""
     src = require_input(input_path, SETTINGS)
     out = prepare_output(src, output_path, "_repaired", _overwrite(overwrite), SETTINGS)
     return engine.repair_pdf(src, out, SETTINGS, password)

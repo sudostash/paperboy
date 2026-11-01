@@ -19,6 +19,7 @@ from ..results import (
 from .base import (
     combine_protections,
     copy_docinfo,
+    drop_copied_signatures,
     inherit_protection,
     open_pdf,
     refuse_signed,
@@ -49,6 +50,7 @@ def rearrange_pages(
         for i in order:
             dst.pages.append(src.pages[i])
         copy_docinfo(src, dst)
+        drop_copied_signatures(dst)
         protection = inherit_protection(src, password)
         dst.save(str(out), encryption=protection.encryption)
     return protection.report(
@@ -69,6 +71,7 @@ def delete_pages(
         for i in keep:
             dst.pages.append(src.pages[i])
         copy_docinfo(src, dst)
+        drop_copied_signatures(dst)
         protection = inherit_protection(src, password)
         dst.save(str(out), encryption=protection.encryption)
     return protection.report(
@@ -85,6 +88,7 @@ def extract_pages(
         for i in idx:
             dst.pages.append(src.pages[i])
         copy_docinfo(src, dst)
+        drop_copied_signatures(dst)
         protection = inherit_protection(src, password)
         dst.save(str(out), encryption=protection.encryption)
     return protection.report({"output": str(out), "pages": len(idx)})
@@ -141,6 +145,7 @@ def merge_pdfs(
                 total += len(src.pages)
                 protections.append(inherit_protection(src, pw))
         protection = combine_protections(protections)
+        drop_copied_signatures(dst)
         dst.save(str(out), encryption=protection.encryption)
     finally:
         dst.close()
@@ -177,6 +182,7 @@ def split_pdf(
             for i in idx:
                 dst.pages.append(src.pages[i])
             copy_docinfo(src, dst)
+            drop_copied_signatures(dst)
             dst.save(str(out), encryption=protection.encryption)
             dst.close()
             outputs.append(str(out))

@@ -223,21 +223,24 @@ All notable changes to this project are documented here. The format follows
   - document assembly (adding, removing, reordering or rotating pages): `rearrange_pages`,
     `delete_pages`, `extract_pages`, `rotate_pages`, `split_pdf`, `insert_blank_pages`,
     `n_up`, and each input of `merge_pdfs` and `interleave_pdfs`;
-  - changing the document: `crop_pages`, `set_metadata`, `flatten_pdf`;
+  - changing the document: `crop_pages`, `set_metadata`, `flatten_pdf`, and
+    `optimize_pdf` when it lowers picture resolution (`max_image_dpi`, `target_size_mb`);
   - changing annotations (comments, links, form fields): `flatten_pdf` and `fill_form`
     with `flatten` (which now need both this and changing the document), `resize_pages`
     when the pages have annotations, `sanitize_pdf` when the PDF has any, `redact_pdf`
-    when one is in an area;
+    when one is in an area or the texts and patterns are found in a comment or field;
   - lifting them altogether: `decrypt_pdf`, re-encrypting with `encrypt_pdf`, and
     `convert_to_pdfa` need the owner password when the PDF restricts anything (printing,
     changes, copying), not only copying.
 - Signed PDFs are refused by every tool that rewrites the signed document, which would
   invalidate the signature: `rotate_pages`, `crop_pages`, `resize_pages`,
-  `insert_blank_pages`, `set_metadata`, `flatten_pdf`, `add_watermark` and
-  `add_page_numbers` (as other editing tools already were). They also drop Reader usage
-  rights, which break once the file changes. Tools that build a new document from some
-  pages (`extract_pages`, `split_pdf`, `merge_pdfs`, ...) don't carry the signature over.
-- `split_pdf` no longer creates the output folder when it refuses the input.
+  `insert_blank_pages`, `set_metadata`, `flatten_pdf`, `add_watermark`,
+  `add_page_numbers`, `optimize_pdf`, `repair_pdf`, `encrypt_pdf` and `decrypt_pdf` (as
+  other editing tools already were). They also drop Reader usage rights, which break once
+  the file changes. Tools that build a new document from some pages (`extract_pages`,
+  `delete_pages`, `rearrange_pages`, `split_pdf`, `merge_pdfs`, `interleave_pdfs`) leave
+  the signature behind: copied signature fields lose their value (and the signer's
+  certificate), so the new document isn't shown as signed with a broken signature.
 - Copy-restricted PDFs: `extract_text`, `decrypt_pdf`, and `encrypt_pdf` with
   `current_password` now need the owner password when the PDF forbids copying (as
   `render_pages` already did); the open password is enough when copying is allowed.

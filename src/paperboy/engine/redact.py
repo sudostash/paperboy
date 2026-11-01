@@ -517,6 +517,13 @@ def _scrub(pdf: pikepdf.Pdf, texts: list[str], patterns: list[str], match_case: 
                 xmp_hits.add(t - len(entries))
             else:
                 stream_spans.setdefault(t - len(entries) - len(xmp), []).append((start, end))
+    # Comments and form fields change only if their text matches: check before any does.
+    touched = {entries[i][3] for i in spans} | {
+        streams[i][2] for i in range(len(streams))
+        if stream_spans.get(i) or i in hidden or streams[i][3] is None}
+    if touched & {"comments", "form fields", "XFA form data"}:
+        require_annotation_permission(pdf, "replacing the text in its comments and form "
+                                           "fields")
     places = set()
     redrawn = False
     renamed = []

@@ -8,7 +8,7 @@ import pikepdf
 from ..config import Settings
 from ..errors import PdfUserError
 from ..results import DecryptResult, EncryptResult
-from .base import open_pdf, open_with_password, require_no_restrictions
+from .base import open_pdf, open_with_password, refuse_signed, require_no_restrictions
 
 # algorithm -> (revision R, use AES)
 _ALGORITHMS = {
@@ -79,6 +79,8 @@ def encrypt_pdf(
     with open_pdf(path, settings, current_password) as pdf:
         # Re-encrypting sets new permissions and a new owner password: lifting the old ones.
         require_no_restrictions(pdf, "re-encrypting it")
+        if refuse_signed(pdf, "encrypting it"):  # Reader extensions break: drop them
+            del pdf.Root.Perms
         pages = len(pdf.pages)
         pdf.save(str(out), encryption=encryption)
     return {"output": str(out), "algorithm": algorithm, "pages": pages}
@@ -96,6 +98,8 @@ def decrypt_pdf(path: Path, out: Path, password: str, settings: Settings) -> Dec
         if not pdf.is_encrypted:
             raise PdfUserError("This PDF is not encrypted")
         require_no_restrictions(pdf, "removing its password")
+        if refuse_signed(pdf, "removing its password"):  # Reader extensions break
+            del pdf.Root.Perms
         if len(pdf.pages) > settings.max_pages:
             raise PdfUserError(
                 f"Document has {len(pdf.pages)} pages, over the "

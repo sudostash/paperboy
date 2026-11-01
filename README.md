@@ -246,17 +246,19 @@ All configuration is environment variables. Sensible defaults; nothing is requir
     (`rearrange_pages`, `delete_pages`, `extract_pages`, `rotate_pages`, `split_pdf`,
     `insert_blank_pages`, `n_up`, and each input of `merge_pdfs` and `interleave_pdfs`).
   - **Changing the document:** `crop_pages`, `resize_pages`, `n_up`, `set_metadata`,
-    `flatten_pdf`, stamps, redaction, sanitizing and OCR.
+    `flatten_pdf`, stamps, redaction, sanitizing, OCR, and `optimize_pdf` when it lowers
+    picture resolution.
   - **Changing annotations** (comments, links, form fields): `flatten_pdf`, `fill_form` with
-    `flatten`, and `resize_pages`, `sanitize_pdf` and `redact_pdf` when they would move or
-    remove annotations.
+    `flatten`, and `resize_pages`, `sanitize_pdf` and `redact_pdf` when they would move,
+    change or remove annotations.
   - **Any restriction at all:** `decrypt_pdf`, re-encrypting with `encrypt_pdf`, and
     `convert_to_pdfa` (which can't be encrypted) would lift every restriction, so they need
     the owner password unless the PDF restricts nothing.
 
   Digitally signed PDFs are refused by every tool that would rewrite the signed document
   (and so invalidate its signature); Reader usage rights are dropped, since they break once
-  the file changes. Outputs that keep the input's protection (rotate, merge, split, ...) keep
+  the file changes. A new document made from a signed PDF's pages (extract, split, merge,
+  ...) is not signed: copied signature fields lose their value. Outputs that keep the input's protection (rotate, merge, split, ...) keep
   its restrictions too.
 - **Non-ASCII passwords work with every encryption scheme.** RC4/AES-128 files store passwords
   in PDFDocEncoding and AES-256 in UTF-8; every tool opens files the same way (through pikepdf)

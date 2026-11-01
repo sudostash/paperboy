@@ -23,6 +23,7 @@ from ..results import (
 from .base import (
     combine_protections,
     copy_docinfo,
+    drop_copied_signatures,
     has_annotations,
     inherit_protection,
     open_pdf,
@@ -426,6 +427,7 @@ def interleave_pdfs(fronts: Path, backs: Path, out: Path, settings: Settings,
                 if k < nb:
                     dst.pages.append(back.pages[order[k]])
             copy_docinfo(front, dst)
+            drop_copied_signatures(dst)
             protection = combine_protections([inherit_protection(front, front_password),
                                               inherit_protection(back, back_password)])
             dst.save(str(out), encryption=protection.encryption)

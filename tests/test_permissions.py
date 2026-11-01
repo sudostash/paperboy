@@ -13,7 +13,7 @@ import pytest
 from pikepdf import Dictionary, Name
 
 from paperboy import engine as E
-from paperboy.engine.base import has_annotations, require_no_restrictions
+from paperboy.engine.base import has_annotations, require_no_restrictions, signature_state
 from paperboy.errors import PdfUserError
 
 from conftest import HAS_QPDF, page_labels
@@ -56,6 +56,21 @@ def _note(pdf, page=0, rect=(100, 100, 200, 140)):
 def _signed(pdf):
     pdf.Root.Perms = Dictionary(DocMDP=pdf.make_indirect(Dictionary(
         Type=Name.Sig, ByteRange=[0, 1, 2, 3])))
+
+
+def _signed_field(pdf):
+    """A signature the way signing software writes it: a signature field whose widget
+    is on page 1, its value a signature dictionary."""
+    sig = pdf.make_indirect(Dictionary(Type=Name.Sig, Filter=Name("/Adobe.PPKLite"),
+                                       ByteRange=[0, 1, 2, 3],
+                                       Contents=pikepdf.String(b"\x30\x82PKCS7")))
+    field = pdf.make_indirect(Dictionary(FT=Name.Sig, T=pikepdf.String("Signature1"),
+                                         V=sig))
+    widget = pdf.make_indirect(Dictionary(Type=Name.Annot, Subtype=Name.Widget,
+                                          Rect=[72, 72, 272, 122], F=4, Parent=field))
+    field.Kids = pikepdf.Array([widget])
+    pdf.pages[0].obj.Annots = pikepdf.Array([widget])
+    pdf.Root.AcroForm = Dictionary(Fields=pikepdf.Array([field]), SigFlags=3)
 
 
 def _usage_rights(pdf):
@@ -161,6 +176,49 @@ def test_rotating_is_assembly_not_a_change_to_the_pages(lock, tmp_path, settings
     E.rotate_pages(lock(NO_CHANGES), tmp_path / "r.pdf", 90, settings, password="user")
 
 
+def _photo_pdf(path):
+    from PIL import Image
+    from reportlab.pdfgen import canvas
+    img = path.with_suffix(".png")
+    Image.new("RGB", (1200, 1200), (200, 30, 30)).save(img)
+    c = canvas.Canvas(str(path))
+    c.drawImage(str(img), 72, 400, 144, 144)  # 600 dpi
+    c.showPage()
+    c.save()
+    return path
+
+
+@pytest.mark.parametrize("args", [{"max_image_dpi": 72}, {"target_size_mb": 0.01}])
+def test_lowering_picture_resolution_needs_permission_to_change_the_pages(args, lock,
+                                                                          tmp_path, settings):
+    src = lock(NO_CHANGES, src=_photo_pdf(tmp_path / "photo.pdf"))
+    with pytest.raises(PdfUserError, match="does not allow lowering the resolution"):
+        E.optimize_pdf(src, tmp_path / "o.pdf", settings, password="user", **args)
+    assert not (tmp_path / "o.pdf").exists()
+    E.optimize_pdf(src, tmp_path / "o.pdf", settings, password="user")  # lossless: fine
+    res = E.optimize_pdf(src, tmp_path / "o.pdf", settings, password="owner", **args)
+    if "max_image_dpi" in args:  # (the target is met before any picture needs lowering)
+        assert res["images_resampled"] == 1
+
+
+@pytest.mark.parametrize("revision", [2, 3, 4])
+def test_older_encryption_keeps_its_restrictions(revision, make_pdf, tmp_path, settings):
+    # R2 has no assembly bit: changing the document (bit 4) covers it.
+    out = tmp_path / "old.pdf"
+    with pikepdf.open(make_pdf("p.pdf", 2)) as pdf:
+        pdf.save(out, encryption=pikepdf.Encryption(
+            user="user", owner="owner", R=revision, aes=False, metadata=False,
+            allow=pikepdf.Permissions(modify_assembly=False, modify_other=False)))
+    with pytest.raises(PdfUserError, match="does not allow deleting pages"):
+        E.delete_pages(out, tmp_path / "d.pdf", "1", settings, "user")
+    with pytest.raises(PdfUserError, match="does not allow cropping"):
+        E.crop_pages(out, tmp_path / "c.pdf", settings, margins=[5, 5, 5, 5], password="user")
+    with pytest.raises(PdfUserError, match="restricts what can be done"):
+        E.decrypt_pdf(out, tmp_path / "plain.pdf", "user", settings)
+    E.delete_pages(out, tmp_path / "d.pdf", "1", settings, "owner")
+    E.decrypt_pdf(out, tmp_path / "plain.pdf", "owner", settings)
+
+
 # --- annotations -------------------------------------------------------------------------
 
 
@@ -229,6 +287,32 @@ def test_redacting_where_an_annotation_is_needs_permission_to_remove_it(make_pdf
     assert res["pages"][0]["annotations_removed"] == 1
 
 
+def test_redacting_text_found_in_a_comment_needs_permission_to_change_it(lock, tmp_path,
+                                                                        settings):
+    from reportlab.pdfgen import canvas
+    plain = tmp_path / "secret.pdf"
+    c = canvas.Canvas(str(plain))
+    c.drawString(72, 720, "code SECRET42")
+    c.showPage()
+    c.drawString(72, 720, "page two")
+    c.showPage()
+    c.save()
+
+    def note(pdf):  # on page 2, outside the pages searched; its text isn't drawn
+        pdf.pages[1].obj.Annots = pikepdf.Array([pdf.make_indirect(Dictionary(
+            Type=Name.Annot, Subtype=Name.Text, Rect=[300, 300, 320, 320],
+            Contents=pikepdf.String("reminder: SECRET42")))])
+    src = lock(NO_ANNOTATIONS, src=_edit(plain, note))
+    with pytest.raises(PdfUserError, match="replacing the text in its comments"):
+        E.redact_pdf(src, tmp_path / "r.pdf", settings, texts=["SECRET42"], pages="1",
+                     password="user")
+    assert not (tmp_path / "r.pdf").exists()
+    E.redact_pdf(src, tmp_path / "r.pdf", settings, texts=["page two"], password="user")
+    E.redact_pdf(src, tmp_path / "r.pdf", settings, texts=["SECRET42"], password="owner")
+    with pikepdf.open(tmp_path / "r.pdf", password="owner") as pdf:
+        assert str(pdf.pages[1].obj.Annots[0].Contents) == "reminder: [redacted]"
+
+
 def test_sanitizing_annotations_needs_permission_to_change_them(make_pdf, lock, tmp_path,
                                                                 settings):
     src = lock(NO_ANNOTATIONS, src=_edit(make_pdf("noted.pdf", 1), _note))
@@ -261,14 +345,18 @@ IN_PLACE = {
     "set_metadata": lambda src, out, s: E.set_metadata(src, out, {"title": "T"}, s),
     "add_watermark": lambda src, out, s: E.add_watermark(src, out, s, text="DRAFT"),
     "add_page_numbers": lambda src, out, s: E.add_page_numbers(src, out, s),
+    "optimize_pdf": lambda src, out, s: E.optimize_pdf(src, out, s),
+    "repair_pdf": lambda src, out, s: E.repair_pdf(src, out, s),
+    "encrypt_pdf": lambda src, out, s: E.encrypt_pdf(src, out, "new", s),
 }
 if HAS_QPDF:
     IN_PLACE["flatten_pdf"] = lambda src, out, s: E.flatten_pdf(src, out, s)
 
 
+@pytest.mark.parametrize("sign", [_signed, _signed_field], ids=["certified", "field"])
 @pytest.mark.parametrize("tool", sorted(IN_PLACE))
-def test_tools_that_change_a_signed_pdf_refuse_it(tool, make_pdf, tmp_path, settings):
-    src = _edit(make_pdf("signed.pdf", 2), _signed)
+def test_tools_that_change_a_signed_pdf_refuse_it(tool, sign, make_pdf, tmp_path, settings):
+    src = _edit(make_pdf("signed.pdf", 2), sign)
     with pytest.raises(PdfUserError, match="digitally signed.*invalidate the signature"):
         IN_PLACE[tool](src, tmp_path / "out.pdf", settings)
     assert not (tmp_path / "out.pdf").exists()
@@ -279,18 +367,44 @@ def test_tools_that_change_a_pdf_drop_its_reader_usage_rights(tool, make_pdf, tm
                                                               settings):
     src = _edit(make_pdf("extended.pdf", 2), _usage_rights)
     IN_PLACE[tool](src, tmp_path / "out.pdf", settings)
-    with pikepdf.open(tmp_path / "out.pdf") as pdf:
+    with pikepdf.open(tmp_path / "out.pdf", password="new") as pdf:  # (encrypt_pdf's)
         assert "/Perms" not in pdf.Root  # Reader would call the changed file damaged
 
 
-@pytest.mark.parametrize("tool", ["extract_pages", "delete_pages", "rearrange_pages"])
-def test_new_documents_made_from_a_signed_pdfs_pages_are_allowed(tool, make_pdf, tmp_path,
-                                                                 settings):
-    # The signature isn't carried over: the output is a new, unsigned document.
-    src = _edit(make_pdf("signed.pdf", 3), _signed)
-    ASSEMBLY[tool](src, tmp_path / "out.pdf", settings, None)
-    with pikepdf.open(tmp_path / "out.pdf") as pdf:
+def test_removing_the_password_of_a_signed_pdf_is_refused(make_pdf, tmp_path, settings):
+    signed = _edit(make_pdf("signed.pdf", 1), _signed_field)
+    src = _lock(signed, tmp_path / "locked.pdf", OPEN)
+    with pytest.raises(PdfUserError, match="digitally signed"):
+        E.decrypt_pdf(src, tmp_path / "plain.pdf", "user", settings)
+    extended = _lock(_edit(make_pdf("ur.pdf", 1), _usage_rights), tmp_path / "ur-l.pdf", OPEN)
+    E.decrypt_pdf(extended, tmp_path / "plain.pdf", "user", settings)
+    with pikepdf.open(tmp_path / "plain.pdf") as pdf:
         assert "/Perms" not in pdf.Root
+
+
+NEW_DOCUMENT = {
+    **{tool: ASSEMBLY[tool] for tool in ("extract_pages", "delete_pages", "rearrange_pages")},
+    "merge_pdfs": lambda src, out, s, pw: E.merge_pdfs([src, src], out, s),
+    "interleave_pdfs": lambda src, out, s, pw: E.interleave_pdfs(src, src, out, s),
+    "split_pdf": lambda src, out, s, pw: E.split_pdf(src, out.with_suffix(""), s,
+                                                     ranges="1-2"),
+}
+
+
+@pytest.mark.parametrize("tool", sorted(NEW_DOCUMENT))
+def test_new_documents_made_from_a_signed_pdfs_pages_are_not_signed(tool, make_pdf, tmp_path,
+                                                                    settings):
+    # The signature is left behind: the signer's data would only show as broken.
+    src = _edit(make_pdf("signed.pdf", 3), _signed_field)
+    out = tmp_path / "out.pdf"
+    NEW_DOCUMENT[tool](src, out, settings, None)
+    out = out if out.exists() else next(out.with_suffix("").iterdir())
+    with pikepdf.open(out) as pdf:
+        assert signature_state(pdf) == (False, False)
+        assert all(b"PKCS7" not in bytes(o.get("/Contents", b"")) for o in pdf.objects
+                   if isinstance(o, Dictionary))
+    with pikepdf.open(src) as pdf:  # the input stays signed
+        assert signature_state(pdf)[0]
 
 
 # --- lifting the restrictions ------------------------------------------------------------

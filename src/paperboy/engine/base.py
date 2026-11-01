@@ -266,6 +266,23 @@ def refuse_signed(pdf: pikepdf.Pdf, action: str) -> bool:
     return usage_rights
 
 
+def drop_copied_signatures(pdf: pikepdf.Pdf) -> None:
+    """Remove the signature values that signature fields brought along with copied
+    pages. A new document made from a signed PDF's pages isn't signed: the old
+    signature (and the signer's certificate) would only show as broken."""
+    for page in pdf.pages:
+        annots = page.obj.get("/Annots")
+        for annot in annots if isinstance(annots, pikepdf.Array) else []:
+            field, depth = annot, 0
+            # The field is the widget itself or, up its parents, the one that has /FT.
+            while isinstance(field, pikepdf.Dictionary) and "/FT" not in field and depth < 32:
+                field, depth = field.get("/Parent"), depth + 1
+            if isinstance(field, pikepdf.Dictionary) and field.get("/FT") == pikepdf.Name.Sig:
+                for key in ("/V", "/Lock", "/SV"):
+                    if key in field:
+                        del field[key]
+
+
 def has_annotations(pdf: pikepdf.Pdf, pages=None) -> bool:
     """Whether any of *pages* (indexes; all by default) lists an annotation."""
     for i in range(len(pdf.pages)) if pages is None else pages:
