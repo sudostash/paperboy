@@ -38,7 +38,7 @@ import pikepdf
 from ..config import Settings
 from ..errors import DependencyError, PdfUserError
 from ..results import PdfaResult
-from .base import open_pdf, require_copy_permission, signature_state
+from .base import open_pdf, require_no_restrictions, signature_state
 from .pdfa_content import TooComplex, Usage
 from .redact import _field_of
 from .streams import _DAMAGED as DAMAGED
@@ -887,7 +887,7 @@ def convert_to_pdfa(path: Path, out: Path, settings: Settings,
     with open_pdf(path.read_bytes(), settings, password) as pdf:
         protected = pdf.is_encrypted
         if protected:  # PDF/A can't be encrypted: the copy opens and copies freely
-            require_copy_permission(pdf, "making a PDF/A copy (which can't be encrypted)")
+            require_no_restrictions(pdf, "making a PDF/A copy (which can't be encrypted)")
         signed, _ = signature_state(pdf)
         if signed:
             raise PdfUserError("This PDF is digitally signed; converting it would invalidate "

@@ -104,6 +104,7 @@ body {
   border-top: 1px solid var(--line);
 }
 .call pre.result { color: var(--ok); max-height: 150px; overflow: hidden; }
+.call pre.result.refused { color: var(--warn); background: var(--warn-soft); white-space: pre-wrap; }
 
 .badge {
   font-size: 11px;

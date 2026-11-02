@@ -16,7 +16,15 @@ from ..results import (
     RotateResult,
     SplitResult,
 )
-from .base import combine_protections, copy_docinfo, inherit_protection, open_pdf
+from .base import (
+    combine_protections,
+    copy_docinfo,
+    drop_copied_signatures,
+    inherit_protection,
+    open_pdf,
+    refuse_signed,
+    require_assembly_permission,
+)
 
 
 def rearrange_pages(
@@ -29,6 +37,7 @@ def rearrange_pages(
 ) -> RearrangeResult:
     """Reorder/duplicate/reverse pages. ``page_order`` is the new order, e.g. "3,1,2"."""
     with open_pdf(path, settings, password) as src:
+        require_assembly_permission(src, "reordering its pages")
         total = len(src.pages)
         order = parse_pages(page_order, total)
         if append_unlisted:
@@ -41,6 +50,7 @@ def rearrange_pages(
         for i in order:
             dst.pages.append(src.pages[i])
         copy_docinfo(src, dst)
+        drop_copied_signatures(dst)
         protection = inherit_protection(src, password)
         dst.save(str(out), encryption=protection.encryption)
     return protection.report(
@@ -51,6 +61,7 @@ def delete_pages(
     path: Path, out: Path, pages: str, settings: Settings, password: str | None = None
 ) -> DeleteResult:
     with open_pdf(path, settings, password) as src:
+        require_assembly_permission(src, "deleting pages")
         total = len(src.pages)
         drop = set(parse_pages(pages, total, dedupe=True))
         keep = [i for i in range(total) if i not in drop]
@@ -60,6 +71,7 @@ def delete_pages(
         for i in keep:
             dst.pages.append(src.pages[i])
         copy_docinfo(src, dst)
+        drop_copied_signatures(dst)
         protection = inherit_protection(src, password)
         dst.save(str(out), encryption=protection.encryption)
     return protection.report(
@@ -70,11 +82,13 @@ def extract_pages(
     path: Path, out: Path, pages: str, settings: Settings, password: str | None = None
 ) -> ExtractResult:
     with open_pdf(path, settings, password) as src:
+        require_assembly_permission(src, "extracting pages")
         idx = parse_pages(pages, len(src.pages))
         dst = pikepdf.new()
         for i in idx:
             dst.pages.append(src.pages[i])
         copy_docinfo(src, dst)
+        drop_copied_signatures(dst)
         protection = inherit_protection(src, password)
         dst.save(str(out), encryption=protection.encryption)
     return protection.report({"output": str(out), "pages": len(idx)})
@@ -92,10 +106,14 @@ def rotate_pages(
     if degrees % 90 != 0:
         raise PdfUserError("degrees must be a multiple of 90")
     with open_pdf(path, settings, password) as src:
+        require_assembly_permission(src, "rotating its pages")
+        usage_rights = refuse_signed(src, "rotating its pages")
         total = len(src.pages)
         targets = set(parse_pages(pages, total, dedupe=True)) if pages else set(range(total))
         for i in targets:
             pikepdf.Page(src.pages[i]).rotate(degrees, relative=True)
+        if usage_rights:  # Reader extensions break once the file changes; drop them
+            del src.Root.Perms
         protection = inherit_protection(src, password)
         src.save(str(out), encryption=protection.encryption)
     return protection.report({"output": str(out), "rotated_pages": sorted(i + 1 for i in targets)})
@@ -118,6 +136,7 @@ def merge_pdfs(
         for p in inputs:
             pw = passwords.get(str(p))
             with open_pdf(p, settings, pw) as src:
+                require_assembly_permission(src, f"merging its pages ({p.name})")
                 if total + len(src.pages) > settings.max_pages:
                     raise PdfUserError(
                         f"Merged document would exceed the {settings.max_pages} page limit"
@@ -126,6 +145,7 @@ def merge_pdfs(
                 total += len(src.pages)
                 protections.append(inherit_protection(src, pw))
         protection = combine_protections(protections)
+        drop_copied_signatures(dst)
         dst.save(str(out), encryption=protection.encryption)
     finally:
         dst.close()
@@ -141,8 +161,8 @@ def split_pdf(
     overwrite: bool = False,
 ) -> SplitResult:
     """Split into one file per range (``"1-3;4-6;7-"``) or one file per page."""
-    out_dir.mkdir(parents=True, exist_ok=True)
     with open_pdf(path, settings, password) as src:
+        require_assembly_permission(src, "splitting it")
         total = len(src.pages)
         groups = (
             [parse_pages(r, total) for r in ranges.split(";") if r.strip()]
@@ -151,6 +171,7 @@ def split_pdf(
         )
         if not groups:
             raise PdfUserError("No ranges to split")
+        out_dir.mkdir(parents=True, exist_ok=True)
         protection = inherit_protection(src, password)
         outputs = []
         for n, idx in enumerate(groups, 1):
@@ -161,6 +182,7 @@ def split_pdf(
             for i in idx:
                 dst.pages.append(src.pages[i])
             copy_docinfo(src, dst)
+            drop_copied_signatures(dst)
             dst.save(str(out), encryption=protection.encryption)
             dst.close()
             outputs.append(str(out))

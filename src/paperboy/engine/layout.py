@@ -23,8 +23,13 @@ from ..results import (
 from .base import (
     combine_protections,
     copy_docinfo,
+    drop_copied_signatures,
+    has_annotations,
     inherit_protection,
     open_pdf,
+    refuse_signed,
+    require_annotation_permission,
+    require_assembly_permission,
     require_modify_permission,
 )
 from .search import _content_size
@@ -126,6 +131,8 @@ def crop_pages(path: Path, out: Path, settings: Settings, margins: list | None =
             _number(name, m, 0, MAX_SIDE / scale) * scale
             for name, m in zip(("top", "right", "bottom", "left"), margins, strict=True))
     with open_pdf(path, settings, password) as src:
+        require_modify_permission(src, "cropping its pages")
+        usage_rights = refuse_signed(src, "cropping its pages")
         total = len(src.pages)
         targets = parse_pages(pages, total, dedupe=True) if pages else list(range(total))
         sizes = []
@@ -149,6 +156,8 @@ def crop_pages(path: Path, out: Path, settings: Settings, margins: list | None =
                                    f"{i + 1} ({w:.0f} x {h:.0f} pt)")
             page.obj.CropBox = pikepdf.Array([round(v, 3) for v in box])
             sizes.append(_shown(page))
+        if usage_rights:  # Reader extensions break once the file changes; drop them
+            del src.Root.Perms
         protection = inherit_protection(src, password)
         src.save(str(out), encryption=protection.encryption)
     return protection.report({"output": str(out), "pages": [i + 1 for i in targets],
@@ -233,8 +242,12 @@ def resize_pages(path: Path, out: Path, settings: Settings, size: str | None = N
     paper = _paper(size, width, height, unit)
     with open_pdf(path, settings, password) as src:
         require_modify_permission(src)
+        usage_rights = refuse_signed(src, "resizing its pages")
         total = len(src.pages)
         targets = parse_pages(pages, total, dedupe=True) if pages else list(range(total))
+        if has_annotations(src, targets):  # they move and scale with the content
+            require_annotation_permission(src, "moving its comments, links and form "
+                                               "fields (which resizing does)")
         scales, done = [], set()
         _own_annotations(src, targets)
         for i in targets:
@@ -261,6 +274,8 @@ def resize_pages(path: Path, out: Path, settings: Settings, size: str | None = N
                 if key in page.obj:
                     del page.obj[key]
             scales.append(round(s / u, 4))
+        if usage_rights:  # Reader extensions break once the file changes; drop them
+            del src.Root.Perms
         protection = inherit_protection(src, password)
         src.save(str(out), encryption=protection.encryption)
     return protection.report({"output": str(out), "pages": [i + 1 for i in targets],
@@ -282,6 +297,7 @@ def n_up(path: Path, out: Path, settings: Settings, per_sheet: int = 2,
         raise PdfUserError(f"size must be one of: {', '.join(PAPER)}")
     with open_pdf(path, settings, password) as src:
         require_modify_permission(src)
+        require_assembly_permission(src, "rearranging its pages onto sheets")
         total = len(src.pages)
         if not total:
             raise PdfUserError("This PDF has no pages")
@@ -349,6 +365,8 @@ def insert_blank_pages(path: Path, out: Path, settings: Settings, after: list,
     if isinstance(count, bool) or not isinstance(count, int) or not 1 <= count <= 100:
         raise PdfUserError("count must be 1 to 100")
     with open_pdf(path, settings, password) as src:
+        require_assembly_permission(src, "inserting pages")
+        usage_rights = refuse_signed(src, "inserting pages")
         total = len(src.pages)
         if not total:
             raise PdfUserError("This PDF has no pages")
@@ -371,6 +389,8 @@ def insert_blank_pages(path: Path, out: Path, settings: Settings, after: list,
         for n in sorted(after):
             inserted += [n + shift + k + 1 for k in range(count)]
             shift += count
+        if usage_rights:  # Reader extensions break once the file changes; drop them
+            del src.Root.Perms
         protection = inherit_protection(src, password)
         src.save(str(out), encryption=protection.encryption)
         pages = len(src.pages)
@@ -390,6 +410,8 @@ def interleave_pdfs(fronts: Path, backs: Path, out: Path, settings: Settings,
     try:
         with open_pdf(fronts, settings, front_password) as front, \
                 open_pdf(backs, settings, back_password) as back:
+            require_assembly_permission(front, "combining its pages (the fronts)")
+            require_assembly_permission(back, "combining its pages (the backs)")
             nf, nb = len(front.pages), len(back.pages)
             if nb not in (nf, nf - 1):
                 raise PdfUserError(f"The fronts have {nf} pages and the backs {nb}; the "
@@ -405,6 +427,7 @@ def interleave_pdfs(fronts: Path, backs: Path, out: Path, settings: Settings,
                 if k < nb:
                     dst.pages.append(back.pages[order[k]])
             copy_docinfo(front, dst)
+            drop_copied_signatures(dst)
             protection = combine_protections([inherit_protection(front, front_password),
                                               inherit_protection(back, back_password)])
             dst.save(str(out), encryption=protection.encryption)

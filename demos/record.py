@@ -140,8 +140,11 @@ async def run_scenario(slug: str, scenario: dict, out: Path = OUT) -> dict:
                     (out / slug / name).parent.mkdir(exist_ok=True)
                     (out / slug / name).write_bytes(base64.b64decode(item.data))
                     step["images"].append(name)
-                if step["isError"]:
-                    failure = f"{slug}: {step['tool']} failed: {step['result']}"
+                # A step can show a refusal on purpose (expectError); any other is a bug.
+                if step["isError"] != bool(step.get("expectError")):
+                    failure = (f"{slug}: {step['tool']} failed: {step['result']}"
+                               if step["isError"] else
+                               f"{slug}: {step['tool']} was expected to be refused")
             steps.append(step)
     # Raised outside the session so it isn't wrapped in the client's ExceptionGroup.
     if failure:

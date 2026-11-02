@@ -7,7 +7,7 @@ import pikepdf
 
 from ..config import Settings
 from ..results import MetadataResult, SetMetadataResult
-from .base import inherit_protection, open_pdf
+from .base import inherit_protection, open_pdf, refuse_signed, require_modify_permission
 
 # Friendly names mapped to XMP/docinfo keys pikepdf understands.
 _FIELDS = {
@@ -81,6 +81,10 @@ def set_metadata(
     # dc:creator is an ordered array (rdf:Seq); it must be assigned a list.
     seq_fields = {"author"}
     with open_pdf(path, settings, password) as pdf:
+        require_modify_permission(pdf, "changing its document information")
+        usage_rights = refuse_signed(pdf, "changing its document information")
+        if usage_rights:  # Reader extensions break once the file changes; drop them
+            del pdf.Root.Perms
         # set_pikepdf_as_editor=False keeps pikepdf from restamping Producer/
         # MetadataDate and emitting "will be overwritten" warnings.
         with pdf.open_metadata(set_pikepdf_as_editor=False) as m:

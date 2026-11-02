@@ -454,6 +454,28 @@ SCENARIOS: dict[str, dict] = {
                                     "copied."},
         ],
     },
+    "permissions": {
+        "title": "Respects what a PDF allows",
+        "subtitle": "A PDF that forbids page changes stays that way, unless you type its "
+                    "owner password.",
+        "files": ["lease.pdf"],
+        "prompt": "Remove the draft notes page (page 4) from lease.pdf before I send it.",
+        "steps": [
+            {"type": "call", "tool": "delete_pages",
+             "args": {"input_path": "lease.pdf", "pages": "4"}, "expectError": True},
+            {"type": "say", "text": "lease.pdf opens freely, but its author locked page "
+                                    "changes: removing a page needs the owner password. If "
+                                    "you have it, type it on Paperboy's page - it won't "
+                                    "pass through this chat."},
+            {"type": "call", "tool": "delete_pages",
+             "args": {"input_path": "lease.pdf", "pages": "4", "password": "ask"},
+             "answers": [{"password": "Landlord-2026"}],
+             "show": {"before": "lease.pdf", "after": "lease_trimmed.pdf"}},
+            {"type": "say", "text": "Done: lease_trimmed.pdf has the three lease pages, "
+                                    "without the draft notes. It keeps the lease's "
+                                    "restrictions, so it's protected the same way."},
+        ],
+    },
     "pdfa": {
         "title": "Archive as PDF/A",
         "subtitle": "A PDF/A-2b copy for a court or an archive, checked by veraPDF.",

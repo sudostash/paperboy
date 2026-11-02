@@ -52,7 +52,8 @@ def make_encrypted(make_pdf, tmp_path: Path):
         with pikepdf.open(plain) as pdf:
             pdf.save(out, encryption=pikepdf.Encryption(
                 user=password, owner=owner or password, R=6,
-                allow=allow or pikepdf.Permissions()))
+                # pikepdf's default Permissions() forbids assembly; the default here is none.
+                allow=allow or pikepdf.Permissions(modify_assembly=True)))
         return out
     return factory
 

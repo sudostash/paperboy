@@ -24,7 +24,7 @@ from ..config import Settings
 from ..errors import PdfUserError
 from ..pagespec import parse_pages
 from ..results import PageNumbersResult, WatermarkResult
-from .base import inherit_protection, open_pdf, require_modify_permission
+from .base import inherit_protection, open_pdf, refuse_signed, require_modify_permission
 from .create import _open_image
 
 POSITIONS = ("center", "top-left", "top-center", "top-right",
@@ -258,6 +258,8 @@ def add_page_numbers(
     ink = _color(color)
     with open_pdf(path, settings, password) as pdf:
         require_modify_permission(pdf)
+        if refuse_signed(pdf, "numbering its pages"):  # drop Reader extensions: they break
+            del pdf.Root.Perms
         total = len(pdf.pages)
         targets = parse_pages(pages, total, dedupe=True) if pages else list(range(total))
         last = total + start - 1
@@ -364,6 +366,8 @@ def add_watermark(
 
     with open_pdf(path, settings, password) as pdf:
         require_modify_permission(pdf)
+        if refuse_signed(pdf, "watermarking it"):  # drop Reader extensions: they break
+            del pdf.Root.Perms
         total = len(pdf.pages)
         targets = parse_pages(pages, total, dedupe=True) if pages else list(range(total))
         overlay = _stamp_pages(pdf, targets, draw, under=layer == "under", shared=True)

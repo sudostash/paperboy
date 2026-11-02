@@ -24,7 +24,14 @@ import pikepdf
 from ..config import Settings
 from ..errors import PdfUserError
 from ..results import HiddenDataResult, SanitizeResult
-from .base import inherit_protection, open_pdf, require_modify_permission, signature_state
+from .base import (
+    has_annotations,
+    inherit_protection,
+    open_pdf,
+    require_annotation_permission,
+    require_modify_permission,
+    signature_state,
+)
 from .metadata import read_metadata
 
 SCRIPTS = {"/JavaScript"}
@@ -394,6 +401,10 @@ def sanitize_pdf(
     data = path.read_bytes()
     with open_pdf(data, settings, password) as pdf:
         require_modify_permission(pdf)
+        # Each option can change annotations: authors, scripts, attachments, comments.
+        if (remove_metadata or remove_scripts or remove_attachments or remove_comments) \
+                and has_annotations(pdf):
+            require_annotation_permission(pdf, "cleaning its comments, links and form fields")
         page_count = len(pdf.pages)
         signed, usage_rights = signature_state(pdf)
         if signed:
