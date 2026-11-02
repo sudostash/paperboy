@@ -235,14 +235,31 @@ All configuration is environment variables. Sensible defaults; nothing is requir
   - **Merging** protected files: they must share one password (otherwise the merge is refused,
     so no input's pages become readable with another input's password), and the output gets
     the strictest permissions of all its inputs.
-- **Copy restrictions are enforced.** A protected PDF has a user ("open") password and an
-  owner password that lifts its restrictions. When a PDF forbids copying, getting its content
-  out (`extract_text`, `search_text`, `compare_pdfs` text, `render_pages`, `extract_attachments`,
-  `extract_images`, `extract_tables`, `export_tables`, `decrypt_pdf`, re-encrypting with
-  `encrypt_pdf`) needs the **owner** password; the open password is enough when copying is
-  allowed. `view_pages` and `compare_pdfs` in visual mode (display) work with the open
-  password, and tools whose output keeps the input's protection
-  (rotate, merge, split, ...) keep the restriction on their output too.
+- **Permissions are enforced.** A protected PDF has a user ("open") password and an
+  owner password that lifts its restrictions. Opened with the open password (or none), a PDF
+  keeps its restrictions:
+  - **Copying:** getting its content out (`extract_text`, `search_text`, `compare_pdfs` text,
+    `render_pages`, `extract_attachments`, `extract_images`, `extract_tables`,
+    `export_tables`) needs the **owner** password when the PDF forbids copying.
+    `view_pages` and `compare_pdfs` in visual mode (display) work with the open password.
+  - **Document assembly** (adding, removing, reordering or rotating pages): the page tools
+    (`rearrange_pages`, `delete_pages`, `extract_pages`, `rotate_pages`, `split_pdf`,
+    `insert_blank_pages`, `n_up`, and each input of `merge_pdfs` and `interleave_pdfs`).
+  - **Changing the document:** `crop_pages`, `resize_pages`, `n_up`, `set_metadata`,
+    `flatten_pdf`, stamps, redaction, sanitizing, OCR, and `optimize_pdf` when it lowers
+    picture resolution.
+  - **Changing annotations** (comments, links, form fields): `flatten_pdf`, `fill_form` with
+    `flatten`, and `resize_pages`, `sanitize_pdf` and `redact_pdf` when they would move,
+    change or remove annotations.
+  - **Any restriction at all:** `decrypt_pdf`, re-encrypting with `encrypt_pdf`, and
+    `convert_to_pdfa` (which can't be encrypted) would lift every restriction, so they need
+    the owner password unless the PDF restricts nothing.
+
+  Digitally signed PDFs are refused by every tool that would rewrite the signed document
+  (and so invalidate its signature); Reader usage rights are dropped, since they break once
+  the file changes. A new document made from a signed PDF's pages (extract, split, merge,
+  ...) is not signed: copied signature fields lose their value and their signed appearance. Outputs that keep the input's protection (rotate, merge, split, ...) keep
+  its restrictions too.
 - **Non-ASCII passwords work with every encryption scheme.** RC4/AES-128 files store passwords
   in PDFDocEncoding and AES-256 in UTF-8; every tool opens files the same way (through pikepdf)
   and tries the right encoding, so `café` or `p€ss` work everywhere.

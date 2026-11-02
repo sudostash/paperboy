@@ -220,12 +220,118 @@ def _signed_field(pdf: pikepdf.Pdf) -> bool:
     return False
 
 
-def require_modify_permission(pdf: pikepdf.Pdf) -> None:
-    """Refuse changing page content when the PDF forbids it, unless opened as owner."""
-    if pdf.is_encrypted and not pdf.owner_password_matched and not pdf.allow.modify_other:
-        raise PdfUserError(
-            "This PDF does not allow changing its pages; that needs its owner password"
-        )
+def _restricted(pdf: pikepdf.Pdf) -> bool:
+    """Opened without the owner password, so the file's permissions apply."""
+    return pdf.is_encrypted and not pdf.owner_password_matched
+
+
+def require_modify_permission(pdf: pikepdf.Pdf, action: str = "changing its pages") -> None:
+    """Refuse changing the document (page content, document information) when the PDF
+    forbids it, unless opened as owner."""
+    if _restricted(pdf) and not pdf.allow.modify_other:
+        raise PdfUserError(f"This PDF does not allow {action}; that needs its owner password")
+
+
+def require_assembly_permission(pdf: pikepdf.Pdf, action: str) -> None:
+    """Refuse adding, removing, reordering or rotating pages ("document assembly") when
+    the PDF forbids it, unless opened as owner."""
+    if _restricted(pdf) and not pdf.allow.modify_assembly:
+        raise PdfUserError(f"This PDF does not allow {action}; that needs its owner password")
+
+
+def require_annotation_permission(pdf: pikepdf.Pdf, action: str) -> None:
+    """Refuse adding, changing or removing annotations (comments, links, form fields)
+    when the PDF forbids it, unless opened as owner."""
+    if _restricted(pdf) and not pdf.allow.modify_annotation:
+        raise PdfUserError(f"This PDF does not allow {action}; that needs its owner password")
+
+
+def require_no_restrictions(pdf: pikepdf.Pdf, action: str) -> None:
+    """Refuse *action*, which leaves the output without the file's restrictions (or
+    lets them be replaced), unless opened as owner or the file restricts nothing."""
+    # PDF 2.0 tells readers to ignore the accessibility bit, so it restricts nothing.
+    if _restricted(pdf) and not all(pdf.allow._replace(accessibility=True)):
+        raise PdfUserError(f"This PDF restricts what can be done with it; {action} needs "
+                           "its owner password")
+
+
+def refuse_signed(pdf: pikepdf.Pdf, action: str) -> bool:
+    """Refuse changing a digitally signed PDF, which would invalidate the signature.
+    Returns whether it has Reader usage rights, which the caller drops: they break
+    once the file changes."""
+    signed, usage_rights = signature_state(pdf)
+    if signed:
+        raise PdfUserError(f"This PDF is digitally signed; {action} would invalidate the "
+                           "signature")
+    return usage_rights
+
+
+MAX_SIGNATURE_SCAN = 1_000_000  # dictionaries and arrays checked for copied signatures
+
+
+def _is_signature(value) -> bool:
+    return isinstance(value, pikepdf.Dictionary) and (
+        "/ByteRange" in value or value.get("/Type") == pikepdf.Name.Sig)
+
+
+def _field_type(d: pikepdf.Dictionary):
+    """A field's type, its own or inherited from its parents."""
+    for _ in range(32):
+        if "/FT" in d:
+            return d.FT
+        d = d.get("/Parent")
+        if not isinstance(d, pikepdf.Dictionary):
+            return None
+    return None
+
+
+def _direct_container(value) -> bool:
+    return isinstance(value, (pikepdf.Dictionary, pikepdf.Array)) and not value.is_indirect
+
+
+def drop_copied_signatures(pdf: pikepdf.Pdf) -> None:
+    """Remove the signatures that came along with copied pages: a new document made
+    from a signed PDF's pages isn't signed, and the old signature (with the signer's
+    certificate) would only show as broken. Signature fields lose their value and
+    their signed appearance, and every other reference to a signature goes too."""
+    containers, stack = [], list(pdf.objects)
+    while stack:  # the direct ones inside objects too
+        if len(containers) >= MAX_SIGNATURE_SCAN:
+            raise PdfUserError("The pages hold too many objects to make sure no digital "
+                               "signature comes along; nothing was written")
+        obj = stack.pop()
+        if isinstance(obj, pikepdf.Dictionary):
+            containers.append(obj)
+            stack.extend(v for _, v in obj.items() if _direct_container(v))
+        elif isinstance(obj, pikepdf.Array):
+            containers.append(obj)
+            stack.extend(v for v in obj if _direct_container(v))
+    for c in containers:
+        if isinstance(c, pikepdf.Array):
+            for i in reversed(range(len(c))):
+                if _is_signature(c[i]):
+                    del c[i]
+            continue
+        if "/V" in c and _field_type(c) == pikepdf.Name.Sig:
+            for key in ("/Lock", "/SV"):
+                if key in c:
+                    del c[key]
+            kids = c.get("/Kids")
+            for widget in [c, *(kids if isinstance(kids, pikepdf.Array) else [])]:
+                if isinstance(widget, pikepdf.Dictionary) and "/AP" in widget:
+                    del widget["/AP"]  # it shows the signer's name and the date
+            del c["/V"]
+        for key in [k for k, v in c.items() if _is_signature(v)]:
+            del c[key]
+
+
+def has_annotations(pdf: pikepdf.Pdf, pages=None) -> bool:
+    """Whether any of *pages* (indexes; all by default) lists an annotation."""
+    for i in range(len(pdf.pages)) if pages is None else pages:
+        annots = pdf.pages[i].obj.get("/Annots")
+        if isinstance(annots, pikepdf.Array) and len(annots):
+            return True
+    return False
 
 
 def is_encrypted(path: Path) -> bool:

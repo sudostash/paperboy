@@ -801,7 +801,8 @@ def test_files_without_layers_or_forms_are_fine(tmp_path, settings):
 def test_a_password_protected_pdf_loses_its_password(tmp_path, settings):
     locked = tmp_path / "locked.pdf"
     with pikepdf.open(embedded(tmp_path / "in.pdf")) as pdf:
-        pdf.save(locked, encryption=pikepdf.Encryption(user="pw", owner="own", R=6))
+        pdf.save(locked, encryption=pikepdf.Encryption(
+            user="pw", owner="own", R=6, allow=pikepdf.Permissions(modify_assembly=True)))
     with pytest.raises(PdfUserError, match="password protected"):
         E.convert_to_pdfa(locked, tmp_path / "out.pdf", settings)
     res, out = convert(locked, tmp_path, settings, password="pw")
@@ -817,6 +818,17 @@ def test_copy_protection_needs_the_owner_password(tmp_path, settings):
         pdf.save(locked, encryption=pikepdf.Encryption(
             user="", owner="own", R=6, allow=pikepdf.Permissions(extract=False)))
     _refused(locked, tmp_path, settings, "owner password")
+    assert convert(locked, tmp_path, settings, password="own")[0]["protection_removed"]
+
+
+def test_any_restriction_needs_the_owner_password(tmp_path, settings):
+    # The copy has no password, so it would lift a print-only restriction too.
+    locked = tmp_path / "locked.pdf"
+    with pikepdf.open(embedded(tmp_path / "in.pdf")) as pdf:
+        pdf.save(locked, encryption=pikepdf.Encryption(
+            user="", owner="own", R=6, allow=pikepdf.Permissions(
+                modify_assembly=True, print_lowres=False, print_highres=False)))
+    _refused(locked, tmp_path, settings, "restricts what can be done")
     assert convert(locked, tmp_path, settings, password="own")[0]["protection_removed"]
 
 

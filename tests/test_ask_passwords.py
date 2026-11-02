@@ -52,7 +52,8 @@ def _http(url: str, method="GET", fields=None, host=None):
 def _locked(path, user="secret", owner="boss"):
     plain = _make_pdf(path.with_name("plain-" + path.name), 2)
     with pikepdf.open(plain) as pdf:
-        pdf.save(path, encryption=pikepdf.Encryption(user=user, owner=owner, R=6))
+        pdf.save(path, encryption=pikepdf.Encryption(
+            user=user, owner=owner, R=6, allow=pikepdf.Permissions(modify_assembly=True)))
     return path
 
 
