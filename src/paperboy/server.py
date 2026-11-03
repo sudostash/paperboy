@@ -27,10 +27,13 @@ from .engine.base import KNOWN_USER_PASSWORD, known_user_password, open_pdf
 from .errors import PdfUserError
 from .paths import prepare_output, require_input, resolve, same_file
 from .results import (
+    AddCommentsResult,
     AttachmentsResult,
     BlankPagesResult,
     Bookmark,
     CheckResult,
+    CommentInput,
+    CommentsResult,
     CompareResult,
     ConvertResult,
     CropResult,
@@ -584,6 +587,65 @@ def export_markdown(
     out = prepare_output(src, output_path, "", _overwrite(overwrite), SETTINGS, ext=".md")
     return engine.export_markdown(src, out, SETTINGS, pages, include_tables, page_markers,
                                   password, _overwrite(overwrite))
+
+
+@_tool(_reads("List comments"))
+@_guard
+def list_comments(
+    input_path: str,
+    pages: str | None = None,
+    password: str | None = None,
+) -> CommentsResult:
+    """List the review comments on all pages or a page spec (e.g. "1-3,7"): sticky notes,
+    highlights, underlines, strikeouts, squiggles, text boxes, shapes, ink, stamps and
+    file attachments (not links or form fields). Each has its id ("p<page>-<n>", what
+    add_comments' replies refer to), page, type, author, comment text, subject, created
+    and modified dates (ISO 8601), color, rect ([left, bottom, right, top] in PDF points,
+    in the page's own coordinates) and reply_to (the id of the comment it answers).
+    Highlights and other text markup also give marked_text, the text under them, unless
+    the PDF forbids copying (marked_text_withheld is then true; the owner password
+    gives it). Up to 1,000 comments; truncated means there are more (list fewer pages).
+    """
+    return engine.list_comments(require_input(input_path, SETTINGS), SETTINGS, pages,
+                                password)
+
+
+@_tool(_writes("Add comments"))
+@_guard
+def add_comments(
+    input_path: str,
+    comments: Annotated[list[CommentInput], Field(min_length=1, max_length=100)],
+    author: str | None = None,
+    output_path: str | None = None,
+    password: str | None = None,
+    overwrite: bool | None = None,
+) -> AddCommentsResult:
+    """Add review comments to a copy of a PDF (default "<name>_commented.pdf"). Each is
+    drawn so it looks the same in every viewer and prints, and carries its text, author
+    (the author argument) and date where viewers show comments. Up to 100 per call:
+
+    - highlight / underline / strikeout / squiggly: over "text" (found as search_text
+      finds it, ignoring case unless match_case; whole_word optional; every place it is
+      found, up to 100, on "page" or on all pages), or over "rects" on "page" ([[left,
+      bottom, right, top], ...] in PDF points, in the page's own coordinates, as
+      search_text gives rectangles). "comment" adds a note to it.
+    - note: a sticky note with its "comment", beside "text" (where it is first found, on
+      "page" or in the PDF) or at "at" [x, y] (its top-left) on "page".
+    - text_box: "text" drawn in a box at "rect" on "page" (Latin characters; font_size
+      4-72, default 12; border true by default); "comment" is its subject.
+    - reply: a "comment" answering the comment whose id "to" names (list_comments gives
+      ids; replies show with the comment they answer).
+
+    "color" is #rrggbb or a colour name (defaults: yellow highlights and notes, blue
+    underlines, red strikeouts, green squiggles, black text boxes). Returns each
+    comment's new ids. Nothing is written if any comment fails (e.g. text not found).
+    Needs the owner password if the PDF forbids changing comments. Signed PDFs are
+    refused (the change would invalidate the signature).
+    """
+    src = require_input(input_path, SETTINGS)
+    out = prepare_output(src, output_path, "_commented", _overwrite(overwrite), SETTINGS)
+    return engine.add_comments(src, out, SETTINGS, [dict(c) for c in comments], author,
+                               password)
 
 
 # --------------------------------------------------------------------------- #
@@ -1592,6 +1654,8 @@ def _step_runners() -> dict:
         "ocr_pdf": lambda s, o, a, pw: engine.ocr_pdf(
             s, o, S, a["language"], a["pages"], a["skip_pages_with_text"], a["dpi"], pw),
         "convert_to_pdfa": lambda s, o, a, pw: engine.convert_to_pdfa(s, o, S, pw),
+        "add_comments": lambda s, o, a, pw: engine.add_comments(
+            s, o, S, [dict(c) for c in a["comments"]], a["author"], pw),
     }
 
 
@@ -1693,8 +1757,8 @@ def run_pipeline(
     delete_pages, extract_pages, rearrange_pages, decrypt_pdf, encrypt_pdf (last step
     only), optimize_pdf, repair_pdf, flatten_pdf, set_metadata, sanitize_pdf,
     add_watermark, add_page_numbers, fill_form, crop_pages, resize_pages, n_up,
-    insert_blank_pages, set_outline, redact_pdf, ocr_pdf, convert_to_pdfa (last step
-    only); up to 20. password opens the input and
+    insert_blank_pages, set_outline, redact_pdf, ocr_pdf, add_comments, convert_to_pdfa
+    (last step only); up to 20. password opens the input and
     is used by every step (decrypt_pdf removes it). Every step's arguments are checked before any
     step runs, and each step applies its tool's own rules. Steps hand files to each other
     in a private temporary folder, deleted afterwards; if a step fails, nothing is saved.

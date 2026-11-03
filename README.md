@@ -62,6 +62,8 @@ Output files are written back into your `--root` folder. Remove the server anyti
 | `search_text` | Find a word or phrase (literal, optional case and whole-word matching): each match's page, a snippet around it, and its rectangles on the page; lists pages with no text layer *(read-only)* |
 | `extract_tables` | Find tables (ruled, or laid out by alignment) and return their rows *(read-only)* |
 | `export_tables` | Save each table as a CSV file for Excel, with formula-like cells escaped so a spreadsheet won't run them |
+| `list_comments` | List the review comments (sticky notes, highlights, text boxes, stamps, ...): author, text, dates, replies, and the text under each highlight *(read-only)* |
+| `add_comments` | Add highlights, underlines, strikeouts and squiggles (over text it finds, or rectangles), sticky notes, text boxes and replies, drawn so they look the same in every viewer |
 | `pdf_to_markdown` | Read the text as Markdown for a model: headings (from font sizes), lists, paragraphs and tables, in reading order (following columns); the PDF's text is escaped so it can't add links or HTML *(read-only)* |
 | `export_markdown` | Save that Markdown as a `.md` file |
 | `compare_pdfs` | Compare two versions page by page: pages matched first (insertions don't shift everything), then the lines removed and added, and optionally how pages look (% of pixels changed, with red/green difference images) *(read-only)* |
@@ -250,9 +252,10 @@ All configuration is environment variables. Sensible defaults; nothing is requir
   - **Changing the document:** `crop_pages`, `resize_pages`, `n_up`, `set_metadata`,
     `flatten_pdf`, stamps, redaction, sanitizing, OCR, and `optimize_pdf` when it lowers
     picture resolution.
-  - **Changing annotations** (comments, links, form fields): `flatten_pdf`, `fill_form` with
-    `flatten`, and `resize_pages`, `sanitize_pdf` and `redact_pdf` when they would move,
-    change or remove annotations.
+  - **Changing annotations** (comments, links, form fields): `add_comments`, `flatten_pdf`,
+    `fill_form` with `flatten`, and `resize_pages`, `sanitize_pdf` and `redact_pdf` when
+    they would move, change or remove annotations. (`list_comments` gives the text under
+    highlights only when copying is allowed.)
   - **Any restriction at all:** `decrypt_pdf`, re-encrypting with `encrypt_pdf`, and
     `convert_to_pdfa` (which can't be encrypted) would lift every restriction, so they need
     the owner password unless the PDF restricts nothing.

@@ -7,6 +7,16 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `list_comments` and `add_comments`: review comments. `list_comments` lists sticky notes,
+  highlights and other text markup, text boxes, shapes, ink, stamps and file attachments
+  with their id (`p<page>-<n>`), author, text, dates, colour, rectangle, the comment they
+  reply to, and the text under highlights (only if the PDF allows copying).
+  `add_comments` adds up to 100 per call to a copy: highlights, underlines, strikeouts
+  and squiggles over text it finds (as `search_text` does) or over rectangles, sticky
+  notes beside text or at a point, text boxes (drawn upright on rotated pages) and
+  replies. Each is drawn with its own appearance, so it looks the same in every viewer and
+  prints. Needs the owner password if the PDF forbids changing comments; signed PDFs are
+  refused. Also a `run_pipeline` step.
 - `pdf_to_markdown` and `export_markdown`: a PDF's text as Markdown, for a model to read
   with its structure. Text is read in reading order (pdfminer's layout analysis, which
   follows columns); headings come from font sizes larger than the body text across the
