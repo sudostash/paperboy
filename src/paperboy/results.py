@@ -463,6 +463,31 @@ class ExportTablesResult(TypedDict):
     pages_skipped: list[PageSkip]
 
 
+class MarkdownResult(TypedDict):
+    path: str
+    markdown: str
+    characters: int
+    pages_read: int
+    headings: int
+    tables: int
+    truncated: bool                        # cut at max_chars, or a limit stopped it
+    complete: bool                         # false: the time limit stopped it early
+    pages_skipped: list[PageSkip]          # not read, and why (first 1,000)
+    pages_without_text: list[int]          # 1-based (first 1,000), e.g. scans
+
+
+class ExportMarkdownResult(TypedDict):
+    output: str
+    characters: int
+    pages_read: int
+    headings: int
+    tables: int
+    truncated: bool
+    complete: bool
+    pages_skipped: list[PageSkip]
+    pages_without_text: list[int]
+
+
 class PageDifference(TypedDict):
     # changed / added (only in B) / removed (only in A) / unknown (not compared: no text,
     # skipped, or the time limit); pages that are the same aren't listed.

@@ -226,39 +226,61 @@ def test_when_time_runs_out_the_result_says_so(report, settings, monkeypatch):
     assert res["complete"] is False and res["pages_searched"] == 0
 
 
-def _completed(returncode: int, stderr: bytes, stdout: bytes = b""):
-    import subprocess
-    return subprocess.CompletedProcess([], returncode, stdout, stderr)
+def _worker(monkeypatch, returncode: int, stderr: bytes = b"", stdout: bytes = b""):
+    """Run a stand-in worker process that sends *stdout* and *stderr* and exits with
+    *returncode* (negative: killed by that signal)."""
+    import sys
+    real = T.subprocess.Popen
+    end = f"os.kill(os.getpid(), {-returncode})" if returncode < 0 else \
+        f"sys.exit({returncode})"
+    script = (f"import os, sys; sys.stdin.read(); sys.stdout.buffer.write({stdout!r}); "
+              f"sys.stdout.flush(); sys.stderr.buffer.write({stderr!r}); {end}")
+    monkeypatch.setattr(T.subprocess, "Popen",
+                        lambda cmd, **kw: real([sys.executable, "-c", script], **kw))
 
 
 def test_a_bug_in_the_worker_is_an_error_not_a_skipped_page(report, settings, monkeypatch):
-    monkeypatch.setattr(T.subprocess, "run", lambda *a, **k: _completed(
-        1, b"Traceback (most recent call last):\nModuleNotFoundError: No module named 'x'"))
+    _worker(monkeypatch, 1,
+            b"Traceback (most recent call last):\nModuleNotFoundError: No module named 'x'")
     with pytest.raises(RuntimeError, match="table worker failed: ModuleNotFoundError"):
         E.extract_tables(report, settings)
 
 
 def test_a_worker_out_of_memory_skips_the_page(report, settings, monkeypatch):
-    monkeypatch.setattr(T.subprocess, "run", lambda *a, **k: _completed(
-        1, b"Traceback (most recent call last):\nMemoryError"))
+    _worker(monkeypatch, 1, b"Traceback (most recent call last):\nMemoryError")
     res = E.extract_tables(report, settings, pages="2")
     assert res["pages_skipped"] == [{"page": 2,
                                      "reason": "it needs too much time or memory to read"}]
+    assert res["pages_searched"] == 0 and res["complete"] is True
 
 
 def test_a_file_the_worker_cannot_open_is_an_error(report, settings, monkeypatch):
-    monkeypatch.setattr(T.subprocess, "run", lambda *a, **k: _completed(
-        0, b"", b'{"error": "No /Root object!"}\n'))
+    _worker(monkeypatch, 0, stdout=b'{"error": "No /Root object!"}\n')
     with pytest.raises(PdfUserError, match="Could not read the PDF's layout: No /Root"):
         E.extract_tables(report, settings)
 
 
 def test_a_half_written_last_line_is_ignored(report, settings, monkeypatch):
-    out = b'{"page": 0, "tables": [[["a"]]]}\n{"page": 1, "tab'
-    monkeypatch.setattr(T.subprocess, "run", lambda *a, **k: _completed(-9, b"", out))
+    _worker(monkeypatch, -9, stdout=b'{"page": 0, "tables": [[["a"]]]}\n{"page": 1, "tab')
     res = E.extract_tables(report, settings, pages="1-2")
     assert _plain(res) == [(1, 1, [["a"]])]
     assert _skipped(res) == [2]
+
+
+def test_a_worker_sending_too_much_is_stopped(report, settings, monkeypatch):
+    record = b'{"page": 0, "tables": [[["a"]]]}\n'
+    _worker(monkeypatch, 0, stdout=record + b"x" * 200_000)
+    monkeypatch.setattr(T, "MAX_OUTPUT", len(record) + 10)
+    res = E.extract_tables(report, settings, pages="1-2")
+    assert _plain(res) == [(1, 1, [["a"]])]
+    assert res["pages_skipped"] == [{"page": 2,
+                                     "reason": "it needs too much time or memory to read"}]
+
+
+def test_an_empty_error_from_the_worker(report, settings, monkeypatch):
+    _worker(monkeypatch, 1)
+    with pytest.raises(RuntimeError, match="table worker failed: $"):
+        E.extract_tables(report, settings)
 
 
 @pytest.mark.parametrize(("kwargs", "message"), [

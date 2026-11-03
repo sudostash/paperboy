@@ -211,6 +211,22 @@ function showGrid(step) {
   }
 }
 
+function showMarkdown(step) {
+  // The Markdown a tool returned, as source, its structure picked out line by line.
+  clearStage();
+  stage.append(el("h2", null, `${step.title} · Markdown`));
+  const pre = el("pre", "markdown");
+  step.result[step.showMarkdown].split("\n").forEach((line, i) => {
+    const kind = /^#{1,6} /.test(line) ? "md-heading"
+      : /^(- |\d+\. )/.test(line) ? "md-item"
+      : line.startsWith("|") ? "md-table" : "md-text";
+    const row = el("span", `md-line ${kind}`, line || " ");
+    row.style.animationDelay = `${i * 45}ms`;
+    pre.append(row);
+  });
+  stage.append(pre);
+}
+
 function showTable(step) {
   // A result object (e.g. what inspect_hidden_data found) as a findings table.
   clearStage();
@@ -329,6 +345,9 @@ async function call(step) {
   } else if (step.showGrid) {
     showGrid(step);
     await sleep(2600);
+  } else if (step.showMarkdown) {
+    showMarkdown(step);
+    await sleep(3400);
   } else if (step.showTable) {
     showTable(step);
     await sleep(2600);

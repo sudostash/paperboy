@@ -84,8 +84,8 @@ def test_scenario_is_well_formed(slug):
             assert isinstance(step["args"], dict)
             assert set(step.get("show", {})) <= {"before", "after", "password", "highlight",
                                                  "review", "layout"}
-            views = [k for k in ("show", "showSchema", "showImages", "showTable")
-                     if step.get(k)]
+            views = [k for k in ("show", "showSchema", "showImages", "showTable",
+                                 "showGrid", "showMarkdown") if step.get(k)]
             assert len(views) <= 1, f"pick one stage view, not {views}"
         if step["type"] == "say":
             assert step["text"].strip()
@@ -461,6 +461,13 @@ async def test_viewer_plays_scenario_to_completion(browser, tmp_path, slug):
         if calls and calls[-1].get("showTable"):
             table = calls[-1]["result"][calls[-1]["showTable"]]
             assert await page.locator(".schema-table tr").count() == len(table)
+        shown = [c for c in calls if any(c.get(k) for k in (
+            "show", "showSchema", "showImages", "showTable", "showGrid", "showMarkdown"))]
+        if shown and shown[-1].get("showMarkdown"):  # still on stage
+            text = shown[-1]["result"][shown[-1]["showMarkdown"]]
+            assert await page.locator(".markdown .md-line").count() == len(text.split("\n"))
+            assert await page.locator(".md-heading").count() == sum(
+                line.startswith("#") for line in text.split("\n"))
         if calls and calls[-1].get("showSchema"):
             fields = calls[-1]["schema"]["properties"]
             rows = page.locator(".schema-table tr td.field")

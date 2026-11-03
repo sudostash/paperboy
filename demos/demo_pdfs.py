@@ -685,6 +685,75 @@ def build_lease(path: Path) -> Path:
     return path
 
 
+def build_handbook(path: Path) -> Path:
+    """A two-page driver handbook laid out in two columns, with headings, a bulleted
+    list, a numbered list, a ruled table and words hyphenated at line breaks."""
+    width, height = letter
+    c = canvas.Canvas(str(path), pagesize=letter)
+    c.setTitle("Driver Handbook")
+
+    def column(x, y, rows):
+        for font, size, gap, text in rows:
+            c.setFont(font, size)
+            c.drawString(x, y, text)
+            y -= gap
+        return y
+
+    c.setFillColor(ACCENT)
+    c.rect(0, height - 14, width, 14, stroke=0, fill=1)
+    c.setFillColor(INK)
+    c.setFont("Helvetica-Bold", 26)
+    c.drawString(72, height - 90, "Driver Handbook")
+    body = ("Helvetica", 10.5, 14)
+    column(72, height - 140, [
+        ("Helvetica-Bold", 15, 24, "Before you set off"),
+        (*body, "Check the van each morning: tyres,"),
+        (*body, "lights and the cold box. Report dam-"),
+        (*body, "age in the app before loading."),
+        ("Helvetica", 10.5, 18, "Always carry:"),
+        (*body, "\u2022  your depot badge"),
+        (*body, "\u2022  the handheld scanner"),
+        (*body, "\u2022  spare delivery cards"),
+    ])
+    column(320, height - 140, [
+        ("Helvetica-Bold", 15, 24, "At the door"),
+        (*body, "1. Ring once and wait a full minute."),
+        (*body, "2. Scan the parcel before handing it"),
+        (*body, "    over, never after."),
+        (*body, "3. If nobody answers, leave a card"),
+        (*body, "    and choose a safe place."),
+        (*body, ""),
+        (*body, "Parcels over 25 kg need two people."),
+    ])
+    c.setFont("Helvetica-Bold", 15)
+    c.drawString(72, 380, "Delivery windows")
+    rows = [("Service", "Window", "Signature"), ("Standard", "08:00-18:00", "No"),
+            ("Express", "Before 12:00", "Yes"), ("Evening", "18:00-21:00", "Yes")]
+    xs, top = [72, 200, 330, 440], 360
+    c.setStrokeColor(RULE)
+    c.grid(xs, [top - 22 * i for i in range(len(rows) + 1)])
+    for i, row in enumerate(rows):
+        c.setFont("Helvetica-Bold" if i == 0 else "Helvetica", 10.5)
+        for x, cell in zip(xs[:-1], row, strict=True):  # each cell after its left line
+            c.drawString(x + 8, top - 22 * i - 15, cell)
+    c.setFillColor(MUTED)
+    c.setFont("Helvetica", 9)
+    c.drawRightString(width - 72, 48, "Page 1 of 2")
+    c.showPage()
+    c.setFillColor(INK)
+    column(72, height - 90, [
+        ("Helvetica-Bold", 15, 24, "Returns"),
+        (*body, "Undelivered parcels go back to the depot the same evening and are scanned "),
+        (*body, "in at the returns desk. Damaged parcels are photographed first."),
+    ])
+    c.setFillColor(MUTED)
+    c.setFont("Helvetica", 9)
+    c.drawRightString(width - 72, 48, "Page 2 of 2")
+    c.showPage()
+    c.save()
+    return path
+
+
 BUILDERS = {"report.pdf": build_report, "scan.pdf": build_scan,
             "delivery-form.pdf": build_delivery_form, "proposal.pdf": build_proposal,
             "invoice.pdf": build_invoice, "brochure.pdf": build_brochure,
@@ -693,7 +762,7 @@ BUILDERS = {"report.pdf": build_report, "scan.pdf": build_scan,
             "contract-v2.pdf": build_contract_v2, "taxes.pdf": build_taxes,
             "album.pdf": build_album, "case-file.pdf": build_case_file,
             "scanned-letter.pdf": build_scanned_letter, "minutes.pdf": build_minutes,
-            "lease.pdf": build_lease}
+            "lease.pdf": build_lease, "handbook.pdf": build_handbook}
 
 
 def build(names: list[str], workspace: Path) -> None:

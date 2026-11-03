@@ -21,6 +21,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from pathlib import Path
 
@@ -46,6 +47,7 @@ MAX_CELL = 1_000                # characters kept per cell
 MAX_FORM_DEPTH = 12
 TABLE_TIME_LIMIT_S = 60         # per call, enforced by killing the worker
 WORKER_MEMORY = 2 * 2**30       # per worker, where the system enforces it (Linux)
+MAX_OUTPUT = 64 * 2**20         # bytes a worker may send per run; past this it is stopped
 MAX_LISTED = 1_000              # pages listed as skipped
 STRATEGIES = ("lines", "text")
 LETTER = (0.0, 0.0, 612.0, 792.0)
@@ -136,12 +138,12 @@ def _plain_copy(pdf: pikepdf.Pdf) -> bytes:
     return plain.getvalue()
 
 
-def _prepare(data: bytes, settings: Settings, password: str | None, pages: str | None
-             ) -> tuple[bytes, int, list[int], set[int]]:
+def _prepare(data: bytes, settings: Settings, password: str | None, pages: str | None,
+             action: str = "extracting tables") -> tuple[bytes, int, list[int], set[int]]:
     """Check the password and copy permission, choose the pages, find those too costly
     to read, and write the copy pdfminer reads (it never sees a password)."""
     with open_pdf(data, settings, password) as pdf:
-        require_copy_permission(pdf, "extracting tables")
+        require_copy_permission(pdf, action)
         total = len(pdf.pages)
         targets = parse_pages(pages, total, dedupe=True) if pages else list(range(total))
         content: dict = {}
@@ -158,27 +160,54 @@ def _prepare(data: bytes, settings: Settings, password: str | None, pages: str |
 # --- running the worker ---------------------------------------------------------------------
 
 
-def _run_worker(path: Path, total: int, pages: list[int], strategy: str, tables_left: int,
-                cells_left: int, seconds: float) -> tuple[list[dict], bool]:
-    """Run table_worker on *pages*; return the records it sent and whether it finished
-    (rather than being killed at the deadline or by its limits)."""
-    request = {"path": str(path), "page_count": total, "pages": pages, "strategy": strategy,
-               "max_tables": tables_left, "max_cells": cells_left, "max_cell": MAX_CELL,
-               "max_intersections": MAX_INTERSECTIONS,
-               "cpu_seconds": max(1, int(seconds) + 2), "memory_bytes": WORKER_MEMORY}
-    try:
-        proc = subprocess.run([sys.executable, "-I", "-m", "paperboy.engine.table_worker"],
-                              input=json.dumps(request).encode(), capture_output=True,
-                              timeout=max(seconds, 0.1))
-        out, finished = proc.stdout, proc.returncode == 0
-        failure = proc.stderr.decode("utf-8", "replace").strip().splitlines()[-1:] or [""]
-        if proc.returncode == 1 and not failure[0].startswith(("MemoryError", "RecursionError")):
-            # A Python error in the worker itself (not a limit a page hit) is a bug.
-            raise RuntimeError(f"table worker failed: {failure[0][:200]}")
-    except subprocess.TimeoutExpired as exc:
-        out, finished = exc.stdout or b"", False
+def _run(module: str, request: dict, seconds: float) -> tuple[list[dict], bool]:
+    """Run *module* (table_worker or markdown_worker) on *request*; return the records
+    it sent and whether it finished (rather than being killed at the deadline, by its
+    limits, or for sending more than MAX_OUTPUT bytes: its output is read as it comes,
+    never buffered past that)."""
+    request = {**request, "cpu_seconds": max(1, int(seconds) + 2),
+               "memory_bytes": WORKER_MEMORY}
+    name = module.rsplit(".", 1)[-1].replace("_", " ")
+    with tempfile.TemporaryFile() as errors:
+        proc = subprocess.Popen([sys.executable, "-I", "-m", module], stdin=subprocess.PIPE,
+                                stdout=subprocess.PIPE, stderr=errors)
+        chunks: list[bytes] = []
+        too_much = threading.Event()
+
+        def read() -> None:
+            size = 0
+            while chunk := proc.stdout.read1(2**16):
+                chunks.append(chunk[:MAX_OUTPUT - size])  # records sent before the limit
+                size += len(chunk)
+                if size > MAX_OUTPUT:
+                    too_much.set()
+                    proc.kill()
+                    return
+
+        reader = threading.Thread(target=read, daemon=True)
+        reader.start()
+        try:
+            proc.stdin.write(json.dumps(request).encode())
+            proc.stdin.close()
+        except OSError:  # it stopped before reading the request
+            pass
+        try:
+            proc.wait(timeout=max(seconds, 0.1))
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
+        reader.join()
+        proc.stdout.close()
+        finished = proc.returncode == 0 and not too_much.is_set()
+        if proc.returncode == 1:
+            errors.seek(0)
+            tail = errors.read()[-4096:].decode("utf-8", "replace").strip().splitlines()
+            failure = tail[-1] if tail else ""
+            if not failure.startswith(("MemoryError", "RecursionError")):
+                # A Python error in the worker itself (not a limit a page hit) is a bug.
+                raise RuntimeError(f"{name} failed: {failure[:200]}")
     records = []
-    for line in out.decode("utf-8", "replace").splitlines():
+    for line in b"".join(chunks).decode("utf-8", "replace").splitlines():
         try:
             records.append(json.loads(line))
         except ValueError:  # the line being written when the worker was stopped
@@ -186,17 +215,31 @@ def _run_worker(path: Path, total: int, pages: list[int], strategy: str, tables_
     return records, finished
 
 
-def _find(path: Path, settings: Settings, pages: str | None, strategy: str,
-          max_tables: int, password: str | None) -> dict:
-    if strategy not in STRATEGIES:
-        raise PdfUserError(f"strategy must be one of: {', '.join(STRATEGIES)}")
-    if isinstance(max_tables, bool) or not isinstance(max_tables, int) \
-            or not 1 <= max_tables <= MAX_TABLES:
-        raise PdfUserError(f"max_tables must be 1 to {MAX_TABLES}")
-    data, total, targets, heavy = _prepare(path.read_bytes(), settings, password, pages)
-    deadline = time.monotonic() + TABLE_TIME_LIMIT_S
-    tables, skipped, truncated, cells = [], [], False, 0
+def _run_worker(path: Path, total: int, pages: list[int], strategy: str, tables_left: int,
+                cells_left: int, seconds: float) -> tuple[list[dict], bool]:
+    """Run table_worker on *pages*."""
+    return _run("paperboy.engine.table_worker",
+                {"path": str(path), "page_count": total, "pages": pages,
+                 "strategy": strategy, "max_tables": tables_left, "max_cells": cells_left,
+                 "max_cell": MAX_CELL, "max_intersections": MAX_INTERSECTIONS}, seconds)
+
+
+def read_pages(data: bytes, targets: list[int], heavy: set[int], seconds: float, run, take
+               ) -> tuple[int, bool, list[dict], bool]:
+    """Read *targets* with a worker, within *seconds*; return how many pages were read
+    (not counting those skipped), whether take() stopped early, the pages skipped (with
+    why), and whether time ran out before every page was read or skipped.
+
+    run(copy, pages, seconds_left) runs a worker on the pages, in order, returning its
+    records and whether it finished; take(record) handles a page's record and returns
+    true to stop. Pages in *heavy* are skipped unread. A worker that stops before the
+    end (killed, or out of time or memory) stopped on the first page it didn't report:
+    that page is skipped and the rest read while time remains."""
+    deadline = time.monotonic() + seconds
+    skipped: list[dict] = []
     done: set[int] = set()
+    stopped = timed_out = False
+    read = 0
 
     def skip(index: int, reason: str) -> None:
         done.add(index)
@@ -210,35 +253,58 @@ def _find(path: Path, settings: Settings, pages: str | None, strategy: str,
         copy = Path(tmp) / "plain.pdf"
         copy.write_bytes(data)
         todo = [i for i in targets if i not in heavy]
-        while todo and not truncated and time.monotonic() < deadline:
-            records, finished = _run_worker(copy, total, todo, strategy,
-                                            max_tables - len(tables), MAX_CELLS - cells,
-                                            deadline - time.monotonic())
+        while todo and not stopped and time.monotonic() < deadline:
+            records, finished = run(copy, todo, deadline - time.monotonic())
             for record in records:
                 if "error" in record:  # the file as a whole can't be read
                     raise PdfUserError(f"Could not read the PDF's layout: {record['error']}")
                 index = record["page"]
+                if index not in todo or index in done:  # not a page asked for
+                    raise RuntimeError("worker sent a page it wasn't asked for")
                 if "skipped" in record:
-                    skip(index, record["skipped"])
+                    skip(index, str(record["skipped"]))
                     continue
                 done.add(index)
-                for k, rows in enumerate(record["tables"], 1):
-                    cells += sum(map(len, rows))
-                    tables.append({"page": index + 1, "index": k, "rows": rows,
-                                   "row_count": len(rows),
-                                   "column_count": max(map(len, rows))})
-                truncated = truncated or record.get("truncated", False)
+                read += 1
+                if take(record):
+                    stopped = True
             todo = [i for i in todo if i not in done]
             if finished or not todo:
                 break
-            # The worker stopped on the first page it didn't report: skip that page and
-            # carry on with the rest while time remains.
-            reason = ("it took too long to read" if time.monotonic() >= deadline
-                      else "it needs too much time or memory to read")
-            skip(todo.pop(0), reason)
-    searched = len(done)
+            timed_out = time.monotonic() >= deadline
+            skip(todo.pop(0), "it took too long to read" if timed_out
+                 else "it needs too much time or memory to read")
+        timed_out = timed_out or bool(todo) and not stopped
+    return read, stopped, skipped, timed_out
+
+
+def _find(path: Path, settings: Settings, pages: str | None, strategy: str,
+          max_tables: int, password: str | None) -> dict:
+    if strategy not in STRATEGIES:
+        raise PdfUserError(f"strategy must be one of: {', '.join(STRATEGIES)}")
+    if isinstance(max_tables, bool) or not isinstance(max_tables, int) \
+            or not 1 <= max_tables <= MAX_TABLES:
+        raise PdfUserError(f"max_tables must be 1 to {MAX_TABLES}")
+    data, total, targets, heavy = _prepare(path.read_bytes(), settings, password, pages)
+    tables: list[dict] = []
+    cells = 0
+
+    def run(copy, todo, seconds):
+        return _run_worker(copy, total, todo, strategy, max_tables - len(tables),
+                           MAX_CELLS - cells, seconds)
+
+    def take(record) -> bool:
+        nonlocal cells
+        for k, rows in enumerate(record["tables"], 1):
+            cells += sum(map(len, rows))
+            tables.append({"page": record["page"] + 1, "index": k, "rows": rows,
+                           "row_count": len(rows), "column_count": max(map(len, rows))})
+        return record.get("truncated", False)
+
+    searched, truncated, skipped, timed_out = read_pages(data, targets, heavy,
+                                                         TABLE_TIME_LIMIT_S, run, take)
     return {"tables": tables, "pages_searched": searched,
-            "complete": truncated or searched == len(targets), "truncated": truncated,
+            "complete": truncated or not timed_out, "truncated": truncated,
             "pages_skipped": skipped}
 
 

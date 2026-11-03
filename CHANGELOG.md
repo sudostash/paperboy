@@ -7,6 +7,17 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `pdf_to_markdown` and `export_markdown`: a PDF's text as Markdown, for a model to read
+  with its structure. Text is read in reading order (pdfminer's layout analysis, which
+  follows columns); headings come from font sizes larger than the body text across the
+  document (#, ##, ###; a short bold line on its own is the next level down); bulleted and
+  numbered lists are recognised, including bullets drawn apart from their text; lines are
+  joined into paragraphs, mending words hyphenated at a line break; tables become Markdown
+  tables where they stand. Everything from the PDF is escaped, so its text can't add
+  links, pictures, HTML or formatting. Reading runs under the same limits as
+  `extract_tables` (pages measured first, a killable worker, 60 s per call), and a PDF
+  that forbids copying needs its owner password. `pdf_to_markdown` returns up to
+  `max_chars`, cut at a block; `export_markdown` saves it all (default `<name>.md`).
 - `convert_to_pdfa`: a PDF/A-2b copy for long-term archiving, without redrawing pages. It
   adds an sRGB output intent and PDF/A metadata, removes what PDF/A forbids (scripts and
   other actions, attached files, encryption, annotations that are hidden or can't be shown,
@@ -218,6 +229,8 @@ All notable changes to this project are documented here. The format follows
   an exact pdfminer.six, so a pdfminer.six security fix also needs a pdfplumber release.
 
 ### Changed
+- `extract_tables` and `export_tables` now treat a worker reporting a page it wasn't asked
+  for as an error (shared with the Markdown reader).
 - Every tool that changes a PDF now respects all of its permissions, not only copying;
   the owner password lifts them, as before:
   - document assembly (adding, removing, reordering or rotating pages): `rearrange_pages`,

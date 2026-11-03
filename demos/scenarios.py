@@ -476,6 +476,30 @@ SCENARIOS: dict[str, dict] = {
                                     "restrictions, so it's protected the same way."},
         ],
     },
+    "markdown": {
+        "title": "Read a PDF as Markdown",
+        "subtitle": "Headings, lists and tables kept, in reading order across columns.",
+        "files": ["handbook.pdf"],
+        "prompt": "Turn handbook.pdf into Markdown so I can add it to our team wiki.",
+        "steps": [
+            {"type": "call", "tool": "view_pages",
+             "args": {"input_path": "handbook.pdf", "pages": "1"},
+             "showImages": True},
+            {"type": "say", "text": "It's laid out in two columns with a table below. "
+                                    "Reading it as Markdown, column by column."},
+            {"type": "call", "tool": "pdf_to_markdown",
+             "args": {"input_path": "handbook.pdf", "page_markers": False},
+             "showMarkdown": "markdown"},
+            {"type": "say", "text": "Here it is: each column's heading stays with its "
+                                    "text, the checklists are lists, the delivery windows "
+                                    "are a Markdown table, and \"dam-age\" split across a "
+                                    "line is mended. Saving it as a file for the wiki."},
+            {"type": "call", "tool": "export_markdown",
+             "args": {"input_path": "handbook.pdf", "page_markers": False}},
+            {"type": "say", "text": "Saved handbook.md (2 pages, 5 headings, 1 table), "
+                                    "ready to paste into the wiki."},
+        ],
+    },
     "pdfa": {
         "title": "Archive as PDF/A",
         "subtitle": "A PDF/A-2b copy for a court or an archive, checked by veraPDF.",
