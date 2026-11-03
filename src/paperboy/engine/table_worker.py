@@ -31,8 +31,9 @@ def _limit(cpu_seconds: int, memory_bytes: int) -> None:
 
 
 def _emit(record: dict) -> None:
-    sys.stdout.write(json.dumps(record) + "\n")
-    sys.stdout.flush()
+    # UTF-8 as is (escaping each non-ASCII character would make it up to 12 bytes).
+    sys.stdout.buffer.write((json.dumps(record, ensure_ascii=False) + "\n").encode())
+    sys.stdout.buffer.flush()
 
 
 def _short(exc: BaseException) -> str:

@@ -62,6 +62,8 @@ Output files are written back into your `--root` folder. Remove the server anyti
 | `search_text` | Find a word or phrase (literal, optional case and whole-word matching): each match's page, a snippet around it, and its rectangles on the page; lists pages with no text layer *(read-only)* |
 | `extract_tables` | Find tables (ruled, or laid out by alignment) and return their rows *(read-only)* |
 | `export_tables` | Save each table as a CSV file for Excel, with formula-like cells escaped so a spreadsheet won't run them |
+| `pdf_to_markdown` | Read the text as Markdown for a model: headings (from font sizes), lists, paragraphs and tables, in reading order (following columns); the PDF's text is escaped so it can't add links or HTML *(read-only)* |
+| `export_markdown` | Save that Markdown as a `.md` file |
 | `compare_pdfs` | Compare two versions page by page: pages matched first (insertions don't shift everything), then the lines removed and added, and optionally how pages look (% of pixels changed, with red/green difference images) *(read-only)* |
 | `run_pipeline` | Run several one-file tools in one call (e.g. decrypt → delete pages → optimize → encrypt), each on the result of the last; only the final file is saved, and nothing if a step fails |
 | `list_pdfs` | List the PDFs under `PAPERBOY_ROOT` (or a folder in it): path, size, last changed; up to 1,000 *(read-only)* |
@@ -240,7 +242,7 @@ All configuration is environment variables. Sensible defaults; nothing is requir
   keeps its restrictions:
   - **Copying:** getting its content out (`extract_text`, `search_text`, `compare_pdfs` text,
     `render_pages`, `extract_attachments`, `extract_images`, `extract_tables`,
-    `export_tables`) needs the **owner** password when the PDF forbids copying.
+    `export_tables`, `pdf_to_markdown`, `export_markdown`) needs the **owner** password when the PDF forbids copying.
     `view_pages` and `compare_pdfs` in visual mode (display) work with the open password.
   - **Document assembly** (adding, removing, reordering or rotating pages): the page tools
     (`rearrange_pages`, `delete_pages`, `extract_pages`, `rotate_pages`, `split_pdf`,

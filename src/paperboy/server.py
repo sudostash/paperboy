@@ -37,6 +37,7 @@ from .results import (
     DecryptResult,
     DeleteResult,
     EncryptResult,
+    ExportMarkdownResult,
     ExportTablesResult,
     ExtractAttachmentsResult,
     ExtractImagesResult,
@@ -49,6 +50,7 @@ from .results import (
     InfoResult,
     InsertBlankResult,
     InterleaveResult,
+    MarkdownResult,
     MergeResult,
     MetadataResult,
     NUpResult,
@@ -525,6 +527,63 @@ def export_tables(
     out_dir = _output_folder(src, output_dir, "_tables")
     return engine.export_tables(src, out_dir, SETTINGS, pages, strategy, max_tables,
                                 escape_formulas, password, _overwrite(overwrite))
+
+
+@_tool(_reads("PDF to Markdown"))
+@_guard
+def pdf_to_markdown(
+    input_path: str,
+    pages: str | None = None,
+    include_tables: bool = True,
+    page_markers: bool = True,
+    max_chars: int = 50000,
+    password: str | None = None,
+) -> MarkdownResult:
+    """Read a PDF's text as Markdown, keeping its structure for a model to read: headings
+    (#, ##, ### from font sizes larger than the body text; a short bold line on its own
+    becomes the next level down), bulleted and numbered lists, paragraphs (lines joined,
+    words hyphenated at line breaks mended), and tables as Markdown tables (unless
+    include_tables=false). Text is read in reading order, following columns. On all pages
+    or a page spec (e.g. "1-3,7"); page_markers adds "<!-- page N -->" before each page.
+
+    Text from the PDF is escaped, so it can't add hidden links, pictures, HTML or
+    formatting (a web address written out in it stays as written, and some viewers show
+    it as a link); only the unescaped "<!-- page N -->" lines are page markers, and
+    invisible characters are removed. Structure is inferred from the layout, so check
+    headings and lists that matter (with view_pages). Returns up to max_chars
+    (1-1,000,000) characters, cut at the end of a block (or within one too long to fit);
+    truncated means there is more (export_markdown saves up to 4 million characters). Pages with no
+    text (e.g. scans; ocr_pdf makes them readable) are listed in pages_without_text;
+    pages that can't be read safely in pages_skipped, with the reason; complete is false
+    if the 60 s limit per call stopped it before every page was read. Needs the owner
+    password if the PDF forbids copying.
+    """
+    return engine.pdf_to_markdown(require_input(input_path, SETTINGS), SETTINGS, pages,
+                                  include_tables, page_markers, max_chars, password)
+
+
+@_tool(_writes("Export Markdown"))
+@_guard
+def export_markdown(
+    input_path: str,
+    output_path: str | None = None,
+    pages: str | None = None,
+    include_tables: bool = True,
+    page_markers: bool = True,
+    password: str | None = None,
+    overwrite: bool | None = None,
+) -> ExportMarkdownResult:
+    """Save a PDF's text as a Markdown file (UTF-8, ending in .md or .markdown; default
+    "<name>.md" next to the PDF), read as pdf_to_markdown reads it, without its
+    max_chars limit. Limits, pages_skipped and pages_without_text are as for
+    pdf_to_markdown. Needs the owner password if the PDF forbids copying.
+    """
+    src = require_input(input_path, SETTINGS)
+    if output_path and Path(output_path).suffix.lower() not in (".md", ".markdown"):
+        raise ToolError("output_path must end in .md or .markdown")
+    out = prepare_output(src, output_path, "", _overwrite(overwrite), SETTINGS, ext=".md")
+    return engine.export_markdown(src, out, SETTINGS, pages, include_tables, page_markers,
+                                  password, _overwrite(overwrite))
 
 
 # --------------------------------------------------------------------------- #

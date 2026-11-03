@@ -14,6 +14,7 @@ from .files import list_pdfs
 from .forms import fill_form, list_form_fields
 from .info import check_pdf, pdf_info
 from .layout import crop_pages, insert_blank_pages, interleave_pdfs, n_up, resize_pages
+from .markdown import export_markdown, pdf_to_markdown
 from .metadata import get_metadata, set_metadata
 from .ocr import ocr_pdf
 from .optimize import flatten_pdf, optimize_pdf, repair_pdf
@@ -54,5 +55,5 @@ __all__ = [
     "crop_pages", "resize_pages", "n_up", "insert_blank_pages", "interleave_pdfs",
     "extract_tables", "export_tables",
     "compare_pdfs", "list_pdfs", "redact_pdf", "ocr_pdf",
-    "convert_to_pdfa",
+    "convert_to_pdfa", "pdf_to_markdown", "export_markdown",
 ]

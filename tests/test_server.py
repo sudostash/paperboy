@@ -62,6 +62,7 @@ INPUT_TOOLS = {
     "crop_pages": {"margins": [1, 1, 1, 1]}, "resize_pages": {"size": "a4"},
     "n_up": {}, "insert_blank_pages": {"after": [1]},
     "extract_tables": {}, "export_tables": {},
+    "pdf_to_markdown": {}, "export_markdown": {},
     "run_pipeline": {"steps": [{"tool": "optimize_pdf"}]},
 }
 
@@ -77,12 +78,23 @@ def test_every_tool_refuses_inputs_outside_root(tool, outside):
     "view_pages", "render_pages", "find_blank_pages", "list_form_fields",
     "inspect_hidden_data", "scan_pdf", "get_outline",
     "list_attachments", "extract_attachments", "extract_images", "search_text",
-    "extract_tables", "export_tables"}))
+    "extract_tables", "export_tables", "pdf_to_markdown", "export_markdown"}))
 def test_every_writer_refuses_outputs_outside_root(tool, doc, outside):
     args = dict(INPUT_TOOLS[tool], input_path=str(doc), output_path=str(outside / "o.pdf"))
     with pytest.raises(S.ToolError, match="outside the allowed root"):
         getattr(S, tool)(**args)
     assert not (outside / "o.pdf").exists()
+
+
+def test_export_markdown_refuses_outputs_outside_root_or_not_markdown(doc, outside):
+    with pytest.raises(S.ToolError, match="outside the allowed root"):
+        S.export_markdown(input_path=str(doc), output_path=str(outside / "o.md"))
+    with pytest.raises(S.ToolError, match=r"must end in \.md or \.markdown"):
+        S.export_markdown(input_path=str(doc), output_path=str(doc.with_name("o.pdf")))
+    assert not (outside / "o.md").exists() and not doc.with_name("o.pdf").exists()
+    res = S.export_markdown(input_path=str(doc), output_path=str(doc.with_name("o.MARKDOWN")))
+    assert res["output"] == str(doc.with_name("o.MARKDOWN"))
+    assert S.export_markdown(input_path=str(doc))["output"] == str(doc.with_name("doc.md"))
 
 
 def test_merge_refuses_paths_outside_root(doc, outside):

@@ -167,6 +167,8 @@ CASES = [
      lambda d: {"path_a": _pdf(d / "a.pdf"), "path_b": _blank_middle(d / "b.pdf"),
                 "mode": "both"}),
     ("export_tables", "export_tables", lambda d: {"input_path": _tabled(d / "t.pdf")}),
+    ("pdf_to_markdown", "pdf_to_markdown", lambda d: {"input_path": _tabled(d / "t.pdf")}),
+    ("export_markdown", "export_markdown", lambda d: {"input_path": _tabled(d / "t.pdf")}),
     ("crop_pages", "crop_pages",
      lambda d: {"input_path": _pdf(d / "a.pdf"), "margins": [10, 10, 10, 10]}),
     ("resize_pages", "resize_pages", lambda d: {"input_path": _pdf(d / "a.pdf"), "size": "a4"}),

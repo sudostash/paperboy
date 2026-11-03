@@ -31,7 +31,7 @@ EXPECTED_TOOLS = {
     "crop_pages", "resize_pages", "n_up", "insert_blank_pages", "interleave_pdfs",
     "extract_tables", "export_tables",
     "compare_pdfs", "run_pipeline", "list_pdfs", "redact_pdf", "ocr_pdf",
-    "convert_to_pdfa",
+    "convert_to_pdfa", "pdf_to_markdown", "export_markdown",
 }
 
 
@@ -77,7 +77,7 @@ READ_ONLY_TOOLS = {"pdf_info", "get_metadata", "check_pdf", "extract_text", "vie
                    "find_blank_pages", "list_form_fields", "inspect_hidden_data",
                    "scan_pdf", "get_outline",
                    "list_attachments", "search_text",
-                   "extract_tables", "compare_pdfs", "list_pdfs"}
+                   "extract_tables", "compare_pdfs", "list_pdfs", "pdf_to_markdown"}
 
 
 async def test_tool_annotations(server_env):
