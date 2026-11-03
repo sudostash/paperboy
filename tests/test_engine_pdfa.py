@@ -962,9 +962,9 @@ def test_the_candidate_file_is_removed(tmp_path, verapdf, monkeypatch):
     made = []
     real = pdfa.tempfile.mkdtemp
     monkeypatch.setattr(pdfa.tempfile, "mkdtemp",
-                        lambda **kw: made.append(real(dir=tmp_path, **kw)) or made[-1])
+                        lambda **kw: made.append(real(**{"dir": tmp_path, **kw})) or made[-1])
     convert(embedded(tmp_path / "in.pdf"), tmp_path, verapdf[0])
-    assert made and not os.path.exists(made[0])
+    assert made and not any(os.path.exists(m) for m in made)  # (and the output's own)
 
 
 REAL = shutil.which("verapdf")

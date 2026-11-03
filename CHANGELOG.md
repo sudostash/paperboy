@@ -264,6 +264,33 @@ All notable changes to this project are documented here. The format follows
   permission is always granted, per PDF 2.0).
 
 ### Fixed
+- Outputs written under their default name (`<name>_rotated.pdf`, ...) went through no
+  root check, so a link planted at that name could have a tool write outside the root
+  (`convert_to_pdfa` and `convert_to_pdf` even through to the link's target). Default
+  names, and `split_pdf`'s default folder, are now confined like given paths.
+- `convert_to_pdfa`, `convert_to_pdf` and `images_to_pdf` write their PDF beside the
+  output and move it into place once complete (never through a link, never half
+  written); `convert_to_pdf` and `images_to_pdf` also refuse a result over the file-size
+  or page limit, as for any input.
+- `flatten_pdf` had qpdf write to a fixed temporary name a link could redirect, and
+  deleted the file it was replacing if flattening failed. It now uses a private folder
+  and leaves an existing output alone on failure.
+- `split_pdf` checks every part's name before writing any, never writes through a link,
+  and removes the parts it wrote if a later one fails. It and `render_pages` no longer
+  create the output folder when the call is refused.
+- `images_to_pdf` decoded every image at once; it now makes one page at a time and has a
+  limit of 400 million pixels per call, like `render_pages`.
+- On mcp 1.x, `convert_to_pdf`, `images_to_pdf` and `list_pdfs` ran on the server's event
+  loop, holding up every other call (and password pages) while they worked. Every tool
+  now runs in a worker thread.
+- Errors while checking a call that asks for a password ("ask") are reported like any
+  other tool error, never as raw exception text.
+- `run_pipeline` checks a watermark step's `image_path` before any step runs, as its
+  description says.
+- Outputs written by Paperboy itself (split parts, PDF/A copies, converted files,
+  extracted attachments and images) get the usual file mode for a new file, not a
+  temporary file's owner-only one, and a file they replace keeps its mode. The
+  `paperboy://pdfs` resource is read in a worker thread too.
 - `redact_pdf` removed the wrong annotation, or none, when annotations were stored
   directly in a page's `/Annots` (not as objects of their own), so a visible annotation
   inside a redacted area could survive. Such annotations are now given objects of their

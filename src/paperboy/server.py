@@ -13,6 +13,7 @@ import logging
 import os
 import re
 import time
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Annotated
 
@@ -24,7 +25,7 @@ from . import SERVER_NAME, __version__, engine, password_page
 from .config import Settings
 from .engine.base import KNOWN_USER_PASSWORD, known_user_password, open_pdf
 from .errors import PdfUserError
-from .paths import prepare_output, prepare_output_dir, require_input, resolve, same_file
+from .paths import prepare_output, require_input, resolve, same_file
 from .results import (
     AttachmentsResult,
     BlankPagesResult,
@@ -108,18 +109,24 @@ def _guard(fn):
     """
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
-        try:
+        with _tool_errors(fn.__name__):
             return fn(*args, **kwargs)
-        except ToolError:
-            raise
-        except PdfUserError as exc:
-            raise ToolError(str(exc)) from exc
-        except Exception as exc:
-            logger.exception("Unexpected error in %s", fn.__name__)
-            raise ToolError(
-                f"Internal error in {fn.__name__}; details were logged by the server"
-            ) from exc
     return wrapper
+
+
+@contextmanager
+def _tool_errors(name: str):
+    """Expected failures become their message; anything else a generic one."""
+    try:
+        yield
+    except ToolError:
+        raise
+    except PdfUserError as exc:
+        raise ToolError(str(exc)) from exc
+    except Exception as exc:
+        logger.exception("Unexpected error in %s", name)
+        raise ToolError(f"Internal error in {name}; details were logged by the server") \
+            from exc
 
 
 # --- passwords typed by the user ------------------------------------------------------
@@ -317,18 +324,27 @@ async def _resolve_passwords(ctx, kwargs: dict, tool: str = "") -> None:
         _set(kwargs, where, value)
 
 
+def _takes_passwords(fn) -> bool:
+    return bool(set(inspect.signature(fn).parameters) & (
+        set(_OPEN_PASSWORDS) | set(_NEW_PASSWORDS) | {"passwords", "steps"}))
+
+
 def _asking(fn):
-    """The tool as registered: unchanged unless it takes passwords; then async, getting
-    any "ask" password from the user before running the tool in a worker thread."""
+    """The tool as registered: async, running the tool in a worker thread (mcp 1.x
+    would run a plain function on the event loop, holding up every other call); a
+    tool that takes passwords first gets any "ask" password from the user."""
     signature = inspect.signature(fn)
-    takes = set(signature.parameters) & (set(_OPEN_PASSWORDS) | set(_NEW_PASSWORDS)
-                                         | {"passwords", "steps"})
-    if not takes:
-        return fn
+    if not _takes_passwords(fn):
+        @functools.wraps(fn)
+        async def run(**kwargs):
+            return await anyio.to_thread.run_sync(functools.partial(fn, **kwargs))
+        run.__signature__ = signature
+        return run
 
     @functools.wraps(fn)
     async def wrapper(*, paperboy_context: Context, **kwargs):
-        await _resolve_passwords(paperboy_context, kwargs, fn.__name__)
+        with _tool_errors(fn.__name__):  # checking the call happens here, not in the tool
+            await _resolve_passwords(paperboy_context, kwargs, fn.__name__)
         return await anyio.to_thread.run_sync(functools.partial(fn, **kwargs))
 
     wrapper.__signature__ = signature.replace(parameters=[
@@ -345,7 +361,7 @@ def _tool(annotations: ToolAnnotations):
     def register(fn):
         registered = _asking(fn)
         description = inspect.cleandoc(fn.__doc__ or "")
-        if registered is not fn:
+        if _takes_passwords(fn):
             description += "\n\n" + ASK_NOTE.strip()
         mcp.tool(annotations=annotations, description=description)(registered)
         return fn
@@ -799,12 +815,7 @@ def split_pdf(
     forbids document assembly.
     """
     src = require_input(input_path, SETTINGS)
-    out_dir = (
-        prepare_output_dir(output_dir, SETTINGS)
-        if output_dir
-        else src.parent / f"{src.stem}_split"
-    )
-    out_dir.mkdir(parents=True, exist_ok=True)
+    out_dir = _output_folder(src, output_dir, "_split")
     return engine.split_pdf(src, out_dir, SETTINGS, ranges, password, _overwrite(overwrite))
 
 
@@ -1456,13 +1467,7 @@ def render_pages(
     Copy-protected PDFs need their owner password.
     """
     src = require_input(input_path, SETTINGS)
-    # The default folder goes through resolve() too: a symlinked <name>_pages must not
-    # lead outside the root.
-    out_dir = (
-        prepare_output_dir(output_dir, SETTINGS)
-        if output_dir
-        else resolve(str(src.parent / f"{src.stem}_pages"), SETTINGS)
-    )
+    out_dir = _output_folder(src, output_dir, "_pages")
     return engine.render_pages(src, out_dir, SETTINGS, pages, dpi, format, password,
                                _overwrite(overwrite))
 
@@ -1650,6 +1655,11 @@ def run_pipeline(
         if tool == "convert_to_pdfa" and n != len(plan):
             # Any later change would leave a file that claims to be PDF/A but isn't.
             raise ToolError(f"Step {n}: convert_to_pdfa must be the last step")
+        if tool == "add_watermark" and plan[n - 1][1].get("image_path"):
+            try:  # a missing image must stop the run before step 1, not at this step
+                require_input(plan[n - 1][1]["image_path"], SETTINGS)
+            except PdfUserError as exc:
+                raise ToolError(f"Step {n} ({tool}): {exc}") from None
     replace = _overwrite(overwrite)
     out = prepare_output(src, output_path, "_processed", replace, SETTINGS)
     with open_pdf(src, SETTINGS, password) as first:
@@ -1721,7 +1731,12 @@ def list_pdfs(
 @mcp.resource("paperboy://pdfs", name="pdfs", description=(
     "The PDFs under the folder the server may use (PAPERBOY_ROOT), as JSON: path, size "
     "and when each last changed."), mime_type="application/json")
-def pdfs_resource() -> str:
+async def pdfs_resource() -> str:
+    # In a worker thread: mcp 1.x would list on the event loop, holding up every call.
+    return await anyio.to_thread.run_sync(_list_pdfs_json)
+
+
+def _list_pdfs_json() -> str:
     try:
         return json.dumps(engine.list_pdfs(SETTINGS), indent=2)
     except PdfUserError as exc:  # e.g. no root set: say so rather than fail the read

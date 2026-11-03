@@ -5,7 +5,7 @@ import pytest
 
 from paperboy.config import Settings
 from paperboy.errors import PdfUserError
-from paperboy.paths import prepare_output, prepare_output_dir, require_input, resolve
+from paperboy.paths import prepare_output, require_input, resolve
 
 
 def test_outside_root_rejected(tmp_path):
@@ -185,21 +185,6 @@ def test_existing_default_output_is_protected(doc, settings):
     assert doc.with_name("doc_x.pdf").read_bytes() == b"keep me"
 
 
-# --- prepare_output_dir ---------------------------------------------------------------
-
-
-def test_prepare_output_dir_creates_it(settings, tmp_path):
-    d = prepare_output_dir(str(tmp_path / "x" / "y"), settings)
-    assert d.is_dir()
-
-
-def test_prepare_output_dir_is_confined(sandbox):
-    s, _, outside = sandbox
-    with pytest.raises(PdfUserError, match="outside the allowed root"):
-        prepare_output_dir(str(outside / "parts"), s)
-    assert not (outside / "parts").exists()
-
-
 # --- review findings: same file under a different name -----------------------------
 
 
@@ -217,8 +202,3 @@ def test_output_case_variant_of_input_is_refused_on_case_insensitive_fs(doc, set
     with pytest.raises(PdfUserError, match="same as the input"):
         prepare_output(doc, str(upper), "_x", True, settings)
 
-
-def test_prepare_output_dir_refuses_an_existing_file(settings, tmp_path):
-    (tmp_path / "taken").write_text("x")
-    with pytest.raises(PdfUserError, match="not a folder"):
-        prepare_output_dir(str(tmp_path / "taken"), settings)

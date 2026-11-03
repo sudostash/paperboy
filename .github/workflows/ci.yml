@@ -15,10 +15,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install system binaries (LibreOffice, qpdf)
+      - name: Install system binaries (LibreOffice, qpdf, Tesseract)
+        # Tesseract (with English data) so the OCR tests that run the real binary don't skip.
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends qpdf libreoffice-core libreoffice-writer
+          sudo apt-get install -y --no-install-recommends qpdf libreoffice-core libreoffice-writer \
+            tesseract-ocr tesseract-ocr-eng
 
       - uses: actions/setup-python@v5
         with:

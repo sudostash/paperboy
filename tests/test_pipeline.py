@@ -188,7 +188,7 @@ def test_inputs_outside_the_root_are_refused(doc, outside):
     with pytest.raises(S.ToolError, match="outside the allowed root"):
         S.run_pipeline(str(doc), [{"tool": "optimize_pdf"}],
                        output_path=str(outside / "o.pdf"))
-    with pytest.raises(S.ToolError, match=r"Step 1 \(add_watermark\) failed: .*outside"):
+    with pytest.raises(S.ToolError, match=r"Step 1 \(add_watermark\): .*outside"):
         S.run_pipeline(str(doc), [{"tool": "add_watermark",
                                    "args": {"image_path": str(outside / "logo.png")}}])
     assert not (outside / "o.pdf").exists()

@@ -192,7 +192,10 @@ def flatten_pdf(
         require_modify_permission(src, "flattening its comments and form fields")
         usage_rights = refuse_signed(src, "flattening it")
         protection = inherit_protection(src, password)
-    flattened = out.with_name(f".{out.name}.flattening")
+    # qpdf writes into a private folder (no one can plant a link there); pikepdf's
+    # save replaces the output only once the result is complete.
+    work = Path(tempfile.mkdtemp(prefix=".paperboy-", dir=out.parent))
+    flattened = work / "flattened.pdf"
     try:
         proc = run_qpdf(
             settings,
@@ -210,10 +213,7 @@ def flatten_pdf(
             if usage_rights and "/Perms" in pdf.Root:  # they break once the file changes
                 del pdf.Root.Perms
             pdf.save(str(out), encryption=protection.encryption)
-    except BaseException:
-        out.unlink(missing_ok=True)
-        raise
     finally:
-        flattened.unlink(missing_ok=True)
+        shutil.rmtree(work, ignore_errors=True)
     return protection.report(
         {"output": str(out), "pages": pages, "warnings": proc.returncode == 3})
