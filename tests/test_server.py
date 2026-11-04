@@ -62,7 +62,8 @@ INPUT_TOOLS = {
     "crop_pages": {"margins": [1, 1, 1, 1]}, "resize_pages": {"size": "a4"},
     "n_up": {}, "insert_blank_pages": {"after": [1]},
     "extract_tables": {}, "export_tables": {},
-    "pdf_to_markdown": {}, "export_markdown": {},
+    "pdf_to_markdown": {}, "export_markdown": {}, "list_comments": {},
+    "add_comments": {"comments": [{"type": "highlight", "text": "PAGE"}]},
     "run_pipeline": {"steps": [{"tool": "optimize_pdf"}]},
 }
 
@@ -78,7 +79,8 @@ def test_every_tool_refuses_inputs_outside_root(tool, outside):
     "view_pages", "render_pages", "find_blank_pages", "list_form_fields",
     "inspect_hidden_data", "scan_pdf", "get_outline",
     "list_attachments", "extract_attachments", "extract_images", "search_text",
-    "extract_tables", "export_tables", "pdf_to_markdown", "export_markdown"}))
+    "extract_tables", "export_tables", "pdf_to_markdown", "export_markdown",
+    "list_comments"}))
 def test_every_writer_refuses_outputs_outside_root(tool, doc, outside):
     args = dict(INPUT_TOOLS[tool], input_path=str(doc), output_path=str(outside / "o.pdf"))
     with pytest.raises(S.ToolError, match="outside the allowed root"):

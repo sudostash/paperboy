@@ -500,6 +500,37 @@ SCENARIOS: dict[str, dict] = {
                                     "ready to paste into the wiki."},
         ],
     },
+    "comments": {
+        "title": "Review with comments",
+        "subtitle": "Highlights, notes and text boxes that show the same in every viewer.",
+        "files": ["handbook.pdf"],
+        "prompt": "Review handbook.pdf for me: flag the one-minute wait as too long, mark "
+                  "\"never after\" for removal, ask whether Sunday deliveries are coming, "
+                  "and stamp it as a draft.",
+        "steps": [
+            {"type": "call", "tool": "add_comments",
+             "args": {"input_path": "handbook.pdf", "author": "Ops review", "comments": [
+                 {"type": "highlight", "text": "wait a full minute",
+                  "comment": "Too long: 30 seconds is enough."},
+                 {"type": "strikeout", "text": "never after",
+                  "comment": "Remove: scanning first is the rule anyway."},
+                 {"type": "note", "text": "Delivery windows",
+                  "comment": "Are Sunday deliveries starting in January?"},
+                 {"type": "text_box", "page": 1, "rect": [380, 470, 540, 505],
+                  "text": "DRAFT - not yet approved", "color": "red", "font_size": 12}]},
+             "show": {"before": "handbook.pdf", "after": "handbook_commented.pdf",
+                      "layout": "side-by-side"}},
+            {"type": "say", "text": "Done: handbook_commented.pdf has a highlight on the "
+                                    "one-minute wait, a strikeout on \"never after\", a "
+                                    "note by Delivery windows and a red DRAFT box. Here "
+                                    "they are as anyone reviewing will see them:"},
+            {"type": "call", "tool": "list_comments",
+             "args": {"input_path": "handbook_commented.pdf"},
+             "showTable": "comments", "columns": ["id", "type", "comment", "marked_text"]},
+            {"type": "say", "text": "Each comment has an id, so replies can be threaded "
+                                    "under it later."},
+        ],
+    },
     "pdfa": {
         "title": "Archive as PDF/A",
         "subtitle": "A PDF/A-2b copy for a court or an archive, checked by veraPDF.",

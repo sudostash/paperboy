@@ -79,7 +79,8 @@ def test_a_protected_input_stays_protected_through_the_steps(make_encrypted, tmp
     ([{"tool": "optimize_pdf"}] * 21, "Give 1 to 20 steps"),
     (["optimize_pdf"], "Step 1 must be an object with a tool name"),
     ([{"args": {}}], "Step 1 must be an object with a tool name"),
-    ([{"tool": "merge_pdfs"}], "can't run in a pipeline. Steps can be: add_page_numbers"),
+    ([{"tool": "merge_pdfs"}],
+     "can't run in a pipeline. Steps can be: add_comments, add_page_numbers"),
     ([{"tool": "pdf_info"}], "can't run in a pipeline"),
     ([{"tool": "delete_pages"}], r"Step 1 \(delete_pages\): pages: Field required"),
     ([{"tool": "rotate_pages", "args": {"degrees": "ninety"}}], "degrees:"),
@@ -412,3 +413,14 @@ def test_every_step_passes_on_all_its_arguments():
         used = set(re.findall(r'a\["(\w+)"\]', body))
         assert params - used == passed_otherwise.get(name, set()), name
     assert len(runners) == len(S._step_runners())
+
+
+def test_comments_can_be_added_in_a_pipeline(doc):
+    res = S.run_pipeline(str(doc), [
+        {"tool": "delete_pages", "args": {"pages": "1"}},
+        {"tool": "add_comments", "args": {"author": "Sam", "comments": [
+            {"type": "highlight", "text": "PAGE-3", "comment": "check"}]}},
+        {"tool": "encrypt_pdf", "args": {"user_password": "pw"}}])
+    assert res["steps"][1]["result"]["comments"][0]["added"] == [{"id": "p2-1", "page": 2}]
+    listed = S.list_comments(res["output"], password="pw")["comments"]
+    assert [(c["author"], c["marked_text"]) for c in listed] == [("Sam", "PAGE-3")]

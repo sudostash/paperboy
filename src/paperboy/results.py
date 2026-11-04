@@ -488,6 +488,68 @@ class ExportMarkdownResult(TypedDict):
     pages_without_text: list[int]
 
 
+class Comment(TypedDict):
+    id: str                                # "p<page>-<n>": what a reply refers to
+    page: int                              # 1-based
+    type: str                              # note, highlight, text_box, stamp, ...
+    author: str | None
+    comment: str | None                    # its text (a text box's: the text shown)
+    subject: str | None
+    created: str | None                    # ISO 8601
+    modified: str | None
+    color: str | None                      # #rrggbb
+    rect: list[float] | None               # [left, bottom, right, top] in PDF points
+    reply_to: str | None                   # the id of the comment it answers
+    marked_text: str | None                # the text under a highlight, underline, ...
+
+
+class CommentsResult(TypedDict):
+    path: str
+    comments: list[Comment]
+    count: int
+    truncated: bool                        # more than 1,000 comments
+    text_withheld: bool                    # copying is forbidden: no comment text
+    marked_text_complete: bool             # false: some marked_text wasn't read (limits)
+
+
+class CommentInput(TypedDict):
+    """A comment to add; which keys apply depends on its type (see add_comments)."""
+
+    __pydantic_config__ = ConfigDict(extra="forbid")  # type: ignore[misc]
+
+    type: Literal["highlight", "underline", "strikeout", "squiggly", "note", "text_box",
+                  "reply"]
+    page: NotRequired[int]
+    text: NotRequired[str]
+    rects: NotRequired[list[list[float]]]
+    at: NotRequired[list[float]]
+    rect: NotRequired[list[float]]
+    comment: NotRequired[str]
+    color: NotRequired[str]
+    font_size: NotRequired[float]
+    border: NotRequired[bool]
+    match_case: NotRequired[bool]
+    whole_word: NotRequired[bool]
+    to: NotRequired[str]
+
+
+class AddedPlace(TypedDict):
+    id: str
+    page: int
+
+
+class AddedComment(TypedDict):
+    index: int                             # 1-based, in the comments given
+    type: str
+    added: list[AddedPlace]                # one per place its text was found
+
+
+class AddCommentsResult(Protected):
+    output: str
+    comments: list[AddedComment]
+    added: int
+
+
 class PageDifference(TypedDict):
     # changed / added (only in B) / removed (only in A) / unknown (not compared: no text,
     # skipped, or the time limit); pages that are the same aren't listed.
@@ -612,7 +674,7 @@ PipelineTool = Literal[
     "encrypt_pdf", "optimize_pdf", "repair_pdf", "flatten_pdf", "set_metadata",
     "sanitize_pdf", "add_watermark", "add_page_numbers", "fill_form", "crop_pages",
     "resize_pages", "n_up", "insert_blank_pages", "set_outline", "redact_pdf", "ocr_pdf",
-    "convert_to_pdfa"]
+    "convert_to_pdfa", "add_comments"]
 
 
 class PipelineStepInput(TypedDict):

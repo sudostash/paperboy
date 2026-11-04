@@ -12,6 +12,7 @@ import io
 import json
 import os
 import sys
+from pathlib import Path
 
 import jsonschema
 import pikepdf
@@ -91,6 +92,18 @@ def _pictured(path):
     return str(path)
 
 
+def _commented(folder):
+    """A PDF with a highlight and a reply to it."""
+    from paperboy.config import Settings
+    from paperboy.engine import add_comments
+    settings = Settings(root=folder)
+    first, second = folder / "c1.pdf", folder / "c2.pdf"
+    add_comments(Path(_pdf(folder / "c0.pdf")), first, settings,
+                 [{"type": "highlight", "text": "PAGE-1", "comment": "why?"}], "Sam")
+    add_comments(first, second, settings, [{"type": "reply", "to": "p1-1", "comment": "ok"}])
+    return str(second)
+
+
 def _tabled(path):
     from reportlab.lib import colors
     from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
@@ -168,6 +181,16 @@ CASES = [
                 "mode": "both"}),
     ("export_tables", "export_tables", lambda d: {"input_path": _tabled(d / "t.pdf")}),
     ("pdf_to_markdown", "pdf_to_markdown", lambda d: {"input_path": _tabled(d / "t.pdf")}),
+    ("add_comments", "add_comments",
+     lambda d: {"input_path": _pdf(d / "a.pdf"), "author": "Sam",
+                "comments": [{"type": "highlight", "text": "a", "comment": "x"},
+                             {"type": "note", "page": 1, "at": [10, 100], "comment": "y"},
+                             {"type": "text_box", "page": 1, "rect": [100, 100, 300, 150],
+                              "text": "box"}]}),
+    ("add_comments-locked", "add_comments",
+     lambda d: {"input_path": _locked(d / "l.pdf"), "password": "pw",
+                "comments": [{"type": "note", "page": 1, "at": [10, 100], "comment": "y"}]}),
+    ("list_comments", "list_comments", lambda d: {"input_path": _commented(d)}),
     ("export_markdown", "export_markdown", lambda d: {"input_path": _tabled(d / "t.pdf")}),
     ("crop_pages", "crop_pages",
      lambda d: {"input_path": _pdf(d / "a.pdf"), "margins": [10, 10, 10, 10]}),
