@@ -30,9 +30,10 @@ SCENARIOS: dict[str, dict] = {
                   "Then check report.pdf and rotate its last page.",
         "steps": [
             {"type": "tools"},
-            {"type": "say", "text": "Four inspection tools are marked read-only, so your "
-                                    "client can run them straight away. Every tool that "
-                                    "writes a file is marked destructive and asks first."},
+            {"type": "say", "text": "The tools that only read (in green) are marked "
+                                    "read-only, so your client can run them straight away. "
+                                    "Every tool that writes a file is marked destructive "
+                                    "and asks first."},
             {"type": "call", "tool": "pdf_info", "args": {"input_path": "report.pdf"},
              "show": {"after": "report.pdf"}},
             {"type": "call", "tool": "rotate_pages",

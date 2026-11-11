@@ -41,6 +41,7 @@ body {
 }
 
 .brand { font-weight: 700; font-size: 18px; white-space: nowrap; }
+.icon { width: 1em; height: 1em; vertical-align: -0.15em; flex-shrink: 0; }
 .brand .mark { width: 22px; height: 22px; vertical-align: -4px; margin-right: 4px; }
 
 .heading h1 { margin: 0; font-size: 18px; }
