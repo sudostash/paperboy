@@ -740,3 +740,19 @@ PROMO: dict = {
                 "paperboy install claude-desktop --root ~/Documents"],
     "url": "github.com/sudostash/paperboy",
 }
+
+# How the gallery (viewer/index.html) groups the scenarios: the sections and order of
+# docs/tutorials.md. Every scenario is in exactly one group.
+GROUPS: list[tuple[str, list[str]]] = [
+    ("Getting started", ["list-pdfs", "tool-annotations", "structured-output"]),
+    ("Reading and finding", ["render-pages", "search", "markdown", "tables", "extract",
+                             "ocr", "compare"]),
+    ("Organizing pages", ["organize", "extract-crop", "blank-pages", "interleave",
+                          "page-layout", "bookmarks"]),
+    ("Creating PDFs", ["convert"]),
+    ("Editing and marking up", ["fill-form", "watermark-numbers", "comments", "metadata",
+                                "pipeline"]),
+    ("Sharing safely", ["sanitize", "redaction", "protect", "ask-password", "permissions",
+                        "scan"]),
+    ("File health and size", ["repair", "target-size", "pdfa"]),
+]

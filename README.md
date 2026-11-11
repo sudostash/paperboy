@@ -495,6 +495,7 @@ on the right). See [demos/README.md](demos/README.md).
 pip install -e ".[demo]" && playwright install chromium
 python demos/record.py            # writes demos/out/videos/<scenario>.webm
 python demos/record.py --promo    # the product video: demos/out/videos/paperboy-promo.webm
+python demos/record.py --gallery  # browse every demo in your browser
 ```
 
 ## Roadmap

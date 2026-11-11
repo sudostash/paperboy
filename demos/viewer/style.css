@@ -18,6 +18,8 @@
 
 * { box-sizing: border-box; }
 
+[hidden] { display: none !important; }
+
 html, body { height: 100%; margin: 0; }
 
 body {
@@ -317,3 +319,148 @@ body {
 .md-heading { color: var(--accent); font-weight: 700; }
 .md-item { color: var(--ok); }
 .md-table { color: var(--muted); }
+
+/* Navigation back to the gallery from a playing demo */
+.back {
+  margin-left: auto;
+  white-space: nowrap;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--accent);
+  text-decoration: none;
+  padding: 6px 12px;
+  border-radius: 8px;
+}
+.back:hover { background: var(--accent-soft); }
+
+/* The gallery: index.html without a scenario */
+body.browsing { height: auto; min-height: 100%; overflow: auto; }
+body.browsing .bar { position: sticky; top: 0; z-index: 1; }
+
+.gallery {
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 28px 28px 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 34px;
+}
+
+.gallery h2 { margin: 0 0 14px; font-size: 18px; }
+
+.hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+  padding: 26px 28px;
+  border-radius: var(--radius);
+  background: var(--ink);
+  color: #fff;
+}
+.hero h2 { margin: 2px 0 6px; font-size: 26px; }
+.hero p { margin: 0; color: #cbd2d9; }
+.hero .kicker {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #8fb3f5;
+}
+.hero .secondary { background: transparent; color: #fff; border-color: #52606d; }
+.hero .missing { color: #cbd2d9; }
+
+.note { margin: -14px 0 0; color: var(--muted); }
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 18px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.card h3 { margin: 0; font-size: 16px; }
+.card p { margin: 0; color: var(--muted); font-size: 14px; flex: 1; }
+
+.actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+.actions .primary, .actions .secondary {
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 7px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--accent);
+  cursor: pointer;
+  text-decoration: none;
+}
+.actions .primary { background: var(--accent); color: #fff; }
+.actions .primary:hover { background: #255bb8; }
+.actions .secondary { background: var(--panel); color: var(--accent); border-color: var(--line); }
+.actions .secondary:hover { border-color: var(--accent); }
+.actions .missing { font-size: 13px; color: var(--muted); }
+
+.back:focus-visible, .actions .primary:focus-visible, .actions .secondary:focus-visible,
+.video-dialog .close:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.empty { margin: 40px auto; max-width: 560px; text-align: center; }
+.empty p { color: var(--muted); }
+.command {
+  display: block;
+  margin: 10px auto 0;
+  width: fit-content;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--code);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font: 13px var(--mono);
+}
+.note .command { display: inline-block; margin: 0 0 0 4px; }
+
+.video-dialog {
+  width: min(1100px, 94vw);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--ink);
+  color: #fff;
+  overflow: hidden;
+}
+.video-dialog::backdrop { background: rgba(15, 20, 32, .72); }
+.video-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; }
+.video-head h2 { margin: 0; font-size: 16px; }
+.video-dialog .close {
+  font: inherit;
+  font-size: 18px;
+  line-height: 1;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+}
+.video-dialog .close:hover { background: rgba(255, 255, 255, .12); }
+.video-dialog video { display: block; width: 100%; aspect-ratio: 16 / 9; background: #000; }
+
+@media (max-width: 640px) {
+  .gallery { padding: 20px 16px 48px; }
+  .bar { padding: 12px 16px; gap: 12px; flex-wrap: wrap; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card, .hero { animation: none; }
+}

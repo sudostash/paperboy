@@ -26,7 +26,7 @@ sys.path.insert(0, str(DEMOS))
 
 import demo_pdfs  # noqa: E402
 import record  # noqa: E402
-from scenarios import PROMO, SCENARIOS  # noqa: E402
+from scenarios import GROUPS, PROMO, SCENARIOS  # noqa: E402
 from test_server_stdio import EXPECTED_TOOLS  # noqa: E402
 
 STEP_TYPES = {"tools", "say", "call"}
@@ -134,6 +134,11 @@ def test_tutorials_cover_every_scenario(slug):
     assert f'*"{SCENARIOS[slug]["prompt"]}"*' in flat
 
 
+def test_every_scenario_is_in_exactly_one_gallery_group():
+    grouped = [slug for _, slugs in GROUPS for slug in slugs]
+    assert sorted(grouped) == sorted(SCENARIOS)
+
+
 def test_promo_is_well_formed():
     assert {"name", "tagline", "dateline", "hook", "ask", "clients", "playback",
             "features", "trust", "install", "url"} <= PROMO.keys()
@@ -239,6 +244,53 @@ async def test_run_promo_starts_clean(tmp_path):
     await record.run_promo(tmp_path, dict(SMALL_PROMO, features=[]))
 
     assert not stale.exists()
+
+
+def test_write_catalog_lists_what_can_be_watched_or_replayed(tmp_path):
+    (tmp_path / "videos").mkdir()
+    (tmp_path / "videos" / "search.webm").write_bytes(b"v")
+    (tmp_path / "videos" / record.PROMO_VIDEO).write_bytes(b"v")
+    (tmp_path / "ocr").mkdir()
+    (tmp_path / "ocr" / "script.json").write_text("{}")
+
+    path = record.write_catalog(tmp_path)
+
+    text = path.read_text()
+    assert path == tmp_path / "catalog.js"
+    assert text.startswith("// Written by demos/record.py")
+    catalog = json.loads(text.split("window.PAPERBOY_DEMOS = ", 1)[1].rstrip().rstrip(";"))
+    assert [g["name"] for g in catalog["groups"]] == [name for name, _ in GROUPS]
+    demos = {d["slug"]: d for g in catalog["groups"] for d in g["demos"]}
+    assert demos.keys() == SCENARIOS.keys()
+    assert demos["search"] == {"slug": "search", "title": SCENARIOS["search"]["title"],
+                               "subtitle": SCENARIOS["search"]["subtitle"],
+                               "video": True, "live": False}
+    assert demos["ocr"]["live"] and not demos["ocr"]["video"]
+    assert catalog["promo"]["video"] and not catalog["promo"]["live"]
+    assert catalog["promo"]["file"] == record.PROMO_VIDEO
+
+
+async def test_prepare_all_runs_every_scenario_and_skips_what_cannot_run(
+        tmp_path, monkeypatch, capsys):
+    ran = []
+
+    async def fake_run(slug, scenario, out):
+        if slug == "ocr":
+            (out / slug).mkdir(parents=True)  # a half-made demo is cleaned away
+            raise RuntimeError("OCR needs Tesseract")
+        ran.append(slug)
+
+    monkeypatch.setattr(record, "run_scenario", fake_run)
+
+    skipped = await record.prepare_all(tmp_path)
+
+    assert skipped == ["ocr"]
+    assert ran == [slug for slug in SCENARIOS if slug != "ocr"]
+    assert not (tmp_path / "ocr").exists()
+    assert "skipped ocr: OCR needs Tesseract" in capsys.readouterr().out
+    # The product video's script, without running its scenes a second time.
+    script = json.loads((tmp_path / "promo" / "script.json").read_text())
+    assert script["tools"] == len(EXPECTED_TOOLS)
 
 
 async def test_run_scenario_hides_local_paths(tmp_path):
@@ -440,6 +492,47 @@ def test_main_promo_takes_no_scenarios(monkeypatch, capsys):
     assert "--promo takes no scenarios" in capsys.readouterr().err
 
 
+def test_main_opens_the_gallery(monkeypatch):
+    seen = []
+    monkeypatch.setattr(record, "gallery", lambda: seen.append(True))
+    monkeypatch.setattr(sys, "argv", ["record.py", "--gallery"])
+    record.main()
+    assert seen == [True]
+
+
+@pytest.mark.parametrize("extra", [["tool-annotations"], ["--promo"], ["--preview"]])
+def test_main_gallery_takes_no_other_options(monkeypatch, capsys, extra):
+    monkeypatch.setattr(sys, "argv", ["record.py", "--gallery", *extra])
+    with pytest.raises(SystemExit):
+        record.main()
+    assert "--gallery takes no other options" in capsys.readouterr().err
+
+
+def test_gallery_prepares_demos_and_opens_the_browser(monkeypatch, tmp_path):
+    prepared, opened = [], []
+
+    async def fake_prepare(out):
+        prepared.append(out)
+        return []
+
+    monkeypatch.setattr(record, "prepare_all", fake_prepare)
+    monkeypatch.setattr(record.webbrowser, "open", opened.append)
+
+    def interrupt():
+        assert _status(opened[0]) == 200
+        assert _status(opened[0].replace("viewer/index.html", "out/catalog.js")) == 200
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(record, "_wait_forever", interrupt)
+
+    record.gallery(out=tmp_path)
+
+    assert prepared == [tmp_path]
+    assert opened[0].endswith("/viewer/index.html")
+    with pytest.raises(OSError):
+        urllib.request.urlopen(opened[0], timeout=2)
+
+
 def test_main_dispatches_preview(monkeypatch):
     seen = []
     monkeypatch.setattr(record, "preview", seen.append)
@@ -511,15 +604,135 @@ async def _stage_text(browser, url: str) -> str:
     return text
 
 
-async def test_viewer_explains_file_url(browser):
-    text = await _stage_text(browser, (DEMOS / "viewer" / "index.html").as_uri())
+@pytest.fixture
+def copied_viewer(tmp_path):
+    """The viewer beside an out/ folder of its own, as it sits in demos/."""
+    shutil.copytree(DEMOS / "viewer", tmp_path / "viewer")
+    (tmp_path / "out").mkdir()
+    return tmp_path
+
+
+async def _open(browser, url: str):
+    page = await browser.new_page(viewport=record.VIEWPORT)
+    errors: list[str] = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    await page.goto(url)
+    page.errors = errors
+    return page
+
+
+async def test_viewer_explains_live_replay_needs_http(browser, copied_viewer):
+    url = (copied_viewer / "viewer" / "index.html").as_uri() + "?s=search"
+    text = await _stage_text(browser, url)
     assert "served over HTTP" in text
-    assert "--preview" in text
+    assert "--gallery" in text
 
 
-async def test_viewer_explains_missing_scenario(browser, served):
-    text = await _stage_text(browser, f"{served}/viewer/index.html")
-    assert "No scenario selected" in text
+async def test_gallery_from_a_file_offers_the_videos(browser, copied_viewer):
+    videos = copied_viewer / "out" / "videos"
+    videos.mkdir()
+    (videos / "search.webm").write_bytes(b"v")
+    (copied_viewer / "out" / "search").mkdir()
+    (copied_viewer / "out" / "search" / "script.json").write_text("{}")
+    record.write_catalog(copied_viewer / "out")
+
+    page = await _open(browser, (copied_viewer / "viewer" / "index.html").as_uri())
+    try:
+        assert not page.errors
+        assert await page.is_hidden("#player")
+        assert await page.locator(".card").count() == len(SCENARIOS)
+        # Opened as a file: videos only, no live replay, and a note saying how.
+        assert await page.get_by_role("button", name="Watch video: Search a PDF").count() == 1
+        assert await page.locator("a.secondary").count() == 0
+        assert "--gallery" in await page.inner_text(".note")
+    finally:
+        await page.close()
+
+
+async def test_gallery_without_recordings_says_how_to_make_them(browser, copied_viewer):
+    page = await _open(browser, (copied_viewer / "viewer" / "index.html").as_uri())
+    try:
+        assert not page.errors
+        text = await page.inner_text("#gallery")
+        assert "No demos recorded yet" in text
+        assert "python demos/record.py --gallery" in text
+    finally:
+        await page.close()
+
+
+async def test_gallery_lists_every_demo_by_group(browser, tmp_path):
+    for slug in ("search", "redaction"):
+        (tmp_path / slug).mkdir()
+        (tmp_path / slug / "script.json").write_text("{}")
+    (tmp_path / "videos").mkdir()
+    (tmp_path / "videos" / "search.webm").write_bytes(b"v")
+    record.write_catalog(tmp_path)
+    server = record._serve(tmp_path)
+    page = await _open(browser, f"http://127.0.0.1:{server.server_address[1]}/viewer/index.html")
+    try:
+        assert not page.errors
+        assert await page.inner_text("#title") == "Demos"
+        assert await page.locator(".group h2").all_inner_texts() == [n for n, _ in GROUPS]
+        assert await page.locator(".card").count() == len(SCENARIOS)
+        assert await page.locator(".card h3").all_inner_texts() == [
+            SCENARIOS[slug]["title"] for _, slugs in GROUPS for slug in slugs]
+        # Each card offers what exists: a video, a live replay, or neither yet.
+        live = page.get_by_role("link", name="Play live: Redact for real")
+        assert await live.get_attribute("href") == "index.html?s=redaction"
+        assert await page.get_by_role("button", name="Watch video: Search a PDF").count() == 1
+        assert await page.get_by_role("button", name="Watch video: Redact for real").count() == 0
+        assert await page.locator(".card .missing").count() == len(SCENARIOS) - 2
+        assert await page.is_hidden("#back")
+    finally:
+        await page.close()
+        server.shutdown()
+
+
+async def test_gallery_plays_a_video_in_a_dialog(browser, tmp_path):
+    await record.record(["list-pdfs"], headed=False, out=tmp_path, speed=40)
+    server = record._serve(tmp_path)
+    page = await _open(browser, f"http://127.0.0.1:{server.server_address[1]}/viewer/index.html")
+    try:
+        watch = page.get_by_role("button", name="Watch video: See which PDFs you have")
+        await watch.click()
+        assert await page.is_visible("#video-dialog")
+        assert await page.inner_text("#video-title") == SCENARIOS["list-pdfs"]["title"]
+        assert (await page.get_attribute("#video", "src")).endswith("/videos/list-pdfs.webm")
+        await page.wait_for_function("document.getElementById('video').readyState >= 1")
+        await page.keyboard.press("Escape")
+        assert await page.is_hidden("#video-dialog")
+        # Stopped, not playing on behind the page (the close event follows the Escape).
+        await page.wait_for_function("!document.getElementById('video').hasAttribute('src')")
+        assert await page.evaluate("document.activeElement.getAttribute('aria-label')") == \
+            "Watch video: See which PDFs you have"
+        await watch.click()
+        await page.click("#video-close")
+        assert await page.is_hidden("#video-dialog")
+        assert not page.errors
+    finally:
+        await page.close()
+        server.shutdown()
+
+
+async def test_a_playing_demo_links_back_to_the_gallery(browser, tmp_path):
+    await record.run_scenario("list-pdfs", SCENARIOS["list-pdfs"], out=tmp_path)
+    record.write_catalog(tmp_path)
+    server = record._serve(tmp_path)
+    base = f"http://127.0.0.1:{server.server_address[1]}/viewer/index.html"
+    page = await _open(browser, f"{base}?s=list-pdfs&speed=40")
+    try:
+        assert await page.is_visible("#back")
+        await page.click("#back")
+        await page.wait_for_selector("#gallery .card")
+        assert page.url == base
+        # Recordings and the product video hide it.
+        await page.goto(f"{base}?s=list-pdfs&speed=40&embed=1")
+        await page.wait_for_function("window.__demoDone || window.__demoError")
+        assert await page.is_hidden("#back")
+        assert not page.errors
+    finally:
+        await page.close()
+        server.shutdown()
 
 
 async def test_viewer_explains_unrecorded_scenario(browser, served):
@@ -611,6 +824,7 @@ async def test_record_writes_a_webm_video(browser, tmp_path):
     assert data[:4] == b"\x1a\x45\xdf\xa3"  # EBML header: a WebM container
     assert len(data) > 10_000
     assert not (tmp_path / "tool-annotations" / "raw").exists()
+    assert '"video": true' in (tmp_path / "catalog.js").read_text()  # the gallery lists it
 
 
 async def test_record_fails_when_the_viewer_errors(browser, tmp_path, monkeypatch):

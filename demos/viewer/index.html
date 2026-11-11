@@ -13,8 +13,9 @@
       <h1 id="title"></h1>
       <p id="subtitle"></p>
     </div>
+    <a class="back" id="back" href="index.html" hidden>← All demos</a>
   </header>
-  <main class="layout">
+  <main class="layout" id="player">
     <section class="chat" aria-label="Conversation" aria-live="polite">
       <div id="log" class="log"></div>
     </section>
@@ -22,15 +23,27 @@
       <div class="placeholder">Results appear here</div>
     </section>
   </main>
+  <main class="gallery" id="gallery" hidden></main>
+  <dialog class="video-dialog" id="video-dialog" aria-labelledby="video-title">
+    <div class="video-head">
+      <h2 id="video-title"></h2>
+      <button type="button" class="close" id="video-close" aria-label="Close video">✕</button>
+    </div>
+    <video id="video" controls playsinline></video>
+  </dialog>
   <script>
-    // Browsers block module scripts and fetch() on file:// pages, so app.js
-    // never runs there; say why instead of showing an empty page.
-    if (location.protocol === "file:") {
+    // Browsers block module scripts and fetch() on file:// pages, so app.js never
+    // runs there. The gallery still works (plain scripts and videos load), but a
+    // scenario can only be replayed live when the viewer is served over HTTP.
+    if (location.protocol === "file:" && new URLSearchParams(location.search).get("s")) {
       document.getElementById("stage").innerHTML =
-        '<div class="placeholder"><p>This viewer must be served over HTTP, not opened as a file.</p>' +
-        "<code>python demos/record.py --preview tool-annotations</code></div>";
+        '<div class="placeholder"><p>Replaying a demo live needs the viewer served over HTTP, not opened as a file.</p>' +
+        "<code>python demos/record.py --gallery</code></div>";
     }
   </script>
+  <!-- Written by record.py; missing until something is recorded. -->
+  <script src="../out/catalog.js"></script>
+  <script src="gallery.js"></script>
   <script type="module" src="app.js"></script>
 </body>
 </html>

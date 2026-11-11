@@ -74,8 +74,10 @@ python demos/record.py           # every guide, into demos/out/videos/
 python demos/record.py --promo   # the product video
 ```
 
-Then open any `.webm` file in a browser. See [demos/README.md](../demos/README.md) for
-more options, such as playing one guide in your browser without recording it.
+Then open `demos/viewer/index.html` in your browser: it lists every demo, grouped like this
+page, with a button to watch each one. Or run `python demos/record.py --gallery`, which also
+lets you replay any demo live without recording videos first. See
+[demos/README.md](../demos/README.md) for more options.
 
 ---
 

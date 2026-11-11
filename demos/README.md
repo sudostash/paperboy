@@ -25,6 +25,7 @@ without Chromium; the `demos` CI job installs it so they always run there.
 pip install -e ".[demo]"
 playwright install chromium
 
+python demos/record.py --gallery            # browse every demo in your browser
 python demos/record.py --list               # available scenarios
 python demos/record.py                      # record all
 python demos/record.py tool-annotations     # record one
@@ -34,9 +35,21 @@ python demos/record.py --promo              # the product video
 python demos/record.py --promo --preview    # play it in your browser
 ```
 
-Don't open `viewer/index.html` directly: browsers block its scripts on `file://`, and it needs a
-recorded transcript plus a `?s=<scenario>` parameter. `--preview` sets all of that up. To just
-watch a finished recording, open `out/videos/<scenario>.webm` in a browser.
+### Browsing the demos
+
+`viewer/index.html` without a scenario is a gallery of every demo, grouped like
+[docs/tutorials.md](../docs/tutorials.md), with the product video first. Each card has
+**Watch video** (the recording, played on the page) and **Play live** (the transcript replayed
+in the viewer), for whichever exist; a playing demo links back with **All demos**.
+
+- `python demos/record.py --gallery` runs every scenario against the real server (under a
+  minute; any that can't run here, say without Tesseract, are listed as skipped), then
+  serves the gallery and opens it in your browser, with both buttons on every card.
+- After recording, you can also just open `viewer/index.html` from your file manager. Browsers
+  don't run the live replay on a `file://` page, so it offers the videos only.
+
+The gallery's list is `out/catalog.js`, which `record.py` rewrites whenever it records,
+previews or opens the gallery.
 
 The viewer loads pdf.js from cdn.jsdelivr.net, so recording needs network access.
 `demos/out/` is gitignored; videos are generated locally, not committed.

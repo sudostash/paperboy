@@ -108,7 +108,7 @@ async function feature(promo, item, n) {
     const win = el("div", "window");
     frame = el("iframe");
     frame.title = item.headline;
-    frame.src = `index.html?s=${encodeURIComponent(item.slug)}&speed=${promo.playback * speed}`;
+    frame.src = `index.html?s=${encodeURIComponent(item.slug)}&speed=${promo.playback * speed}&embed=1`;
     win.append(frame);
     s.append(header, win);
   });

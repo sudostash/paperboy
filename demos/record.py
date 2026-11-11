@@ -15,6 +15,7 @@ Usage:
     python demos/record.py --preview tool-annotations   # play in your browser, no video
     python demos/record.py --promo             # the product video
     python demos/record.py --promo --preview
+    python demos/record.py --gallery           # browse every demo in your browser
 """
 from __future__ import annotations
 
@@ -44,7 +45,7 @@ DISPLAY_ROOT = "~/Documents"
 
 sys.path.insert(0, str(DEMOS))
 from demo_pdfs import build  # noqa: E402
-from scenarios import PROMO, SCENARIOS  # noqa: E402
+from scenarios import GROUPS, PROMO, SCENARIOS  # noqa: E402
 
 PROMO_VIDEO = "paperboy-promo.webm"
 
@@ -167,20 +168,64 @@ async def run_scenario(slug: str, scenario: dict, out: Path = OUT) -> dict:
     return json.loads(text)
 
 
-async def run_promo(out: Path = OUT, promo: dict = PROMO) -> dict:
-    """Run the scenarios the product video shows, and write its script with the
-    server's real tool count."""
+async def run_promo(out: Path = OUT, promo: dict = PROMO, scenes: bool = True) -> dict:
+    """Run the scenarios the product video shows (unless *scenes* is false: they have
+    just been run), and write its script with the server's real tool count."""
     workspace = out / "promo"
     shutil.rmtree(workspace, ignore_errors=True)
     workspace.mkdir(parents=True)
     async with stdio_client(_server(workspace)) as (r, w), ClientSession(r, w) as session:
         await session.initialize()
         tools = len((await session.list_tools()).tools)
-    for item in promo["features"]:
+    for item in promo["features"] if scenes else []:
         await run_scenario(item["slug"], SCENARIOS[item["slug"]], out)
     script = dict(promo, tools=tools)
     (workspace / "script.json").write_text(json.dumps(script, indent=2))
     return script
+
+
+def write_catalog(out: Path = OUT) -> Path:
+    """Write ``<out>/catalog.js``: the demos the gallery (viewer/index.html) lists, and
+    which of them have a video to watch or a transcript to replay live.
+
+    A script rather than JSON, so the gallery can load it from a file:// page too."""
+    videos = out / "videos"
+
+    def entry(slug: str) -> dict:
+        return {"slug": slug, "title": SCENARIOS[slug]["title"],
+                "subtitle": SCENARIOS[slug]["subtitle"],
+                "video": (videos / f"{slug}.webm").is_file(),
+                "live": (out / slug / "script.json").is_file()}
+
+    catalog = {
+        "promo": {"title": "Product video",
+                  "subtitle": f"{PROMO['tagline']}: a short tour of what it does.",
+                  "file": PROMO_VIDEO, "video": (videos / PROMO_VIDEO).is_file(),
+                  "live": (out / "promo" / "script.json").is_file()},
+        "groups": [{"name": name, "demos": [entry(slug) for slug in slugs]}
+                   for name, slugs in GROUPS],
+    }
+    out.mkdir(parents=True, exist_ok=True)
+    path = out / "catalog.js"
+    path.write_text("// Written by demos/record.py: the demos the gallery lists.\n"
+                    f"window.PAPERBOY_DEMOS = {json.dumps(catalog, indent=2)};\n")
+    return path
+
+
+async def prepare_all(out: Path = OUT) -> list[str]:
+    """Run every scenario, so each can be replayed live, and the product video's script.
+    Returns the scenarios that couldn't run here (say, without Tesseract), which the
+    gallery then offers only as videos."""
+    skipped = []
+    for slug in SCENARIOS:
+        try:
+            await run_scenario(slug, SCENARIOS[slug], out)
+        except Exception as exc:  # noqa: BLE001 - one demo mustn't stop the rest
+            shutil.rmtree(out / slug, ignore_errors=True)
+            skipped.append(slug)
+            print(f"skipped {slug}: {exc}")
+    await run_promo(out, scenes=False)
+    return skipped
 
 
 class _DemoHandler(SimpleHTTPRequestHandler):
@@ -253,7 +298,7 @@ async def record(slugs: list[str], headed: bool, out: Path = OUT, speed: int = 1
             for slug in slugs:
                 await run_scenario(slug, SCENARIOS[slug], out)
                 target = videos / f"{slug}.webm"
-                await _capture(browser, f"{viewer}/index.html?s={slug}&speed={speed}",
+                await _capture(browser, f"{viewer}/index.html?s={slug}&speed={speed}&embed=1",
                                out / slug / "raw", target, slug)
                 recorded.append(target)
             if promo:
@@ -265,6 +310,7 @@ async def record(slugs: list[str], headed: bool, out: Path = OUT, speed: int = 1
             await browser.close()
     finally:
         server.shutdown()
+        write_catalog(out)  # list whatever was recorded, even if a later one failed
     return recorded
 
 
@@ -281,9 +327,27 @@ def preview(slug: str | None, out: Path = OUT) -> None:
     else:
         asyncio.run(run_scenario(slug, SCENARIOS[slug], out))
         page = f"index.html?s={slug}"
+    write_catalog(out)  # so "All demos" lists what's here
     server = _serve(out)
     url = f"http://127.0.0.1:{server.server_address[1]}/viewer/{page}"
     print(f"Playing {slug} at {url} (reload to replay, Ctrl+C to stop)")
+    webbrowser.open(url)
+    try:
+        _wait_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.shutdown()
+
+
+def gallery(out: Path = OUT) -> None:
+    """Prepare every demo, then open the gallery in the default browser."""
+    print("Preparing every demo against the real server (under a minute)...")
+    asyncio.run(prepare_all(out))
+    write_catalog(out)
+    server = _serve(out)
+    url = f"http://127.0.0.1:{server.server_address[1]}/viewer/index.html"
+    print(f"Gallery at {url} (Ctrl+C to stop)")
     webbrowser.open(url)
     try:
         _wait_forever()
@@ -302,6 +366,8 @@ def main() -> None:
                         help="play one scenario in your browser instead of recording")
     parser.add_argument("--promo", action="store_true",
                         help="the product video: a reel of scenarios between title cards")
+    parser.add_argument("--gallery", action="store_true",
+                        help="prepare every demo and browse them in your browser")
     args = parser.parse_args()
     if args.list:
         for slug, s in SCENARIOS.items():
@@ -310,6 +376,11 @@ def main() -> None:
     unknown = set(args.slugs) - SCENARIOS.keys()
     if unknown:
         parser.error(f"unknown scenario(s): {', '.join(sorted(unknown))}")
+    if args.gallery:
+        if args.slugs or args.promo or args.preview:
+            parser.error("--gallery takes no other options")
+        gallery()
+        return
     if args.promo:
         if args.slugs:
             parser.error("--promo takes no scenarios")

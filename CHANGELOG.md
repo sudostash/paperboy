@@ -16,6 +16,10 @@ All notable changes to this project are documented here. The format follows
   fixing a damaged file (`check_pdf`, `repair_pdf`), turning photos and notes into one PDF
   (`convert_to_pdf`, `images_to_pdf`) and setting document properties (`get_metadata`,
   `set_metadata`). Every tool now appears in a demo.
+- A demo gallery: `demos/viewer/index.html` without a scenario lists every demo by topic,
+  with buttons to watch its video or replay it live, and a playing demo links back to it.
+  `python demos/record.py --gallery` prepares every demo and opens it; after recording,
+  opening `index.html` from a file manager works too (videos only).
 - A product video: `python demos/record.py --promo` records `paperboy-promo.webm`, title
   cards around six real scenarios played back in the demo viewer.
 - `list_comments` and `add_comments`: review comments. `list_comments` lists sticky notes,

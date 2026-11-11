@@ -9,6 +9,8 @@ const params = new URLSearchParams(location.search);
 const slug = params.get("s");
 // ?speed=N plays N times faster; tests use it, recordings play at 1x.
 const speed = Math.max(Number(params.get("speed")) || 1, 1);
+// ?embed=1 hides navigation: recordings and the product video use it.
+const embedded = params.get("embed") === "1";
 const base = `../out/${slug}`;
 const log = document.getElementById("log");
 const stage = document.getElementById("stage");
@@ -387,13 +389,12 @@ async function play() {
 function explain(message) {
   const box = el("div", "placeholder");
   box.append(el("p", null, message),
-    el("code", null, "python demos/record.py --preview tool-annotations"));
+    el("code", null, "python demos/record.py --gallery"));
   stage.replaceChildren(box);
 }
 
-if (!slug) {
-  explain("No scenario selected. Open this page through the preview server:");
-} else {
+if (slug) {  // without one, gallery.js lists the demos instead
+  document.getElementById("back").hidden = embedded;
   play().catch((err) => {
     console.error(err);
     window.__demoError = String(err);
