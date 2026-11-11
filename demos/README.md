@@ -30,6 +30,8 @@ python demos/record.py                      # record all
 python demos/record.py tool-annotations     # record one
 python demos/record.py tool-annotations --headed
 python demos/record.py --preview tool-annotations   # play in your browser, no video
+python demos/record.py --promo              # the product video
+python demos/record.py --promo --preview    # play it in your browser
 ```
 
 Don't open `viewer/index.html` directly: browsers block its scripts on `file://`, and it needs a
@@ -39,7 +41,20 @@ watch a finished recording, open `out/videos/<scenario>.webm` in a browser.
 The viewer loads pdf.js from cdn.jsdelivr.net, so recording needs network access.
 `demos/out/` is gitignored; videos are generated locally, not committed.
 
+## The product video
+
+`python demos/record.py --promo` records `out/videos/paperboy-promo.webm`, a short
+marketing video in the style of a newspaper front page: title cards (`viewer/promo.html`)
+around a reel of real scenarios, each played back faster in the demo viewer. Its copy and
+the scenarios it shows are `PROMO` in `scenarios.py`; the tool count is read from the
+server when it's recorded. Keep every claim in `PROMO` true of the server.
+
+To share it where WebM isn't accepted, convert it, e.g.
+`ffmpeg -i paperboy-promo.webm -c:v libx264 -crf 18 -pix_fmt yuv420p paperboy-promo.mp4`.
+
 ## Adding a scenario
 
 Add an entry to `SCENARIOS` in `scenarios.py` (see the docstring for step types). If it needs a
-new sample file, add a builder to `BUILDERS` in `demo_pdfs.py`.
+new sample file, add a builder to `BUILDERS` in `demo_pdfs.py`. Then add a guide to
+[docs/tutorials.md](../docs/tutorials.md) that quotes its prompt and names its video;
+`tests/test_demos.py` checks that every scenario has one.

@@ -1,0 +1,211 @@
+/* The product video: a newspaper front page come to life. 1280x720, recorded by
+   record.py --promo. Feature scenes embed the demo viewer itself. */
+:root {
+  --paper: #f4efe4;
+  --paper-deep: #e9e1d0;
+  --ink: #17191c;
+  --ink-soft: #4a4f57;
+  --rule: #17191c;
+  --accent: #2f6fde;
+  --night: #0f1420;
+  --night-line: #263044;
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; margin: 0; }
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  overflow: hidden;
+}
+
+#reel { position: relative; width: 1280px; height: 720px; overflow: hidden; }
+
+.scene {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--paper);
+  animation: scene-in 600ms cubic-bezier(.2, .7, .2, 1) both;
+}
+
+.scene.out { animation: scene-out 450ms ease-in both; }
+
+@keyframes scene-in { from { opacity: 0; transform: translateY(18px); } }
+@keyframes scene-out { to { opacity: 0; transform: translateY(-12px); } }
+
+.rise { animation: rise 700ms cubic-bezier(.2, .7, .2, 1) both; }
+@keyframes rise { from { opacity: 0; transform: translateY(26px); } }
+
+/* Masthead */
+.masthead { text-align: center; width: 1040px; }
+
+.rules { border-top: 6px double var(--rule); border-bottom: 2px solid var(--rule); height: 12px; }
+
+.name {
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: 148px;
+  letter-spacing: -2px;
+  line-height: 1;
+  margin: 26px 0 18px;
+}
+
+.name .mark { font-size: 0.62em; vertical-align: 0.12em; margin-right: 18px; }
+
+.dateline {
+  display: flex;
+  justify-content: space-between;
+  font: 600 15px/1 var(--sans);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  padding: 12px 4px;
+  border-top: 2px solid var(--rule);
+  border-bottom: 2px solid var(--rule);
+}
+
+.tagline {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 40px;
+  margin-top: 30px;
+  color: var(--ink-soft);
+}
+
+/* Hook: stacked headlines */
+.hook { width: 1040px; }
+
+.hook .line {
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: 92px;
+  line-height: 1.08;
+  letter-spacing: -1px;
+}
+
+.hook .ask { color: var(--accent); font-style: italic; margin-top: 18px; }
+
+/* What it is */
+.what { text-align: center; width: 1040px; }
+
+.what .count {
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: 200px;
+  line-height: 0.9;
+  color: var(--accent);
+}
+
+.what .label { font-family: var(--serif); font-size: 52px; font-weight: 700; margin: 8px 0 34px; }
+
+.chips { display: flex; justify-content: center; gap: 14px; }
+
+.chip {
+  font: 600 20px/1 var(--sans);
+  padding: 14px 22px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: #fffdf8;
+}
+
+/* Feature scenes: a headline above the real viewer */
+.feature { justify-content: flex-start; padding-top: 22px; background: var(--paper-deep); }
+
+.feature header { width: 1050px; margin-bottom: 14px; }
+
+.feature .title { display: flex; align-items: baseline; gap: 20px; }
+
+.feature .kicker {
+  font: 700 15px/1 var(--sans);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.feature h2 {
+  font-family: var(--serif);
+  font-size: 46px;
+  line-height: 1;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.feature header p { margin: 8px 0 0; font-size: 20px; color: var(--ink-soft); line-height: 1.3; }
+
+.window {
+  width: 1050px;
+  height: 591px;
+  border-radius: 14px 14px 0 0;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: 0 30px 60px rgba(23, 25, 28, .28), 0 0 0 1px rgba(23, 25, 28, .12);
+  animation: rise 800ms 150ms cubic-bezier(.2, .7, .2, 1) both;
+}
+
+.window iframe {
+  width: 1280px;
+  height: 720px;
+  border: 0;
+  transform: scale(0.8203);   /* 1050 / 1280 */
+  transform-origin: 0 0;
+}
+
+/* Trust: newspaper columns */
+.trust { width: 1120px; }
+
+.trust h2 {
+  font-family: var(--serif);
+  font-size: 54px;
+  text-align: center;
+  margin: 0 0 30px;
+}
+
+.columns { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 6px double var(--rule); }
+
+.column { padding: 22px 22px 0; border-left: 1px solid var(--rule); }
+.column:first-child { border-left: 0; padding-left: 0; }
+
+.column h3 { font-family: var(--serif); font-size: 30px; line-height: 1.1; margin: 0 0 12px; }
+.column p { margin: 0; font-size: 19px; line-height: 1.45; color: var(--ink-soft); }
+
+/* Call to action: a terminal on a night background */
+.cta { background: var(--night); color: #f4efe4; }
+
+.terminal {
+  width: 900px;
+  border-radius: 14px;
+  background: #0a0d14;
+  box-shadow: 0 0 0 1px var(--night-line), 0 30px 80px rgba(0, 0, 0, .5);
+  overflow: hidden;
+}
+
+.terminal .dots { display: flex; gap: 8px; padding: 14px 16px; border-bottom: 1px solid var(--night-line); }
+.terminal .dots i { width: 12px; height: 12px; border-radius: 50%; background: #3a4458; }
+
+.terminal pre {
+  margin: 0;
+  padding: 26px 30px 30px;
+  font: 24px/1.7 var(--mono);
+  color: #e6edf7;
+  min-height: 150px;
+  white-space: pre-wrap;
+}
+
+.terminal .prompt { color: #6c9cf0; }
+.terminal .caret { display: inline-block; width: 12px; height: 26px; background: #e6edf7; vertical-align: -5px; animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+
+.signoff { text-align: center; margin-top: 44px; }
+.signoff .name { font-size: 76px; margin: 0; color: #f4efe4; }
+.signoff p { margin: 10px 0 0; font-size: 22px; color: #aab4c5; }
+.signoff .url { font: 600 22px/1 var(--mono); color: #6c9cf0; margin-top: 16px; }

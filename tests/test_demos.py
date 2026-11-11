@@ -7,6 +7,7 @@ skip cleanly without them.
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import sys
 import urllib.error
@@ -25,7 +26,7 @@ sys.path.insert(0, str(DEMOS))
 
 import demo_pdfs  # noqa: E402
 import record  # noqa: E402
-from scenarios import SCENARIOS  # noqa: E402
+from scenarios import PROMO, SCENARIOS  # noqa: E402
 from test_server_stdio import EXPECTED_TOOLS  # noqa: E402
 
 STEP_TYPES = {"tools", "say", "call"}
@@ -61,6 +62,30 @@ def test_build_writes_every_named_file(tmp_path):
         assert (tmp_path / name).is_file()
 
 
+def test_build_quote_is_damaged_but_recoverable(tmp_path):
+    import pikepdf
+
+    path = demo_pdfs.build_quote(tmp_path / "quote.pdf")
+
+    with pikepdf.open(path) as pdf:  # qpdf rebuilds the index, warning as it does
+        assert len(pdf.pages) == 1
+        assert any("damaged" in w for w in pdf.get_warnings())
+        assert b"Quote Q-1187" in pdf.pages[0].Contents.read_bytes()
+
+
+def test_build_receipts_are_photos(tmp_path):
+    for build in (demo_pdfs.build_receipt_taxi, demo_pdfs.build_receipt_hotel):
+        with Image.open(build(tmp_path / f"{build.__name__}.jpg")) as im:
+            assert im.format == "JPEG"
+            assert im.size == (600, 800)
+
+
+def test_build_trip_notes_is_plain_text(tmp_path):
+    text = demo_pdfs.build_trip_notes(tmp_path / "notes.txt").read_text(encoding="utf-8")
+    assert text.startswith("Expense claim")
+    assert "EUR 128.90" in text
+
+
 def test_build_rejects_unknown_file(tmp_path):
     with pytest.raises(KeyError):
         demo_pdfs.build(["missing.pdf"], tmp_path)
@@ -89,6 +114,38 @@ def test_scenario_is_well_formed(slug):
             assert len(views) <= 1, f"pick one stage view, not {views}"
         if step["type"] == "say":
             assert step["text"].strip()
+
+
+def test_every_tool_appears_in_a_scenario():
+    # Each tool has a tutorial video showing it in use.
+    used = {step["tool"] for s in SCENARIOS.values() for step in s["steps"]
+            if step["type"] == "call"}
+    used |= {sub["tool"] for s in SCENARIOS.values() for step in s["steps"]
+             if step.get("tool") == "run_pipeline" for sub in step["args"]["steps"]}
+    assert EXPECTED_TOOLS - used == set()
+
+
+@pytest.mark.parametrize("slug", sorted(SCENARIOS))
+def test_tutorials_cover_every_scenario(slug):
+    # docs/tutorials.md quotes each scenario's request and names its video.
+    doc = (DEMOS.parent / "docs" / "tutorials.md").read_text(encoding="utf-8")
+    flat = re.sub(r"\s*\n>?\s*", " ", doc)  # quotes wrap over "> " lines
+    assert f"Video: `{slug}.webm`" in doc
+    assert f'*"{SCENARIOS[slug]["prompt"]}"*' in flat
+
+
+def test_promo_is_well_formed():
+    assert {"name", "tagline", "dateline", "hook", "ask", "clients", "playback",
+            "features", "trust", "install", "url"} <= PROMO.keys()
+    assert PROMO["playback"] >= 1  # the viewer never plays slower than recorded
+    assert PROMO["features"]
+    for item in PROMO["features"]:
+        assert item["slug"] in SCENARIOS
+        assert item["headline"].strip() and item["detail"].strip()
+    assert len({item["slug"] for item in PROMO["features"]}) == len(PROMO["features"])
+    for item in PROMO["trust"]:
+        assert item["title"].strip() and item["detail"].strip()
+    assert PROMO["install"][0] == "pip install paperboy-mcp"
 
 
 # --------------------------------------------------------------------------- #
@@ -160,6 +217,28 @@ async def test_scenario_runs_against_real_server(slug, tmp_path):
             assert {t["name"] for t in step["tools"]} == EXPECTED_TOOLS
     saved = json.loads((tmp_path / slug / "script.json").read_text())
     assert saved == transcript
+
+
+SMALL_PROMO = dict(PROMO, features=[{"slug": "interleave", "headline": "Combines scans",
+                                    "detail": "Fronts and backs, in order."}])
+
+
+async def test_run_promo_writes_its_script_with_the_real_tool_count(tmp_path):
+    script = await record.run_promo(tmp_path, SMALL_PROMO)
+
+    assert script["tools"] == len(EXPECTED_TOOLS)
+    assert json.loads((tmp_path / "promo" / "script.json").read_text()) == script
+    assert (tmp_path / "interleave" / "script.json").is_file()  # the scene it plays
+
+
+async def test_run_promo_starts_clean(tmp_path):
+    stale = tmp_path / "promo" / "raw" / "old.webm"
+    stale.parent.mkdir(parents=True)
+    stale.write_bytes(b"old")
+
+    await record.run_promo(tmp_path, dict(SMALL_PROMO, features=[]))
+
+    assert not stale.exists()
 
 
 async def test_run_scenario_hides_local_paths(tmp_path):
@@ -334,6 +413,33 @@ def test_main_records_all_scenarios_by_default(monkeypatch):
     assert calls == [(list(SCENARIOS), True)]
 
 
+def test_main_records_the_promo(monkeypatch):
+    calls = []
+
+    async def fake_record(slugs, headed, promo=False):
+        calls.append((slugs, headed, promo))
+
+    monkeypatch.setattr(record, "record", fake_record)
+    monkeypatch.setattr(sys, "argv", ["record.py", "--promo"])
+    record.main()
+    assert calls == [([], False, True)]
+
+
+def test_main_previews_the_promo(monkeypatch):
+    seen = []
+    monkeypatch.setattr(record, "preview", seen.append)
+    monkeypatch.setattr(sys, "argv", ["record.py", "--promo", "--preview"])
+    record.main()
+    assert seen == [None]
+
+
+def test_main_promo_takes_no_scenarios(monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", ["record.py", "--promo", "tool-annotations"])
+    with pytest.raises(SystemExit):
+        record.main()
+    assert "--promo takes no scenarios" in capsys.readouterr().err
+
+
 def test_main_dispatches_preview(monkeypatch):
     seen = []
     monkeypatch.setattr(record, "preview", seen.append)
@@ -359,6 +465,24 @@ def test_preview_opens_browser_and_shuts_down_on_ctrl_c(monkeypatch, tmp_path):
     assert (tmp_path / "tool-annotations" / "script.json").is_file()
     with pytest.raises(OSError):  # server is shut down afterwards
         urllib.request.urlopen(opened[0].split("?")[0], timeout=2)
+
+
+def test_preview_of_the_promo_opens_the_promo_page(monkeypatch, tmp_path):
+    opened = []
+    monkeypatch.setattr(record.webbrowser, "open", opened.append)
+    real = record.run_promo
+    monkeypatch.setattr(record, "run_promo", lambda out: real(out, SMALL_PROMO))
+
+    def interrupt():
+        assert _status(opened[0]) == 200
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(record, "_wait_forever", interrupt)
+
+    record.preview(None, out=tmp_path)
+
+    assert opened[0].endswith("/viewer/promo.html")
+    assert (tmp_path / "promo" / "script.json").is_file()
 
 
 # --------------------------------------------------------------------------- #
@@ -499,3 +623,85 @@ async def test_record_fails_when_the_viewer_errors(browser, tmp_path, monkeypatc
     with pytest.raises(RuntimeError, match="viewer errors"):
         await record.record(["tool-annotations"], headed=False, out=tmp_path, speed=40)
     assert not (tmp_path / "videos" / "tool-annotations.webm").exists()
+
+
+async def _play_promo(browser, out: Path) -> tuple:
+    server = record._serve(out)
+    page = await browser.new_page(viewport=record.VIEWPORT)
+    errors: list[str] = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    headlines: list[str] = []
+    await page.expose_function("__sawHeadline", lambda text: headlines.append(text))
+    await page.add_init_script("""
+        new MutationObserver(() => {
+          for (const h of document.querySelectorAll('.feature h2:not([data-seen])')) {
+            h.dataset.seen = 1;
+            window.__sawHeadline(h.textContent);
+          }
+        }).observe(document, {subtree: true, childList: true});
+    """)
+    try:
+        port = server.server_address[1]
+        await page.goto(f"http://127.0.0.1:{port}/viewer/promo.html?speed=40")
+        await page.wait_for_function("window.__demoDone || window.__demoError",
+                                     timeout=60_000)
+        failed = await page.evaluate("window.__demoError || null")
+        text = await page.inner_text("#reel")
+    finally:
+        await page.close()
+        server.shutdown()
+    return failed, errors, headlines, text
+
+
+async def test_promo_plays_to_completion(browser, tmp_path):
+    script = await record.run_promo(tmp_path, SMALL_PROMO)
+
+    failed, errors, headlines, text = await _play_promo(browser, tmp_path)
+
+    assert failed is None and not errors
+    assert headlines == [item["headline"] for item in script["features"]]
+    # It ends on the install commands and the sign-off.
+    for command in script["install"]:
+        assert f"$ {command}" in text
+    assert script["url"] in text
+
+
+async def test_promo_reports_a_scene_that_cannot_play(browser, tmp_path):
+    await record.run_promo(tmp_path, dict(SMALL_PROMO, features=[]))
+    script = json.loads((tmp_path / "promo" / "script.json").read_text())
+    script["features"] = [{"slug": "never-recorded", "headline": "h", "detail": "d"}]
+    (tmp_path / "promo" / "script.json").write_text(json.dumps(script))
+
+    failed, _, _, text = await _play_promo(browser, tmp_path)
+
+    assert "never-recorded" in failed
+    assert "Could not play the product video" in text
+
+
+async def test_promo_reports_a_missing_script(browser, tmp_path):
+    failed, _, _, _ = await _play_promo(browser, tmp_path)
+    assert "no recorded promo script" in failed
+
+
+async def test_record_writes_the_promo_video(browser, tmp_path, monkeypatch):
+    real = record.run_promo
+    monkeypatch.setattr(record, "run_promo", lambda out: real(out, SMALL_PROMO))
+
+    videos = await record.record([], headed=False, out=tmp_path, speed=40, promo=True)
+
+    assert videos == [tmp_path / "videos" / record.PROMO_VIDEO]
+    assert videos[0].read_bytes()[:4] == b"\x1a\x45\xdf\xa3"
+    assert not (tmp_path / "promo" / "raw").exists()
+
+
+async def test_record_fails_when_the_promo_cannot_play(browser, tmp_path, monkeypatch):
+    async def no_scenes(out):
+        (out / "promo").mkdir(parents=True, exist_ok=True)
+        (out / "promo" / "script.json").write_text(json.dumps(dict(
+            PROMO, tools=1, features=[{"slug": "never-recorded", "headline": "h",
+                                       "detail": "d"}])))
+
+    monkeypatch.setattr(record, "run_promo", no_scenes)
+
+    with pytest.raises(RuntimeError, match="promo: viewer errors"):
+        await record.record([], headed=False, out=tmp_path, speed=40, promo=True)

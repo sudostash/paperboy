@@ -754,6 +754,83 @@ def build_handbook(path: Path) -> Path:
     return path
 
 
+def build_quote(path: Path) -> Path:
+    """A one-page quote mangled by a mail gateway that added a line near the top:
+    the page is all there, but every offset in the index readers use to find it is
+    now wrong, so strict viewers refuse to open it."""
+    c = canvas.Canvas(str(path), pagesize=letter)
+    c.setTitle("Quote Q-1187")
+    width, height = letter
+    c.setFillColor(ACCENT)
+    c.rect(0, height - 14, width, 14, stroke=0, fill=1)
+    c.setFillColor(INK)
+    c.setFont("Helvetica-Bold", 26)
+    c.drawString(72, height - 110, "Quote Q-1187")
+    c.setFont("Helvetica", 14)
+    c.setFillColor(MUTED)
+    c.drawString(72, height - 140, "Same-day courier service, Leeds depot")
+    c.setFillColor(INK)
+    for i, (item, amount) in enumerate([("Route setup", "EUR 650.00"),
+                                        ("Daily courier runs (20 days)", "EUR 3,400.00"),
+                                        ("Total", "EUR 4,050.00")]):
+        c.setFont("Helvetica-Bold" if item == "Total" else "Helvetica", 14)
+        c.drawString(90, height - 200 - i * 28, item)
+        c.drawRightString(width - 90, height - 200 - i * 28, amount)
+    c.showPage()
+    c.save()
+    data = path.read_bytes()
+    header = data.index(b"\n") + 1
+    # Shift everything after the header line, so no recorded offset is right.
+    path.write_bytes(data[:header] + b"X-Scanned-By: mailgate 4.2\n" + data[header:])
+    return path
+
+
+def _receipt(lines: list[tuple[str, str]], tint: str) -> bytes:
+    """A phone photo of a till receipt: a white slip on a tinted desk."""
+    import io
+
+    from PIL import Image, ImageDraw, ImageFont
+
+    img = Image.new("RGB", (600, 800), tint)
+    draw = ImageDraw.Draw(img)
+    draw.rectangle([150, 60, 450, 740], fill="#fbfaf6")
+    font = ImageFont.load_default(size=22)
+    for i, (left, right) in enumerate(lines):
+        y = 110 + i * 46
+        draw.text((175, y), left, fill="#2b2b2b", font=font)
+        draw.text((425, y), right, fill="#2b2b2b", font=font, anchor="ra")
+    buf = io.BytesIO()
+    img.save(buf, "JPEG", quality=90)
+    return buf.getvalue()
+
+
+def build_receipt_taxi(path: Path) -> Path:
+    """A taxi receipt photographed on a desk."""
+    path.write_bytes(_receipt([("LEEDS CABS", ""), ("12 Nov 2026", ""), ("", ""),
+                               ("Station - Depot", "18.40"), ("Tip", "2.00"),
+                               ("TOTAL EUR", "20.40")], "#b9a58a"))
+    return path
+
+
+def build_receipt_hotel(path: Path) -> Path:
+    """A hotel receipt photographed on a desk."""
+    path.write_bytes(_receipt([("CITY HOTEL", ""), ("12-13 Nov 2026", ""), ("", ""),
+                               ("Room, 1 night", "96.00"), ("Breakfast", "12.50"),
+                               ("TOTAL EUR", "108.50")], "#8a9bb9"))
+    return path
+
+
+def build_trip_notes(path: Path) -> Path:
+    """Plain-text notes for an expense claim."""
+    path.write_text("Expense claim: Leeds depot visit\n\n"
+                    "Trip: 12-13 November 2026\n"
+                    "Purpose: opening checks for the new Leeds depot\n\n"
+                    "Taxi, station to depot: EUR 20.40\n"
+                    "Hotel, one night with breakfast: EUR 108.50\n"
+                    "Total claimed: EUR 128.90\n", encoding="utf-8")
+    return path
+
+
 BUILDERS = {"report.pdf": build_report, "scan.pdf": build_scan,
             "delivery-form.pdf": build_delivery_form, "proposal.pdf": build_proposal,
             "invoice.pdf": build_invoice, "brochure.pdf": build_brochure,
@@ -762,7 +839,9 @@ BUILDERS = {"report.pdf": build_report, "scan.pdf": build_scan,
             "contract-v2.pdf": build_contract_v2, "taxes.pdf": build_taxes,
             "album.pdf": build_album, "case-file.pdf": build_case_file,
             "scanned-letter.pdf": build_scanned_letter, "minutes.pdf": build_minutes,
-            "lease.pdf": build_lease, "handbook.pdf": build_handbook}
+            "lease.pdf": build_lease, "handbook.pdf": build_handbook,
+            "quote.pdf": build_quote, "receipt-taxi.jpg": build_receipt_taxi,
+            "receipt-hotel.jpg": build_receipt_hotel, "trip-notes.txt": build_trip_notes}
 
 
 def build(names: list[str], workspace: Path) -> None:

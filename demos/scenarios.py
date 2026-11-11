@@ -531,6 +531,154 @@ SCENARIOS: dict[str, dict] = {
                                     "under it later."},
         ],
     },
+    "organize": {
+        "title": "Merge and reorder documents",
+        "subtitle": "Combine files, put the pages in order, and add a blank page for "
+                    "double-sided printing.",
+        "files": ["report.pdf", "statement.pdf"],
+        "prompt": "Make a board pack from report.pdf and statement.pdf: the report's summary "
+                  "first, then the statement, then the rest of the report. It's printed "
+                  "double-sided, so start the statement on a new sheet.",
+        "steps": [
+            {"type": "call", "tool": "merge_pdfs",
+             "args": {"input_paths": ["report.pdf", "statement.pdf"],
+                      "output_path": "merged.pdf"},
+             "show": {"after": "merged.pdf"}},
+            {"type": "say", "text": "Merged: the report's 3 pages, then the statement's 2. "
+                                    "Moving the statement up behind the summary."},
+            {"type": "call", "tool": "rearrange_pages",
+             "args": {"input_path": "merged.pdf", "page_order": "1,4-5,2-3",
+                      "output_path": "ordered.pdf"},
+             "show": {"before": "merged.pdf", "after": "ordered.pdf"}},
+            {"type": "say", "text": "Now a blank page after the summary, so the statement "
+                                    "starts on the front of a new sheet."},
+            {"type": "call", "tool": "insert_blank_pages",
+             "args": {"input_path": "ordered.pdf", "after": [1],
+                      "output_path": "board-pack.pdf"},
+             "show": {"after": "board-pack.pdf", "highlight": "inserted"}},
+            {"type": "say", "text": "Done: board-pack.pdf has the summary, a blank back, "
+                                    "the statement, then the regional breakdown and next "
+                                    "quarter. Both originals are unchanged."},
+        ],
+    },
+    "extract-crop": {
+        "title": "Pull out a page and trim it",
+        "subtitle": "Save one page as its own PDF, then crop away the margins.",
+        "files": ["report.pdf"],
+        "prompt": "I need just the regional breakdown from report.pdf for a slide, without "
+                  "the white margins and the footer.",
+        "steps": [
+            {"type": "call", "tool": "extract_pages",
+             "args": {"input_path": "report.pdf", "pages": "2",
+                      "output_path": "regional.pdf"},
+             "show": {"before": "report.pdf", "after": "regional.pdf"}},
+            {"type": "say", "text": "Page 2 is now regional.pdf. Cropping the margins and "
+                                    "the footer."},
+            {"type": "call", "tool": "crop_pages",
+             "args": {"input_path": "regional.pdf", "margins": [40, 50, 150, 50]},
+             "show": {"before": "regional.pdf", "after": "regional_cropped.pdf",
+                      "layout": "side-by-side"}},
+            {"type": "say", "text": "Done: regional_cropped.pdf shows just the heading, the "
+                                    "figures and the chart. Cropping hides the margins "
+                                    "rather than deleting them, so you can undo it later."},
+        ],
+    },
+    "protect": {
+        "title": "Lock a finished form",
+        "subtitle": "Fill it in, flatten it so it can't be changed, then add a password.",
+        "files": ["delivery-form.pdf"],
+        "prompt": "Fill in delivery-form.pdf for Ada Lovelace, 12 Analytical Way, Leeds, "
+                  "standard, small parcel, Leeds depot. Then lock it and put a password "
+                  "on it - I'll choose the password myself.",
+        "steps": [
+            {"type": "call", "tool": "fill_form",
+             "args": {"input_path": "delivery-form.pdf",
+                      "values": {"name": "Ada Lovelace", "address": "12 Analytical Way, Leeds",
+                                 "express": False, "size": "small", "depot": "Leeds"}}},
+            {"type": "call", "tool": "flatten_pdf",
+             "args": {"input_path": "delivery-form_filled.pdf"},
+             "show": {"before": "delivery-form_filled.pdf",
+                      "after": "delivery-form_filled_flattened.pdf", "layout": "side-by-side"}},
+            {"type": "say", "text": "Filled in and flattened: the answers are now part of the "
+                                    "page, so nobody can edit them. Now the password - you'll "
+                                    "type it on Paperboy's page, not here."},
+            {"type": "call", "tool": "encrypt_pdf",
+             "args": {"input_path": "delivery-form_filled_flattened.pdf",
+                      "user_password": "ask", "output_path": "delivery-form_locked.pdf"},
+             "answers": [{"password": "Parcel-Leeds-42", "confirm": "Parcel-Leeds-42"}],
+             "show": {"after": "delivery-form_locked.pdf", "password": "Parcel-Leeds-42"}},
+            {"type": "say", "text": "Done: delivery-form_locked.pdf needs your password to "
+                                    "open, with AES-256 encryption. The password never "
+                                    "appeared in our conversation."},
+        ],
+    },
+    "repair": {
+        "title": "Fix a PDF that won't open",
+        "subtitle": "Check what's wrong, rebuild the file, and check it again.",
+        "files": ["quote.pdf"],
+        "prompt": "A supplier emailed quote.pdf and my PDF viewer says it's damaged. Can you "
+                  "fix it?",
+        "steps": [
+            {"type": "call", "tool": "check_pdf", "args": {"input_path": "quote.pdf"},
+             "showTable": "problems"},
+            {"type": "say", "text": "The file's index is broken: it no longer says where the "
+                                    "page is stored, so strict viewers give up. The page "
+                                    "itself is intact. Rebuilding the file."},
+            {"type": "call", "tool": "repair_pdf", "args": {"input_path": "quote.pdf"},
+             "show": {"after": "quote_repaired.pdf"}},
+            {"type": "call", "tool": "check_pdf", "args": {"input_path": "quote_repaired.pdf"}},
+            {"type": "say", "text": "Fixed: quote_repaired.pdf passes the check with no "
+                                    "problems and opens normally: quote Q-1187, EUR 4,050 "
+                                    "in total."},
+        ],
+    },
+    "convert": {
+        "title": "Turn photos and notes into one PDF",
+        "subtitle": "Receipt photos and a text file become a single expense claim.",
+        "files": ["trip-notes.txt", "receipt-taxi.jpg", "receipt-hotel.jpg"],
+        "prompt": "Make one PDF for my expense claim: my notes in trip-notes.txt, then the "
+                  "two receipt photos.",
+        "steps": [
+            {"type": "call", "tool": "convert_to_pdf", "args": {"input_path": "trip-notes.txt"},
+             "show": {"after": "trip-notes.pdf"}},
+            {"type": "call", "tool": "images_to_pdf",
+             "args": {"input_paths": ["receipt-taxi.jpg", "receipt-hotel.jpg"],
+                      "output_path": "receipts.pdf"},
+             "show": {"after": "receipts.pdf"}},
+            {"type": "say", "text": "The notes and the receipts are PDFs now. Putting them "
+                                    "together."},
+            {"type": "call", "tool": "merge_pdfs",
+             "args": {"input_paths": ["trip-notes.pdf", "receipts.pdf"],
+                      "output_path": "expense-claim.pdf"},
+             "show": {"after": "expense-claim.pdf"}},
+            {"type": "say", "text": "Done: expense-claim.pdf has your notes on page 1 and "
+                                    "the taxi and hotel receipts on pages 2 and 3."},
+        ],
+    },
+    "metadata": {
+        "title": "Set a PDF's title and author",
+        "subtitle": "Read the document properties, then fix them before publishing.",
+        "files": ["report.pdf"],
+        "prompt": "We're putting report.pdf on our website. Check its document properties "
+                  "and fix anything that looks wrong.",
+        "steps": [
+            {"type": "call", "tool": "get_metadata", "args": {"input_path": "report.pdf"},
+             "showTable": "metadata"},
+            {"type": "say", "text": "The title and author are fine, but the subject says "
+                                    "\"unspecified\", there are no keywords for search, and "
+                                    "the creator is \"anonymous\". Fixing those."},
+            {"type": "call", "tool": "set_metadata",
+             "args": {"input_path": "report.pdf", "fields": {
+                 "subject": "Quarterly delivery performance, Q3 2026",
+                 "keywords": "deliveries, Q3 2026, on-time rate, depots",
+                 "creator": "Paperboy Demo Co. Operations"}}},
+            {"type": "call", "tool": "get_metadata",
+             "args": {"input_path": "report_meta.pdf"}, "showTable": "metadata"},
+            {"type": "say", "text": "Done: report_meta.pdf has a proper subject, "
+                                    "keywords and creator, so search engines and PDF "
+                                    "viewers describe it correctly. The pages are unchanged."},
+        ],
+    },
     "pdfa": {
         "title": "Archive as PDF/A",
         "subtitle": "A PDF/A-2b copy for a court or an archive, checked by veraPDF.",
@@ -548,4 +696,47 @@ SCENARIOS: dict[str, dict] = {
                                     "allow. Send the spreadsheet separately if they need it."},
         ],
     },
+}
+
+# The product video: a short reel of real scenarios, played back faster, between title
+# cards. Every claim here must stay true of the server; the tool count is filled in
+# from the server when the reel is recorded.
+PROMO: dict = {
+    "name": "Paperboy",
+    "tagline": "PDF tools for your AI assistant",
+    "dateline": ["Open source", "MIT licensed", "Runs on your computer"],
+    "hook": ["Redact it.", "Search it.", "Fill it in.", "Fix it."],
+    "ask": "Just ask your AI.",
+    "clients": ["Claude Desktop", "Claude Code", "Cursor", "Windsurf"],
+    "playback": 3.5,
+    "features": [
+        {"slug": "redaction", "headline": "Redacts for real",
+         "detail": "Names, emails and signatures are removed from the file, not just "
+                   "covered up."},
+        {"slug": "ocr", "headline": "Makes scans searchable",
+         "detail": "OCR adds a text layer, so a scanned letter can be searched and copied."},
+        {"slug": "fill-form", "headline": "Fills in forms",
+         "detail": "It reads the fields, checks every value, and fills them in."},
+        {"slug": "scan", "headline": "Spots dangerous PDFs",
+         "detail": "Hidden scripts and disguised attachments are found, then removed."},
+        {"slug": "markdown", "headline": "Turns PDFs into Markdown",
+         "detail": "Headings, lists and tables, in reading order across columns."},
+        {"slug": "compare", "headline": "Shows what changed",
+         "detail": "Text and layout differences between two versions of a document."},
+    ],
+    "trust": [
+        {"title": "Stays in its folder",
+         "detail": "Runs on your computer. Give it a folder with --root, and it can't read "
+                   "or write anywhere else."},
+        {"title": "Asks before it writes",
+         "detail": "Tools that save files are flagged, so your AI app asks you before "
+                   "running them."},
+        {"title": "Passwords stay out of the chat",
+         "detail": "You type them on Paperboy's own page, never in the conversation."},
+        {"title": "Respects the rules",
+         "detail": "PDF permissions and digital signatures are honoured, not ignored."},
+    ],
+    "install": ["pip install paperboy-mcp",
+                "paperboy install claude-desktop --root ~/Documents"],
+    "url": "github.com/sudostash/paperboy",
 }
