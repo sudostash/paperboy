@@ -20,6 +20,8 @@ All notable changes to this project are documented here. The format follows
   with buttons to watch its video or replay it live, and a playing demo links back to it.
   `python demos/record.py --gallery` prepares every demo and opens it; after recording,
   opening `index.html` from a file manager works too (videos only).
+- The demo videos are published on the [`demo-videos` release](https://github.com/sudostash/paperboy/releases/tag/demo-videos): each tutorial
+  links its video, and the README opens with the product video.
 - A product video: `python demos/record.py --promo` records `paperboy-promo.webm`, title
   cards around six real scenarios played back in the demo viewer.
 - `list_comments` and `add_comments`: review comments. `list_comments` lists sticky notes,

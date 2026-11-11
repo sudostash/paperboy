@@ -48,6 +48,8 @@ from demo_pdfs import build  # noqa: E402
 from scenarios import GROUPS, PROMO, SCENARIOS  # noqa: E402
 
 PROMO_VIDEO = "paperboy-promo.webm"
+# Where the published videos are: assets of the "demo-videos" GitHub release.
+RELEASE_URL = "https://github.com/sudostash/paperboy/releases/download/demo-videos/"
 
 
 def _field(obj, snake: str, camel: str, default=None):

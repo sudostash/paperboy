@@ -15,6 +15,15 @@ function el(tag, cls, text) {
   return node;
 }
 
+// Paperboy's mark: a folded newspaper, drawn in the text colour.
+const MARK = '<svg class="mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><path d="M6 5h18v19a3 3 0 0 0 3 3H9a3 3 0 0 1-3-3z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><path d="M24 12h3v12a3 3 0 0 1-3 3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><rect x="10" y="9" width="10" height="4" rx="1" fill="#2f6fde"/><path d="M10 17h10M10 21h7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+
+function mark() {
+  const box = document.createElement("span");
+  box.innerHTML = MARK;
+  return box.firstElementChild;
+}
+
 let current = null;
 
 async function scene(cls, build) {
@@ -40,8 +49,7 @@ function rise(node, delay) {
 function masthead(promo) {
   const box = el("div", "masthead");
   const name = el("div", "name");
-  name.append(el("span", "mark", "📰"), promo.name);
-  name.querySelector(".mark").setAttribute("aria-hidden", "true");
+  name.append(mark(), promo.name);
   const dateline = el("div", "dateline");
   promo.dateline.forEach((part) => dateline.append(el("span", null, part)));
   box.append(el("div", "rules"), name, dateline);
@@ -159,7 +167,7 @@ async function cta(promo) {
   await sleep(900);
   const sign = rise(el("div", "signoff"), 0);
   const name = el("div", "name");
-  name.append(el("span", "mark", "📰"), promo.name);
+  name.append(mark(), promo.name);
   sign.append(name, el("p", null, promo.tagline), el("div", "url", promo.url));
   current.append(sign);
   await sleep(4500);

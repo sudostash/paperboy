@@ -8,6 +8,10 @@ Encrypt, decrypt, merge, split, reorder, rotate, optimize, repair, convert, and 
 
 Built by [Sudo Stash](https://sudostash.com) · MIT licensed · `pip install paperboy-mcp`
 
+<a href="https://github.com/sudostash/paperboy/releases/download/demo-videos/paperboy-promo.mp4"><img src="https://raw.githubusercontent.com/sudostash/paperboy/main/docs/media/product-video.jpg" alt="Watch the 80-second Paperboy product video" width="720"></a>
+
+[Watch the product video](https://github.com/sudostash/paperboy/releases/download/demo-videos/paperboy-promo.mp4) · [Tutorials](docs/tutorials.md) · [All demo videos](https://github.com/sudostash/paperboy/releases/tag/demo-videos)
+
 </div>
 
 ---
@@ -487,7 +491,8 @@ qpdf, and keeps one virtualenv per job in `.ci/`.
 ### Demo videos
 
 `demos/` records a short tutorial video for each feature, matching the guides in
-[docs/tutorials.md](docs/tutorials.md). Every scenario runs against the real server over
+[docs/tutorials.md](docs/tutorials.md); the published ones are on the
+[demo videos release](https://github.com/sudostash/paperboy/releases/tag/demo-videos). Every scenario runs against the real server over
 stdio, then a Playwright-driven viewer replays it (chat on the left, before/after PDF pages
 on the right). See [demos/README.md](demos/README.md).
 

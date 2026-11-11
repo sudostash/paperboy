@@ -794,7 +794,10 @@ def _receipt(lines: list[tuple[str, str]], tint: str) -> bytes:
     img = Image.new("RGB", (600, 800), tint)
     draw = ImageDraw.Draw(img)
     draw.rectangle([150, 60, 450, 740], fill="#fbfaf6")
-    font = ImageFont.load_default(size=22)
+    try:
+        font = ImageFont.load_default(size=22)
+    except TypeError:  # Pillow < 10.1 has only the small bitmap font
+        font = ImageFont.load_default()
     for i, (left, right) in enumerate(lines):
         y = 110 + i * 46
         draw.text((175, y), left, fill="#2b2b2b", font=font)

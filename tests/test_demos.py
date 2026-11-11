@@ -130,7 +130,7 @@ def test_tutorials_cover_every_scenario(slug):
     # docs/tutorials.md quotes each scenario's request and names its video.
     doc = (DEMOS.parent / "docs" / "tutorials.md").read_text(encoding="utf-8")
     flat = re.sub(r"\s*\n>?\s*", " ", doc)  # quotes wrap over "> " lines
-    assert f"Video: `{slug}.webm`" in doc
+    assert f"Video: [`{slug}.webm`]({record.RELEASE_URL}{slug}.webm)" in doc
     assert f'*"{SCENARIOS[slug]["prompt"]}"*' in flat
 
 
@@ -192,8 +192,8 @@ def test_hint_is_none_without_annotations():
 
 @pytest.mark.parametrize("slug", sorted(SCENARIOS))
 async def test_scenario_runs_against_real_server(slug, tmp_path):
-    if slug in ("ask-password", "permissions") and \
-            not hasattr(mcp_types, "UrlElicitationCapability"):
+    types_a_password = any(step.get("answers") for step in SCENARIOS[slug]["steps"])
+    if types_a_password and not hasattr(mcp_types, "UrlElicitationCapability"):
         pytest.skip("the client opens the password page through URL-mode elicitation")
     if slug == "ocr" and not shutil.which("tesseract"):
         pytest.skip("OCR needs Tesseract installed")

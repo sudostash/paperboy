@@ -60,7 +60,7 @@ body {
   margin: 26px 0 18px;
 }
 
-.name .mark { font-size: 0.62em; vertical-align: 0.12em; margin-right: 18px; }
+.name .mark { width: 0.62em; height: 0.62em; vertical-align: -0.02em; margin-right: 18px; }
 
 .dateline {
   display: flex;

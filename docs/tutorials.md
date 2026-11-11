@@ -64,9 +64,10 @@ connect it to your AI app with one command, and restart the app.
 
 Every guide has a short video showing the request, each tool call with its real result,
 and the PDF before and after. Nothing in them is mocked: they are recorded from the real
-server. There is also an 80-second product video, `paperboy-promo.webm`.
+server. The link under each guide downloads its video; all of them, and an 80-second
+product video, are on the [demo videos release](https://github.com/sudostash/paperboy/releases/tag/demo-videos). They open in any modern browser.
 
-To record them from a checkout of this repository:
+To record them yourself from a checkout of this repository:
 
 ```bash
 pip install -e ".[demo]" && playwright install chromium
@@ -92,7 +93,7 @@ Ask what's in your folder before picking a file to work on.
 The assistant calls `list_pdfs`, which lists every PDF in your Paperboy folder with its
 size and when it last changed (up to 1,000).
 
-Video: `list-pdfs.webm`
+Video: [`list-pdfs.webm`](https://github.com/sudostash/paperboy/releases/download/demo-videos/list-pdfs.webm)
 
 ### What runs without asking
 
@@ -103,7 +104,7 @@ The assistant lists the tools: the read-only ones (checking, searching, viewing)
 straight away; anything that writes a file asks first. Then it reads `report.pdf` with
 `pdf_info` and rotates the last page with `rotate_pages`, which asks for your approval.
 
-Video: `tool-annotations.webm`
+Video: [`tool-annotations.webm`](https://github.com/sudostash/paperboy/releases/download/demo-videos/tool-annotations.webm)
 
 ### Typed, predictable results
 
@@ -113,7 +114,7 @@ Every tool returns named fields (page count, page size, whether it's encrypted, 
 files it wrote) instead of prose, so the assistant reports exact values. This one uses
 `pdf_info` and `split_pdf`.
 
-Video: `structured-output.webm`
+Video: [`structured-output.webm`](https://github.com/sudostash/paperboy/releases/download/demo-videos/structured-output.webm)
 
 ## Reading and finding
 
@@ -125,7 +126,7 @@ Video: `structured-output.webm`
 layout as well as text. `render_pages` saves pages as PNG or JPEG files at the
 resolution you ask for.
 
-Video: `render-pages.webm`
+Video: [`render-pages.webm`](https://github.com/sudostash/paperboy/releases/download/demo-videos/render-pages.webm)
 
 ### Search a PDF
 
@@ -135,7 +136,7 @@ Video: `render-pages.webm`
 `search_text` finds every match with its page and the words around it, and can be
 limited to certain pages.
 
-Video: `search.webm`
+Video: [`search.webm`](https://github.com/sudostash/paperboy/releases/download/demo-videos/search.webm)
 
 ### Read a PDF as Markdown
 
@@ -147,7 +148,7 @@ lists and tables. `export_markdown` saves it as a `.md` file.
 Good to know: scanned pages have no text to read; [make them searchable](#make-a-scan-searchable)
 first.
 
-Video: `markdown.webm`
+Video: [`markdown.webm`](https://github.com/sudostash/paperboy/releases/download/demo-videos/markdown.webm)
 
 ### Get tables out
 
@@ -158,7 +159,7 @@ Video: `markdown.webm`
 questions about it. `export_tables` saves every table as a CSV file that opens in Excel
 or Google Sheets.
 
-Video: `tables.webm`
+Video: [`tables.webm`](https://github.com/sudostash/paperboy/releases/download/demo-videos/tables.webm)
 
 ### Get attachments and pictures out
 
@@ -168,7 +169,7 @@ Video: `tables.webm`
 `list_attachments` shows what's attached, `extract_attachments` saves those files, and
 `extract_images` saves the pictures (skipping small ones like logos if you ask).
 
-Video: `extract.webm`
+Video: [`extract.webm`](https://github.com/sudostash/paperboy/releases/download/demo-videos/extract.webm)
 
 ### Make a scan searchable
 
@@ -181,7 +182,7 @@ and copied.
 Good to know: needs Tesseract. English is included; other languages are separate
 downloads.
 
-Video: `ocr.webm`
+Video: [`ocr.webm`](https://github.com/sudostash/paperboy/releases/download/demo-videos/ocr.webm)
 
 ### Compare two versions
 
@@ -190,7 +191,7 @@ Video: `ocr.webm`
 `compare_pdfs` lists text changes page by page, and can also compare how the pages look,
 which catches changes text can't show (a stamp that moved, a changed picture).
 
-Video: `compare.webm`
+Video: [`compare.webm`](https://github.com/sudostash/paperboy/releases/download/demo-videos/compare.webm)
 
 ## Organizing pages
 
@@ -204,7 +205,7 @@ Video: `compare.webm`
 want (it can also reverse or duplicate pages), and `insert_blank_pages` adds blank pages
 where you need them.
 
-Video: `organize.webm`
+Video: [`organize.webm`](https://github.com/sudostash/paperboy/releases/download/demo-videos/organize.webm)
 
 ### Pull out a page and trim it
 
@@ -217,7 +218,7 @@ points, inches or millimetres.
 Good to know: cropping hides the margins without deleting them, so it can be undone. To
 remove content for good, use [redaction](#redact-for-real).
 
-Video: `extract-crop.webm`
+Video: [`extract-crop.webm`](https://github.com/sudostash/paperboy/releases/download/demo-videos/extract-crop.webm)
 
 ### Remove blank pages
 
@@ -227,7 +228,7 @@ Video: `extract-crop.webm`
 scanner dust), so the assistant can look at the doubtful ones before `delete_pages`
 removes them.
 
-Video: `blank-pages.webm`
+Video: [`blank-pages.webm`](https://github.com/sudostash/paperboy/releases/download/demo-videos/blank-pages.webm)
 
 ### Combine double-sided scans
 
@@ -237,7 +238,7 @@ Video: `blank-pages.webm`
 `interleave_pdfs` alternates fronts and backs, reversing the backs when they were
 scanned last page first.
 
-Video: `interleave.webm`
+Video: [`interleave.webm`](https://github.com/sudostash/paperboy/releases/download/demo-videos/interleave.webm)
 
 ### Resize pages and print 2 per sheet
 
@@ -247,7 +248,7 @@ Video: `interleave.webm`
 `resize_pages` changes the paper size and scales the content to fit. `n_up` puts 2
 pages side by side, or 4 in a grid, on each sheet.
 
-Video: `page-layout.webm`
+Video: [`page-layout.webm`](https://github.com/sudostash/paperboy/releases/download/demo-videos/page-layout.webm)
 
 ### Add bookmarks
 
@@ -256,7 +257,7 @@ Video: `page-layout.webm`
 `get_outline` reads the existing bookmarks, the assistant finds the headings with
 `extract_text`, and `set_outline` writes the new bookmarks, nested if you like.
 
-Video: `bookmarks.webm`
+Video: [`bookmarks.webm`](https://github.com/sudostash/paperboy/releases/download/demo-videos/bookmarks.webm)
 
 ## Creating PDFs
 
@@ -272,7 +273,7 @@ joins them.
 Good to know: Word, Excel, PowerPoint and HTML files need LibreOffice; text and images
 don't.
 
-Video: `convert.webm`
+Video: [`convert.webm`](https://github.com/sudostash/paperboy/releases/download/demo-videos/convert.webm)
 
 ## Editing and marking up
 
@@ -285,7 +286,7 @@ Video: `convert.webm`
 fills them in, checking each value first. The result stays editable unless you ask for it
 to be [locked](#lock-a-finished-form).
 
-Video: `fill-form.webm`
+Video: [`fill-form.webm`](https://github.com/sudostash/paperboy/releases/download/demo-videos/fill-form.webm)
 
 ### Watermarks, stamps and page numbers
 
@@ -296,7 +297,7 @@ Video: `fill-form.webm`
 choice of colour, size and opacity. `add_page_numbers` numbers the pages in any format,
 such as "Page 3 of 10" or "Q3-0001".
 
-Video: `watermark-numbers.webm`
+Video: [`watermark-numbers.webm`](https://github.com/sudostash/paperboy/releases/download/demo-videos/watermark-numbers.webm)
 
 ### Review with comments
 
@@ -307,7 +308,7 @@ Video: `watermark-numbers.webm`
 replies, attached to the words you name. `list_comments` reads all the comments in a
 file, including who wrote them and the text they mark.
 
-Video: `comments.webm`
+Video: [`comments.webm`](https://github.com/sudostash/paperboy/releases/download/demo-videos/comments.webm)
 
 ### Set the title and author
 
@@ -317,7 +318,7 @@ Video: `comments.webm`
 `get_metadata` reads the title, author, subject, keywords and the programs that made the
 file. `set_metadata` changes the fields you name and keeps the rest.
 
-Video: `metadata.webm`
+Video: [`metadata.webm`](https://github.com/sudostash/paperboy/releases/download/demo-videos/metadata.webm)
 
 ### Several steps in one go
 
@@ -327,7 +328,7 @@ Video: `metadata.webm`
 `run_pipeline` chains several tools in one call and saves only the finished file, with
 no in-between copies left behind.
 
-Video: `pipeline.webm`
+Video: [`pipeline.webm`](https://github.com/sudostash/paperboy/releases/download/demo-videos/pipeline.webm)
 
 ## Sharing safely
 
@@ -340,7 +341,7 @@ Video: `pipeline.webm`
 names, scripts, attached files, comments, earlier saved versions. `sanitize_pdf` removes
 it and leaves the pages as they were.
 
-Video: `sanitize.webm`
+Video: [`sanitize.webm`](https://github.com/sudostash/paperboy/releases/download/demo-videos/sanitize.webm)
 
 ### Redact for real
 
@@ -351,7 +352,7 @@ Video: `sanitize.webm`
 signature) from the file itself, not just painted over. A search afterwards finds
 nothing.
 
-Video: `redaction.webm`
+Video: [`redaction.webm`](https://github.com/sudostash/paperboy/releases/download/demo-videos/redaction.webm)
 
 ### Lock a finished form
 
@@ -365,7 +366,7 @@ You choose the password on Paperboy's own page.
 
 Good to know: flattening needs the qpdf command-line tool.
 
-Video: `protect.webm`
+Video: [`protect.webm`](https://github.com/sudostash/paperboy/releases/download/demo-videos/protect.webm)
 
 ### Type passwords yourself
 
@@ -380,7 +381,7 @@ Good to know: if your AI app can't open the page itself, Paperboy gives you a li
 open instead, and the assistant runs the tool again once you've typed the password.
 Administrators can make this the only way passwords are accepted.
 
-Video: `ask-password.webm`
+Video: [`ask-password.webm`](https://github.com/sudostash/paperboy/releases/download/demo-videos/ask-password.webm)
 
 ### When a PDF says no
 
@@ -390,7 +391,7 @@ Some PDFs open freely but forbid changes like removing pages. Paperboy respects 
 says so, and goes ahead only if you type the owner password. Signed PDFs are refused
 where a change would break the signature.
 
-Video: `permissions.webm`
+Video: [`permissions.webm`](https://github.com/sudostash/paperboy/releases/download/demo-videos/permissions.webm)
 
 ### Check a PDF for malicious content
 
@@ -403,7 +404,7 @@ with the active content removed.
 Good to know: with ClamAV installed, it also checks against known malware. No scan can
 prove a file is safe.
 
-Video: `scan.webm`
+Video: [`scan.webm`](https://github.com/sudostash/paperboy/releases/download/demo-videos/scan.webm)
 
 ## File health and size
 
@@ -414,7 +415,7 @@ Video: `scan.webm`
 `check_pdf` reports what's wrong with the file's structure, `repair_pdf` rebuilds it, and
 a second check confirms the repaired copy is sound.
 
-Video: `repair.webm`
+Video: [`repair.webm`](https://github.com/sudostash/paperboy/releases/download/demo-videos/repair.webm)
 
 ### Shrink a PDF to a size
 
@@ -423,7 +424,7 @@ Video: `repair.webm`
 `optimize_pdf` compresses the file, and with a target size it lowers picture resolution
 only as far as needed. Text is never touched.
 
-Video: `target-size.webm`
+Video: [`target-size.webm`](https://github.com/sudostash/paperboy/releases/download/demo-videos/target-size.webm)
 
 ### Archive as PDF/A
 
@@ -433,4 +434,4 @@ Video: `target-size.webm`
 standard requires and removes what it forbids (scripts, attachments). With veraPDF
 installed, the copy is checked and saved only if it passes.
 
-Video: `pdfa.webm`
+Video: [`pdfa.webm`](https://github.com/sudostash/paperboy/releases/download/demo-videos/pdfa.webm)

@@ -52,7 +52,23 @@ The gallery's list is `out/catalog.js`, which `record.py` rewrites whenever it r
 previews or opens the gallery.
 
 The viewer loads pdf.js from cdn.jsdelivr.net, so recording needs network access.
-`demos/out/` is gitignored; videos are generated locally, not committed.
+
+## Publishing the videos
+
+`demos/out/` is gitignored: committed videos would grow the repository by ~90 MB every time
+they're re-recorded, and ship in the source package. They're published as assets of the
+[`demo-videos` release](https://github.com/sudostash/paperboy/releases/tag/demo-videos) instead, which `docs/tutorials.md` and the README link to.
+After re-recording, replace them (this needs push access and the GitHub CLI):
+
+```bash
+cd demos/out/videos
+ffmpeg -y -i paperboy-promo.webm -c:v libx264 -crf 18 -pix_fmt yuv420p \
+  -movflags +faststart paperboy-promo.mp4      # MP4 for sharing where WebM isn't accepted
+gh release upload demo-videos *.webm paperboy-promo.mp4 --clobber
+```
+
+The README's product-video poster is `docs/media/product-video.jpg`, a frame of the
+video with a play button.
 
 ## The product video
 
