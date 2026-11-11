@@ -64,7 +64,7 @@ connect it to your AI app with one command, and restart the app.
 
 Every guide has a short video showing the request, each tool call with its real result,
 and the PDF before and after. Nothing in them is mocked: they are recorded from the real
-server. There is also a 90-second product video, `paperboy-promo.webm`.
+server. There is also an 80-second product video, `paperboy-promo.webm`.
 
 To record them from a checkout of this repository:
 
