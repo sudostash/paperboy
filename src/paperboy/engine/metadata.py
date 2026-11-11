@@ -86,13 +86,20 @@ def set_metadata(
         if usage_rights:  # Reader extensions break once the file changes; drop them
             del pdf.Root.Perms
         # set_pikepdf_as_editor=False keeps pikepdf from restamping Producer/
-        # MetadataDate and emitting "will be overwritten" warnings.
-        with pdf.open_metadata(set_pikepdf_as_editor=False) as m:
+        # MetadataDate and emitting "will be overwritten" warnings. update_docinfo=False
+        # because pikepdf would rebuild the Info dictionary from XMP alone, erasing
+        # every field (title, dates...) that only Info held; only the changed fields
+        # are written there, below.
+        with pdf.open_metadata(set_pikepdf_as_editor=False, update_docinfo=False) as m:
             for friendly, value in fields.items():
                 if friendly in seq_fields:
                     m[_FIELDS[friendly]] = [v.strip() for v in value.split(",") if v.strip()]
                 else:
                     m[_FIELDS[friendly]] = value
+        for friendly, value in fields.items():
+            if friendly in seq_fields:
+                value = ", ".join(v.strip() for v in value.split(",") if v.strip())
+            pdf.docinfo[_DOCINFO[friendly]] = pikepdf.String(value)
         protection = inherit_protection(pdf, password)
         pdf.save(str(out), encryption=protection.encryption)
     return protection.report({"output": str(out), "updated": sorted(fields)})

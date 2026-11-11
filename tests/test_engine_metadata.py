@@ -42,6 +42,43 @@ def test_unset_fields_are_left_alone(doc, tmp_path, settings):
     assert meta["subject"] == "S"
 
 
+def test_fields_only_in_the_info_dictionary_survive(tmp_path, settings):
+    # No XMP: a new packet holds only the changed fields, which must not erase the rest.
+    src, out = tmp_path / "in.pdf", tmp_path / "out.pdf"
+    with pikepdf.new() as pdf:
+        pdf.add_blank_page()
+        pdf.docinfo["/Title"] = "Q3 Report"
+        pdf.docinfo["/Author"] = "Ann Lee"
+        pdf.docinfo["/CreationDate"] = "D:20260101120000Z"
+        pdf.docinfo["/Trapped"] = pikepdf.Name.False_
+        pdf.save(src)
+
+    E.set_metadata(src, out, {"subject": "Results", "author": "Bo, Cy"}, settings)
+
+    assert E.get_metadata(out, settings)["metadata"] == {
+        "title": "Q3 Report", "author": "Bo, Cy", "subject": "Results"}
+    with pikepdf.open(out) as pdf:
+        assert str(pdf.docinfo["/CreationDate"]) == "D:20260101120000Z"
+        assert pdf.docinfo["/Trapped"] == pikepdf.Name.False_
+        assert str(pdf.docinfo["/Author"]) == "Bo, Cy"
+        assert str(pdf.docinfo["/Subject"]) == "Results"
+
+
+def test_info_fields_missing_from_existing_xmp_survive(tmp_path, settings):
+    src, out = tmp_path / "in.pdf", tmp_path / "out.pdf"
+    with pikepdf.new() as pdf:
+        pdf.add_blank_page()
+        with pdf.open_metadata(set_pikepdf_as_editor=False, update_docinfo=False) as m:
+            m["dc:title"] = "From XMP"
+        pdf.docinfo["/Producer"] = "Only in Info"
+        pdf.save(src)
+
+    E.set_metadata(src, out, {"keywords": "a, b"}, settings)
+
+    assert E.get_metadata(out, settings)["metadata"] == {
+        "title": "From XMP", "producer": "Only in Info", "keywords": "a, b"}
+
+
 def test_unknown_fields_are_rejected_before_writing(doc, tmp_path, settings):
     with pytest.raises(PdfUserError, match="Unknown metadata field"):
         E.set_metadata(doc, tmp_path / "m.pdf", {"title": "ok", "color": "red"}, settings)
