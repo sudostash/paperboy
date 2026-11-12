@@ -91,6 +91,22 @@ def test_check_pdf_fallback_on_healthy_file(doc, settings):
                    "raw": None}
 
 
+def test_check_pdf_fallback_reports_damage_qpdf_repairs_while_reading(doc, tmp_path,
+                                                                       settings):
+    # A line added near the top moves every object: qpdf silently rebuilds the index,
+    # so opening succeeds, but the file is damaged and strict viewers refuse it.
+    data = doc.read_bytes()
+    header = data.index(b"\n") + 1
+    damaged = tmp_path / "damaged.pdf"
+    damaged.write_bytes(data[:header] + b"X-Scanned-By: mailgate\n" + data[header:])
+
+    res = E.check_pdf(damaged, dataclasses.replace(settings, qpdf_path=None))
+
+    assert res["healthy"] is False
+    assert res["checker"] == "pikepdf"
+    assert any("damaged" in problem for problem in res["problems"])
+
+
 def test_check_pdf_fallback_on_unreadable_file(tmp_path, settings):
     junk = tmp_path / "junk.pdf"
     junk.write_text("garbage")

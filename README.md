@@ -77,7 +77,7 @@ and a demo video for each.
 | `compare_pdfs` | Compare two versions page by page: pages matched first (insertions don't shift everything), then the lines removed and added, and optionally how pages look (% of pixels changed, with red/green difference images) *(read-only)* |
 | `run_pipeline` | Run several one-file tools in one call (e.g. decrypt → delete pages → optimize → encrypt), each on the result of the last; only the final file is saved, and nothing if a step fails |
 | `list_pdfs` | List the PDFs under `PAPERBOY_ROOT` (or a folder in it): path, size, last changed; up to 1,000 *(read-only)* |
-| `check_pdf` | Validate structural integrity and report problems |
+| `check_pdf` | Validate structural integrity and report problems, including damage qpdf works around while reading (a rebuilt index) |
 | `encrypt_pdf` | Add a password — AES-256 (default), AES-128, RC4 — with print/copy/modify restrictions |
 | `decrypt_pdf` | Remove a password you know (not a cracker) |
 | `rearrange_pages` | Reorder, reverse, or duplicate pages |
@@ -91,7 +91,7 @@ and a demo video for each.
 | `merge_pdfs` | Combine PDFs in order (per-file passwords supported) |
 | `split_pdf` | Split into ranges or one file per page |
 | `optimize_pdf` | Linearize ("fast web view") and recompress to shrink; optionally lower picture resolution to a DPI (`max_image_dpi`) or step it down until the file fits a size (`target_size_mb`, keeping the smallest result and reporting `target_met`) |
-| `repair_pdf` | Rebuild a damaged file's structure |
+| `repair_pdf` | Rebuild a damaged file's structure, and report anything still wrong in the repaired copy (`problems_left`) |
 | `flatten_pdf` | Flatten form fields and annotations *(needs qpdf CLI)* |
 | `convert_to_pdf` | Image / text / Office / HTML → PDF *(Office needs LibreOffice)* |
 | `images_to_pdf` | Combine images into one PDF |
