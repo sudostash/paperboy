@@ -304,6 +304,18 @@ All notable changes to this project are documented here. The format follows
   permission is always granted, per PDF 2.0).
 
 ### Fixed
+- `repair_pdf` no longer writes a damaged "repaired" copy of a file whose trailer was lost
+  (cut off mid-download, say). qpdf rebuilds such a file without a `/Size` entry and qpdf 12
+  saved it that way, so the copy failed `qpdf --check`; every tool now gives such a file a
+  `/Size` when it opens it. `repair_pdf` also reports `problems_left`: anything qpdf still
+  finds wrong reading the repaired copy.
+- `check_pdf` without the qpdf command-line tool called a damaged file healthy when qpdf
+  could work around the damage while reading (a broken index it rebuilt). It now reports
+  qpdf's warnings from opening the file, and its syntax check, as problems.
+- `rearrange_pages`, `delete_pages`, `extract_pages`, `split_pdf`, `n_up` and
+  `interleave_pdfs` kept the document's title, author and other properties only when they
+  were in XMP metadata. Most PDFs keep them in the document info dictionary alone, so the
+  output lost them; those entries are now carried too.
 - `set_metadata` no longer erases the document's other properties. On a PDF without XMP
   metadata (most PDFs made by office software and PDF libraries), setting one field
   dropped the title, author, producer, dates and every other field from the document

@@ -25,7 +25,7 @@ def open_with_password(source: str | io.BytesIO, password: str | None) -> pikepd
     PDFDocEncoding bytes. Raises pikepdf.PasswordError if neither form opens it.
     """
     try:
-        return pikepdf.open(source, password=password or "")
+        return _with_size(pikepdf.open(source, password=password or ""))
     except pikepdf.PasswordError:
         if not password or password.isascii():
             raise
@@ -39,7 +39,40 @@ def open_with_password(source: str | io.BytesIO, password: str | None) -> pikepd
         if pdf.encryption.R >= 5:  # AES-256 uses UTF-8; don't accept a mis-encoded alias
             pdf.close()
             raise pikepdf.PasswordError("invalid password") from None
-        return pdf
+        return _with_size(pdf)
+
+
+def _with_size(pdf: pikepdf.Pdf) -> pikepdf.Pdf:
+    """Give a trailer without /Size one, so saving writes a valid file.
+
+    qpdf rebuilds a damaged file whose trailer was lost, but the trailer it makes has no
+    /Size, and qpdf 12 then saves it without one: the copy is damaged too. With any
+    /Size present, the writer puts in the right value."""
+    if "/Size" not in pdf.trailer:
+        pdf.trailer.Size = 0
+    return pdf
+
+
+# A badly damaged file can produce thousands of warnings; the first ones say enough.
+MAX_PROBLEMS = 100
+
+
+def pdf_problems(pdf: pikepdf.Pdf) -> list[str]:
+    """What qpdf found wrong reading an open document: the warnings it gave while
+    opening it (qpdf silently rebuilds a damaged index, say) and its syntax check.
+    At most MAX_PROBLEMS, each cut to 500 characters."""
+    check = getattr(pdf, "check_pdf_syntax", None) or pdf.check  # renamed in pikepdf 9
+    found = [*pdf.get_warnings(), *(str(problem) for problem in check())]
+    return [problem[:500] for problem in found[:MAX_PROBLEMS]]
+
+
+def problems_reading(path: Path, password: str | None) -> list[str]:
+    """pdf_problems for a file just written; one that won't open is a problem too."""
+    try:
+        with open_with_password(str(path), password) as pdf:
+            return pdf_problems(pdf)
+    except pikepdf.PdfError as exc:
+        return [str(exc)]
 
 
 def require_copy_permission(pdf: pikepdf.Pdf, action: str) -> None:
@@ -343,15 +376,38 @@ def is_encrypted(path: Path) -> bool:
         return True  # needs a user password to open, so it is encrypted
 
 
+# The document info entries a freshly built PDF inherits.
+_INFO_KEYS = ("/Title", "/Author", "/Subject", "/Keywords", "/Creator", "/Producer",
+              "/CreationDate", "/ModDate", "/Trapped")
+
+
 def copy_docinfo(src: pikepdf.Pdf, dst: pikepdf.Pdf) -> None:
-    """Carry basic document info to a freshly built PDF."""
+    """Carry basic document info to a freshly built PDF: the XMP metadata, and the
+    classic Info dictionary entries, which many PDFs use exclusively.
+
+    Best-effort: never fail an operation over metadata."""
+    info = src.trailer.get("/Info")  # not src.docinfo, which creates one if missing
     try:
-        with dst.open_metadata(set_pikepdf_as_editor=False) as dst_meta, \
-                src.open_metadata() as src_meta:
-            for key in src_meta:
-                dst_meta[key] = src_meta[key]
-    except Exception:
-        # Metadata copy is best-effort; never fail an operation over it.
+        if isinstance(src.Root.get("/Metadata"), pikepdf.Stream):
+            with dst.open_metadata(set_pikepdf_as_editor=False) as dst_meta, \
+                    src.open_metadata(set_pikepdf_as_editor=False,
+                                      update_docinfo=False) as src_meta:
+                for key in src_meta:
+                    dst_meta[key] = src_meta[key]
+    except Exception:  # noqa: BLE001 - unreadable XMP must not stop the rest
+        pass
+    if not isinstance(info, pikepdf.Dictionary):
+        return
+    try:
+        for key in _INFO_KEYS:
+            value = info.get(key)
+            if key in dst.docinfo:  # already set from the XMP
+                continue
+            if isinstance(value, pikepdf.String):
+                dst.docinfo[key] = pikepdf.String(bytes(value))
+            elif isinstance(value, pikepdf.Name):
+                dst.docinfo[key] = pikepdf.Name(str(value))
+    except Exception:  # noqa: BLE001
         pass
 
 
