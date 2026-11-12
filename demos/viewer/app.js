@@ -9,6 +9,8 @@ const params = new URLSearchParams(location.search);
 const slug = params.get("s");
 // ?speed=N plays N times faster; tests use it, recordings play at 1x.
 const speed = Math.max(Number(params.get("speed")) || 1, 1);
+// ?embed=1 hides navigation: recordings and the product video use it.
+const embedded = params.get("embed") === "1";
 const base = `../out/${slug}`;
 const log = document.getElementById("log");
 const stage = document.getElementById("stage");
@@ -20,6 +22,23 @@ function el(tag, cls, text) {
   if (cls) node.className = cls;
   if (text !== undefined) node.textContent = text;
   return node;
+}
+
+// Small line icons drawn in the text colour (emoji would show the platform's artwork).
+const ICONS = {
+  tool: '<path d="M10.5 2a3.5 3.5 0 0 0-3.3 4.6L2.5 11.3a1.4 1.4 0 0 0 2 2l4.7-4.7A3.5 3.5 0 0 0 13.8 5.4l-2 2-1.8-.4-.4-1.8 2-2A3.5 3.5 0 0 0 10.5 2z"/>',
+  read: '<path d="M1.5 8s2.5-5 6.5-5 6.5 5 6.5 5-2.5 5-6.5 5-6.5-5-6.5-5z"/><circle cx="8" cy="8" r="2"/>',
+  write: '<path d="M11 2.5l2.5 2.5L6 12.5H3.5V10z"/>',
+  link: '<path d="M6.5 9.5l3-3"/><path d="M7 4.5l1.2-1.2a2.5 2.5 0 0 1 3.5 3.5L10.5 8"/><path d="M9 11.5l-1.2 1.2a2.5 2.5 0 0 1-3.5-3.5L5.5 8"/>',
+  lock: '<rect x="3.5" y="7" width="9" height="6.5" rx="1.2"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/>',
+};
+
+function icon(name) {
+  const box = document.createElement("span");
+  box.innerHTML = `<svg class="icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"
+    fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
+    stroke-linejoin="round">${ICONS[name]}</svg>`;
+  return box.firstElementChild;
 }
 
 function append(node) {
@@ -63,7 +82,7 @@ function showTools(tools) {
   sorted.forEach((t, i) => {
     const card = el("div", `tool ${t.readOnly ? "ro" : ""}`);
     card.style.animationDelay = `${i * 45}ms`;
-    card.append(el("span", null, t.title), el("span", null, t.readOnly ? "👁" : "✎"));
+    card.append(el("span", null, t.title), icon(t.readOnly ? "read" : "write"));
     grid.append(card);
   });
   stage.append(grid);
@@ -272,7 +291,9 @@ async function askPassword(card, question) {
   // The client offers to open Paperboy's local page; the password is typed there, so it
   // never reaches the assistant or the client.
   const box = el("div", "ask-box");
-  box.append(el("span", null, `🔗 ${question.message}`));
+  const message = el("span", null, ` ${question.message}`);
+  message.prepend(icon("link"));
+  box.append(message);
   box.append(el("code", "link", `http://${question.host}/p/••••••••`));
   const btns = el("div", "btns");
   const open = el("button", "allow", "Open");
@@ -285,7 +306,9 @@ async function askPassword(card, question) {
   await sleep(400);
   box.replaceChildren();
   const page = el("div", "local-page");
-  page.append(el("div", "bar", `🔒 ${question.host}`));
+  const bar = el("div", "bar", ` ${question.host}`);
+  bar.prepend(icon("lock"));
+  page.append(bar);
   page.append(el("b", null, question.new ? "Choose a password" : "Enter the password"));
   const fields = [el("div", "secret", "")];
   if (question.new) fields.push(el("div", "secret", ""));
@@ -326,7 +349,7 @@ async function call(step) {
   const card = append(el("div", "call"));
   const head = el("div", "call-head");
   const name = el("span");
-  name.append(`🔧 ${step.title} `, el("code", null, step.tool));
+  name.append(icon("tool"), ` ${step.title} `, el("code", null, step.tool));
   head.append(name, badge(step.readOnly));
   card.append(head, el("pre", null, JSON.stringify(step.args, null, 2)));
   log.scrollTop = log.scrollHeight;
@@ -387,13 +410,12 @@ async function play() {
 function explain(message) {
   const box = el("div", "placeholder");
   box.append(el("p", null, message),
-    el("code", null, "python demos/record.py --preview tool-annotations"));
+    el("code", null, "python demos/record.py --gallery"));
   stage.replaceChildren(box);
 }
 
-if (!slug) {
-  explain("No scenario selected. Open this page through the preview server:");
-} else {
+if (slug) {  // without one, gallery.js lists the demos instead
+  document.getElementById("back").hidden = embedded;
   play().catch((err) => {
     console.error(err);
     window.__demoError = String(err);

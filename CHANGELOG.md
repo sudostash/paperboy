@@ -7,6 +7,23 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `docs/tutorials.md`: a guide for each job you can ask your AI to do with Paperboy, with
+  an example request (the one its demo video uses), the tools involved and what to know,
+  linked from the README.
+- Demo videos for the tools that had none: merging and reordering documents
+  (`merge_pdfs`, `rearrange_pages`, `insert_blank_pages`), pulling out and cropping pages
+  (`extract_pages`, `crop_pages`), locking a finished form (`flatten_pdf`, `encrypt_pdf`),
+  fixing a damaged file (`check_pdf`, `repair_pdf`), turning photos and notes into one PDF
+  (`convert_to_pdf`, `images_to_pdf`) and setting document properties (`get_metadata`,
+  `set_metadata`). Every tool now appears in a demo.
+- A demo gallery: `demos/viewer/index.html` without a scenario lists every demo by topic,
+  with buttons to watch its video or replay it live, and a playing demo links back to it.
+  `python demos/record.py --gallery` prepares every demo and opens it; after recording,
+  opening `index.html` from a file manager works too (videos only).
+- The demo videos are published on the [`demo-videos` release](https://github.com/sudostash/paperboy/releases/tag/demo-videos): each tutorial
+  links its video, and the README opens with the product video.
+- A product video: `python demos/record.py --promo` records `paperboy-promo.webm`, title
+  cards around six real scenarios played back in the demo viewer.
 - `list_comments` and `add_comments`: review comments. `list_comments` lists sticky notes,
   highlights and other text markup, text boxes, shapes, ink, stamps and file attachments
   with their id (`p<page>-<n>`), author, text, dates, colour, rectangle, the comment they
@@ -287,6 +304,10 @@ All notable changes to this project are documented here. The format follows
   permission is always granted, per PDF 2.0).
 
 ### Fixed
+- `set_metadata` no longer erases the document's other properties. On a PDF without XMP
+  metadata (most PDFs made by office software and PDF libraries), setting one field
+  dropped the title, author, producer, dates and every other field from the document
+  info dictionary, because pikepdf rebuilt it from the new XMP packet alone.
 - Outputs written under their default name (`<name>_rotated.pdf`, ...) went through no
   root check, so a link planted at that name could have a tool write outside the root
   (`convert_to_pdfa` and `convert_to_pdf` even through to the link's target). Default

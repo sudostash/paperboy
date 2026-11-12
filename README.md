@@ -8,6 +8,10 @@ Encrypt, decrypt, merge, split, reorder, rotate, optimize, repair, convert, and 
 
 Built by [Sudo Stash](https://sudostash.com) · MIT licensed · `pip install paperboy-mcp`
 
+<a href="https://github.com/sudostash/paperboy/releases/download/demo-videos/paperboy-promo.mp4"><img src="https://raw.githubusercontent.com/sudostash/paperboy/main/docs/media/product-video.jpg" alt="Watch the 80-second Paperboy product video" width="720"></a>
+
+[Watch the product video](https://github.com/sudostash/paperboy/releases/download/demo-videos/paperboy-promo.mp4) · [Tutorials](docs/tutorials.md) · [All demo videos](https://github.com/sudostash/paperboy/releases/tag/demo-videos)
+
 </div>
 
 ---
@@ -40,6 +44,10 @@ paperboy install claude-desktop --root ~/Documents    # 2. wire it into Claude, 
 Output files are written back into your `--root` folder. Remove the server anytime with
 `paperboy uninstall claude-desktop`. Using Cursor, Windsurf, or Claude Code instead? See
 [Connect it to your AI](#connect-it-to-your-ai).
+
+**What next?** The [tutorials](docs/tutorials.md) walk through each job you can hand to
+your AI (redacting, filling forms, OCR, merging, repairing and more) with a request to try
+and a demo video for each.
 
 > **Want to sanity-check without an AI?** With the package installed, drive the engine directly:
 > ```python
@@ -482,13 +490,17 @@ qpdf, and keeps one virtualenv per job in `.ci/`.
 
 ### Demo videos
 
-`demos/` records a short tutorial video for each feature. Every scenario runs against the real
-server over stdio, then a Playwright-driven viewer replays it (chat on the left, before/after
-PDF pages on the right). See [demos/README.md](demos/README.md).
+`demos/` records a short tutorial video for each feature, matching the guides in
+[docs/tutorials.md](docs/tutorials.md); the published ones are on the
+[demo videos release](https://github.com/sudostash/paperboy/releases/tag/demo-videos). Every scenario runs against the real server over
+stdio, then a Playwright-driven viewer replays it (chat on the left, before/after PDF pages
+on the right). See [demos/README.md](demos/README.md).
 
 ```bash
 pip install -e ".[demo]" && playwright install chromium
 python demos/record.py            # writes demos/out/videos/<scenario>.webm
+python demos/record.py --promo    # the product video: demos/out/videos/paperboy-promo.webm
+python demos/record.py --gallery  # browse every demo in your browser
 ```
 
 ## Roadmap
