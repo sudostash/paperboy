@@ -30,7 +30,7 @@ EXPECTED_TOOLS = {
     "search_text",
     "crop_pages", "resize_pages", "n_up", "insert_blank_pages", "interleave_pdfs",
     "extract_tables", "export_tables",
-    "compare_pdfs", "run_pipeline", "list_pdfs", "redact_pdf", "ocr_pdf",
+    "compare_pdfs", "run_pipeline", "batch_process", "list_pdfs", "redact_pdf", "ocr_pdf",
     "convert_to_pdfa", "pdf_to_markdown", "export_markdown", "list_comments", "add_comments",
 }
 

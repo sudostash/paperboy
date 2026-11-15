@@ -32,7 +32,8 @@ connect it to your AI app with one command, and restart the app.
   [Watermarks, stamps and page numbers](#watermarks-stamps-and-page-numbers) ·
   [Review with comments](#review-with-comments) ·
   [Set the title and author](#set-the-title-and-author) ·
-  [Several steps in one go](#several-steps-in-one-go)
+  [Several steps in one go](#several-steps-in-one-go) ·
+  [Process a whole folder](#process-a-whole-folder)
 - Sharing safely: [Remove hidden data](#remove-hidden-data) ·
   [Redact for real](#redact-for-real) · [Lock a finished form](#lock-a-finished-form) ·
   [Type passwords yourself](#type-passwords-yourself) ·
@@ -329,6 +330,20 @@ Video: [`metadata.webm`](https://github.com/sudostash/paperboy/releases/download
 no in-between copies left behind.
 
 Video: [`pipeline.webm`](https://github.com/sudostash/paperboy/releases/download/demo-videos/pipeline.webm)
+
+### Process a whole folder
+
+> *"Stamp DRAFT and page numbers on every PDF in this folder."*
+
+`batch_process` runs the same steps on every PDF in a folder, or on a list of files, in
+one call: up to 100 files, with the same steps `run_pipeline` takes. The copies keep their
+names (and subfolders, if you ask for those too) in a `processed` folder, and your
+originals stay as they are. Each file is handled on its own: one that fails, like a
+password-protected file in the video, is reported and the rest still run. If some
+copies already exist, nothing runs until you say to replace them. Your AI app shows
+progress as each file finishes.
+
+Video: [`batch.webm`](https://github.com/sudostash/paperboy/releases/download/demo-videos/batch.webm)
 
 ## Sharing safely
 
