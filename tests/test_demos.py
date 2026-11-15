@@ -121,8 +121,27 @@ def test_every_tool_appears_in_a_scenario():
     used = {step["tool"] for s in SCENARIOS.values() for step in s["steps"]
             if step["type"] == "call"}
     used |= {sub["tool"] for s in SCENARIOS.values() for step in s["steps"]
-             if step.get("tool") == "run_pipeline" for sub in step["args"]["steps"]}
+             if step.get("tool") in ("run_pipeline", "batch_process")
+             for sub in step["args"]["steps"]}
     assert EXPECTED_TOOLS - used == set()
+
+
+def test_every_tool_is_documented():
+    # A new tool needs a row in the README's tool table and a mention in a tutorial.
+    readme = (DEMOS.parent / "README.md").read_text(encoding="utf-8")
+    table = {name for row in re.findall(r"^\| (`\w+`(?: / `\w+`)*) \|", readme, re.M)
+             for name in re.findall(r"`(\w+)`", row)}
+    assert EXPECTED_TOOLS - table == set(), "missing from the README tool table"
+    guides = (DEMOS.parent / "docs" / "tutorials.md").read_text(encoding="utf-8")
+    assert {t for t in EXPECTED_TOOLS if f"`{t}`" not in guides} == set(), \
+        "missing from docs/tutorials.md"
+
+
+def test_every_tutorial_video_has_a_scenario():
+    # A guide never links a video that no scenario records.
+    doc = (DEMOS.parent / "docs" / "tutorials.md").read_text(encoding="utf-8")
+    linked = re.findall(re.escape(record.RELEASE_URL) + r"([\w-]+)\.webm", doc)
+    assert linked and set(linked) <= set(SCENARIOS)
 
 
 @pytest.mark.parametrize("slug", sorted(SCENARIOS))
