@@ -82,8 +82,60 @@ def test_repair_rebuilds_broken_xref(doc, tmp_path, settings):
     damaged.write_bytes(doc.read_bytes().replace(b"xref", b"xxxx", 1))
     out = tmp_path / "fixed.pdf"
     res = E.repair_pdf(damaged, out, settings)
-    assert res == {"output": str(out), "pages": 5, **UNPROTECTED}
+    assert res == {"output": str(out), "pages": 5, "problems_left": [], **UNPROTECTED}
     assert page_labels(out) == page_labels(doc)
+
+
+def _without_trailer(doc: Path, tmp_path: Path) -> Path:
+    """*doc* cut off as its cross-reference table starts: no index, no trailer."""
+    data = doc.read_bytes()
+    damaged = tmp_path / "cut.pdf"
+    damaged.write_bytes(data[:data.rindex(b"\nxref") + 1] + b"xref\n")  # ends mid-table
+    return damaged
+
+
+def test_repair_of_a_file_without_a_trailer_writes_a_sound_file(doc, tmp_path, settings):
+    damaged = _without_trailer(doc, tmp_path)
+    try:
+        pikepdf.open(damaged).close()
+    except pikepdf.PdfError:
+        pytest.skip("this qpdf can't rebuild a file without a trailer (qpdf < 12)")
+    out = tmp_path / "fixed.pdf"
+
+    res = E.repair_pdf(damaged, out, settings)
+
+    # qpdf rebuilds a trailer without /Size; saved as is, the "repaired" copy was damaged.
+    assert res["problems_left"] == []
+    with pikepdf.open(out) as pdf:
+        assert pdf.get_warnings() == []
+        assert int(pdf.trailer.Size) > 1
+    assert page_labels(out) == page_labels(doc)
+    if HAS_QPDF:
+        assert subprocess.run(["qpdf", "--check", str(out)], capture_output=True).returncode == 0
+
+
+def test_repair_reports_what_is_still_wrong(doc, tmp_path, settings, monkeypatch):
+    from paperboy.engine import optimize
+
+    seen = []
+
+    def still_wrong(path, password):
+        seen.append((path, password))
+        return ["object 7: stream is damaged"]
+
+    monkeypatch.setattr(optimize, "problems_reading", still_wrong)
+    out = tmp_path / "fixed.pdf"
+    res = E.repair_pdf(doc, out, settings)
+    assert res["problems_left"] == ["object 7: stream is damaged"]
+    assert seen == [(out, None)]
+
+
+def test_repair_of_a_protected_file_checks_the_protected_copy(make_encrypted, tmp_path,
+                                                                 settings):
+    out = tmp_path / "fixed.pdf"
+    res = E.repair_pdf(make_encrypted(password="pw"), out, settings, "pw")
+    assert res["password_protected"] is True
+    assert res["problems_left"] == []  # opened with its password, not reported unreadable
 
 
 def test_repair_gives_up_on_garbage(tmp_path, settings):

@@ -433,7 +433,9 @@ def get_metadata(input_path: str, password: str | None = None) -> MetadataResult
 @_tool(_reads("Check PDF"))
 @_guard
 def check_pdf(input_path: str, password: str | None = None) -> CheckResult:
-    """Validate structural integrity and report any problems found."""
+    """Validate structural integrity and report any problems found: qpdf's full check
+    when its command-line tool is installed, otherwise pikepdf's, which also reports
+    damage qpdf works around while reading (such as an index it had to rebuild)."""
     return engine.check_pdf(require_input(input_path, SETTINGS), SETTINGS, password)
 
 
@@ -984,8 +986,9 @@ def repair_pdf(
     password: str | None = None,
     overwrite: bool | None = None,
 ) -> RepairResult:
-    """Rebuild a damaged PDF's structure by reading and rewriting it. Signed PDFs are
-    refused (rewriting invalidates the signature)."""
+    """Rebuild a damaged PDF's structure by reading and rewriting it. problems_left lists
+    anything qpdf still finds wrong in the repaired copy (empty when it is sound). Signed
+    PDFs are refused (rewriting invalidates the signature)."""
     src = require_input(input_path, SETTINGS)
     out = prepare_output(src, output_path, "_repaired", _overwrite(overwrite), SETTINGS)
     return engine.repair_pdf(src, out, SETTINGS, password)

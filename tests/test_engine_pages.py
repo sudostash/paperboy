@@ -59,6 +59,21 @@ def test_rearrange_keeps_metadata(doc, tmp_path, settings):
     assert _title(out) == "Kept Title"
 
 
+def test_extract_keeps_info_only_metadata(doc, tmp_path, settings):
+    # Most PDFs keep their title in the document info dictionary alone, without XMP.
+    src = tmp_path / "info.pdf"
+    with pikepdf.open(doc) as pdf:
+        if "/Metadata" in pdf.Root:
+            del pdf.Root.Metadata
+        pdf.docinfo["/Title"] = "Info Title"
+        pdf.docinfo["/Author"] = "Ann Lee"
+        pdf.save(src)
+    out = tmp_path / "e.pdf"
+    E.extract_pages(src, out, "1-2", settings)
+    assert E.get_metadata(out, settings)["metadata"]["title"] == "Info Title"
+    assert E.get_metadata(out, settings)["metadata"]["author"] == "Ann Lee"
+
+
 def test_rearrange_bad_spec_writes_nothing(doc, tmp_path, settings):
     with pytest.raises(PdfUserError):
         E.rearrange_pages(doc, tmp_path / "r.pdf", "9", settings)

@@ -7,7 +7,16 @@ import subprocess
 import pikepdf
 import pytest
 
-from paperboy.engine.base import copy_docinfo, is_encrypted, open_pdf, run_qpdf
+from paperboy.engine.base import (
+    MAX_PROBLEMS,
+    copy_docinfo,
+    is_encrypted,
+    open_pdf,
+    open_with_password,
+    pdf_problems,
+    problems_reading,
+    run_qpdf,
+)
 from paperboy.errors import PdfUserError
 
 from conftest import HAS_QPDF
@@ -104,6 +113,116 @@ def test_copy_docinfo_carries_metadata(doc, tmp_path):
         copy_docinfo(src, dst)
         with dst.open_metadata() as m:
             assert m["dc:title"] == "Carried"
+
+
+def _info_only(doc, tmp_path, **entries):
+    """*doc* with document info entries and no XMP, as most PDFs come."""
+    out = tmp_path / "info.pdf"
+    with pikepdf.open(doc) as pdf:
+        if "/Metadata" in pdf.Root:
+            del pdf.Root.Metadata
+        for key, value in entries.items():
+            pdf.docinfo[f"/{key}"] = value
+        pdf.save(out)
+    return out
+
+
+def test_copy_docinfo_carries_info_only_metadata(doc, tmp_path):
+    src_path = _info_only(doc, tmp_path, Title="Q3 Report", Author="Ann Lee",
+                          CreationDate="D:20260101120000Z", Trapped=pikepdf.Name.False_,
+                          Custom="not a standard entry")
+    with pikepdf.open(src_path) as src, pikepdf.new() as dst:
+        copy_docinfo(src, dst)
+        assert str(dst.docinfo["/Title"]) == "Q3 Report"
+        assert str(dst.docinfo["/Author"]) == "Ann Lee"
+        assert str(dst.docinfo["/CreationDate"]) == "D:20260101120000Z"
+        assert dst.docinfo["/Trapped"] == pikepdf.Name.False_
+        assert "/Custom" not in dst.docinfo  # only the standard entries
+        assert "/Metadata" not in dst.Root  # no XMP made up from nothing
+
+
+def test_copy_docinfo_lets_xmp_win_and_skips_odd_values(doc, tmp_path):
+    src_path = _info_only(doc, tmp_path, Title="Old title", Subject="From info")
+    with pikepdf.open(src_path, allow_overwriting_input=True) as pdf:
+        with pdf.open_metadata(set_pikepdf_as_editor=False, update_docinfo=False) as m:
+            m["dc:title"] = "XMP title"
+        pdf.docinfo["/Keywords"] = pikepdf.Array([1, 2])  # not a string: skipped
+        pdf.save(src_path)
+    with pikepdf.open(src_path) as src, pikepdf.new() as dst:
+        copy_docinfo(src, dst)
+        assert str(dst.docinfo["/Title"]) == "XMP title"
+        assert str(dst.docinfo["/Subject"]) == "From info"
+        assert "/Keywords" not in dst.docinfo
+
+
+def test_copy_docinfo_without_any_metadata(doc, tmp_path):
+    with pikepdf.open(doc) as src, pikepdf.new() as dst:
+        if "/Info" in src.trailer:
+            del src.trailer.Info
+        copy_docinfo(src, dst)
+        assert "/Title" not in dst.docinfo
+
+
+def test_copy_docinfo_never_raises_on_info(doc):
+    class BrokenDocinfo:
+        Root = pikepdf.Dictionary()
+
+        @property
+        def docinfo(self):
+            raise RuntimeError("boom")
+
+    with pikepdf.open(doc) as src:
+        src.docinfo["/Title"] = "T"
+        copy_docinfo(src, BrokenDocinfo())  # best-effort: swallowed
+
+
+def test_open_gives_a_trailer_without_size_one(doc, tmp_path):
+    data = doc.read_bytes()
+    cut = tmp_path / "cut.pdf"
+    cut.write_bytes(data[:data.rindex(b"\nxref") + 1] + b"xref\n")  # ends mid-table
+    try:
+        pdf = open_with_password(str(cut), None)
+    except pikepdf.PdfError:
+        pytest.skip("this qpdf can't rebuild a file without a trailer (qpdf < 12)")
+    with pdf:
+        assert "/Size" in pdf.trailer
+        pdf.save(tmp_path / "saved.pdf")
+    with pikepdf.open(tmp_path / "saved.pdf") as saved:
+        assert saved.get_warnings() == []
+
+
+class _Checked:
+    """Stands in for a pikepdf.Pdf: the warnings from opening, and a syntax check."""
+
+    def __init__(self, warnings, problems, renamed=True):
+        self._warnings = warnings
+        if renamed:
+            self.check_pdf_syntax = lambda: problems
+        else:  # pikepdf < 9
+            self.check = lambda: problems
+
+    def get_warnings(self):
+        return self._warnings
+
+
+@pytest.mark.parametrize("renamed", [True, False])
+def test_pdf_problems_lists_warnings_then_syntax_problems(renamed):
+    pdf = _Checked(["file is damaged"], ["object 3: bad stream"], renamed)
+    assert pdf_problems(pdf) == ["file is damaged", "object 3: bad stream"]
+
+
+def test_pdf_problems_is_bounded():
+    pdf = _Checked(["w" * 900] * (MAX_PROBLEMS + 50), ["late"])
+    found = pdf_problems(pdf)
+    assert len(found) == MAX_PROBLEMS
+    assert all(len(problem) == 500 for problem in found)
+
+
+def test_problems_reading(doc, tmp_path):
+    assert problems_reading(doc, None) == []
+    junk = tmp_path / "junk.pdf"
+    junk.write_bytes(b"%PDF-1.4\n garbage")
+    assert len(problems_reading(junk, None)) == 1  # won't open: that is the problem
 
 
 def test_copy_docinfo_never_raises(doc):

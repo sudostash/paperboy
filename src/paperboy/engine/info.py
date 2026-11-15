@@ -9,7 +9,7 @@ import pikepdf
 from ..config import Settings
 from ..errors import PdfUserError
 from ..results import CheckResult, InfoResult
-from .base import open_pdf, open_with_password, run_qpdf
+from .base import open_pdf, open_with_password, pdf_problems, run_qpdf
 from .metadata import read_metadata
 
 # qpdf echoes the user password, even one it recovered from the owner password, and
@@ -92,13 +92,15 @@ def check_pdf(path: Path, settings: Settings, password: str | None = None) -> Ch
         return {"path": str(path), "healthy": proc.returncode == 0, "checker": "qpdf",
                 "problems": problems, "raw": output[:4000]}
 
-    # Fallback: a successful open + page walk means it parses.
+    # Fallback: pikepdf's own reading. qpdf rebuilds damaged structure while it opens
+    # a file, so the warnings from opening count as problems as much as a failure does.
     try:
         with open_pdf(path, settings, password) as pdf:
             for _ in pdf.pages:
                 pass
-        return {"path": str(path), "healthy": True, "checker": "pikepdf", "problems": [],
-                "raw": None}
+            problems = pdf_problems(pdf)
+        return {"path": str(path), "healthy": not problems, "checker": "pikepdf",
+                "problems": problems, "raw": None}
     except PdfUserError:
         raise
     except Exception as exc:  # noqa: BLE001

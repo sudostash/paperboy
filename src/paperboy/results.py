@@ -117,6 +117,7 @@ class OptimizeResult(Protected):
 class RepairResult(Protected):
     output: str
     pages: int
+    problems_left: list[str]               # what qpdf still reports in the repaired copy
 
 
 class FlattenResult(Protected):

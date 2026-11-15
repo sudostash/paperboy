@@ -412,8 +412,8 @@ Video: [`scan.webm`](https://github.com/sudostash/paperboy/releases/download/dem
 
 > *"A supplier emailed quote.pdf and my PDF viewer says it's damaged. Can you fix it?"*
 
-`check_pdf` reports what's wrong with the file's structure, `repair_pdf` rebuilds it, and
-a second check confirms the repaired copy is sound.
+`check_pdf` reports what's wrong with the file's structure, and `repair_pdf` rebuilds it,
+reporting anything still wrong in the repaired copy. A second check confirms it's sound.
 
 Video: [`repair.webm`](https://github.com/sudostash/paperboy/releases/download/demo-videos/repair.webm)
 

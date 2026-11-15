@@ -18,6 +18,7 @@ from .base import (
     inherit_protection,
     open_pdf,
     open_with_password,
+    problems_reading,
     refuse_signed,
     require_annotation_permission,
     require_modify_permission,
@@ -173,7 +174,9 @@ def repair_pdf(
             del pdf.Root.Perms
         protection = inherit_protection(pdf, password)
         pdf.save(str(out), encryption=protection.encryption)
-    return protection.report({"output": str(out), "pages": pages})
+    owner = protection.encryption.owner if protection.encryption else None
+    return protection.report({"output": str(out), "pages": pages,
+                              "problems_left": problems_reading(out, owner)})
 
 
 def flatten_pdf(
