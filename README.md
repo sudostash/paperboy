@@ -76,6 +76,7 @@ and a demo video for each.
 | `export_markdown` | Save that Markdown as a `.md` file |
 | `compare_pdfs` | Compare two versions page by page: pages matched first (insertions don't shift everything), then the lines removed and added, and optionally how pages look (% of pixels changed, with red/green difference images) *(read-only)* |
 | `run_pipeline` | Run several one-file tools in one call (e.g. decrypt → delete pages → optimize → encrypt), each on the result of the last; only the final file is saved, and nothing if a step fails |
+| `batch_process` | Run the same steps (as for `run_pipeline`) on every PDF in a folder, or on a list of files, up to 100; results keep their names in a `processed` folder, each file succeeds or fails on its own, and progress is reported as each finishes |
 | `list_pdfs` | List the PDFs under `PAPERBOY_ROOT` (or a folder in it): path, size, last changed; up to 1,000 *(read-only)* |
 | `check_pdf` | Validate structural integrity and report problems, including damage qpdf works around while reading (a rebuilt index) |
 | `encrypt_pdf` | Add a password — AES-256 (default), AES-128, RC4 — with print/copy/modify restrictions |
@@ -289,6 +290,14 @@ All configuration is environment variables. Sensible defaults; nothing is requir
   file, and keeps the input's protection (and owner password) through the chain. Steps
   hand files over in a private temporary folder in the system's temp directory, which can
   briefly hold a decrypted copy after a `decrypt_pdf` step; each is removed once used.
+- **Batches are checked before they start.** `batch_process` checks its steps, finds its
+  files (a folder batch, as `list_pdfs` does: inside `PAPERBOY_ROOT`, no hidden files, no
+  links out of the root) and works out every result's path before processing any file.
+  It refuses a batch where a result would replace an input, two results would share a file,
+  or results already exist (unless `overwrite`). It processes at most 100 files and stops
+  starting new ones after 30 minutes, and each file runs as a pipeline with the same
+  limits. A password typed for a batch (`"ask"`) serves only the files you were asked
+  about: if they change before it runs, nothing is done.
 - **Extraction is bounded and careful with names.** `extract_attachments` and
   `extract_images` decode with byte budgets and refuse data they can't measure (decompression
   bombs, predictor or JPEG headers that disagree with the image's size); each call has a total

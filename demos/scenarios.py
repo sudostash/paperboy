@@ -358,6 +358,28 @@ SCENARIOS: dict[str, dict] = {
                                     "unchanged."},
         ],
     },
+    "batch": {
+        "title": "Process a whole folder",
+        "subtitle": "The same steps on every PDF in one call; a file that fails doesn't stop "
+                    "the rest.",
+        "files": ["report.pdf", "proposal.pdf", "invoice.pdf", "taxes.pdf"],
+        "prompt": "Stamp DRAFT and page numbers on every PDF in this folder.",
+        "steps": [
+            {"type": "call", "tool": "batch_process",
+             "args": {"folder": ".",
+                      "steps": [{"tool": "add_watermark", "args": {"text": "DRAFT"}},
+                                {"tool": "add_page_numbers"}]},
+             "showTable": "files", "columns": ["input", "status", "error"]},
+            {"type": "call", "tool": "pdf_info", "args": {"input_path": "processed/report.pdf"},
+             "show": {"before": "report.pdf", "after": "processed/report.pdf"}},
+            {"type": "say", "text": "Three of the four are done, in one call: the copies are "
+                                    "in processed/, with the same names, each with the DRAFT "
+                                    "watermark and page numbers. taxes.pdf needs its password, "
+                                    "so it was left as it is; say the word and I'll run it "
+                                    "too, with you typing the password on a local page. Your "
+                                    "originals are unchanged."},
+        ],
+    },
     "list-pdfs": {
         "title": "See which PDFs you have",
         "subtitle": "List the PDFs Paperboy may use, then pick one to work on.",
@@ -752,7 +774,7 @@ GROUPS: list[tuple[str, list[str]]] = [
                           "page-layout", "bookmarks"]),
     ("Creating PDFs", ["convert"]),
     ("Editing and marking up", ["fill-form", "watermark-numbers", "comments", "metadata",
-                                "pipeline"]),
+                                "pipeline", "batch"]),
     ("Sharing safely", ["sanitize", "redaction", "protect", "ask-password", "permissions",
                         "scan"]),
     ("File health and size", ["repair", "target-size", "pdfa"]),

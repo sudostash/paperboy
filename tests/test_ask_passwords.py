@@ -595,3 +595,133 @@ async def test_a_client_that_fails_to_hear_back_still_gets_the_result(sandbox, t
     kwargs = {"input_path": str(locked), "password": "ask"}
     await S._resolve_passwords(ctx, kwargs)
     assert kwargs["password"] == "secret"
+
+
+# --- batch_process --------------------------------------------------------------------------
+
+
+@pytest.fixture
+def batch(sandbox, tmp_path):
+    d = tmp_path / "statements"
+    d.mkdir()
+    return d, _locked(d / "may.pdf"), _locked(d / "june.pdf")
+
+
+# The folder also holds the unprotected copies _locked starts from: one password serves a
+# mixed folder, and pikepdf warns that those didn't need it.
+@pytest.mark.filterwarnings("ignore:A password was provided")
+async def test_a_batch_asks_once_for_the_password_that_opens_its_files(batch):
+    folder, may, june = batch
+    ctx = _Ctx(typed=[{"password": "secret"}])
+    kwargs = {"folder": str(folder), "password": "ask",
+              "steps": [{"tool": "rotate_pages", "args": {"degrees": 90}}]}
+    await S._resolve_passwords(ctx, kwargs, "batch_process")
+    assert kwargs["password"] == "secret"
+    assert ctx.opened == ["Paperboy needs opening the 4 PDFs in “statements”. Type "
+                          "it on this page, not in the chat."]
+    res = S.batch_process(**kwargs)
+    assert res["done"] == 4
+    assert {f["password_protected"] for f in res["files"]} == {True, False}
+
+
+async def test_a_batch_names_the_files_it_asks_for(batch):
+    folder, may, june = batch
+    for paths, name in (([may], "“may.pdf”"), ([may, june], "the 2 PDFs")):
+        ctx = _Ctx(typed=[{"password": "secret"}])
+        await S._resolve_passwords(ctx, {"input_paths": [str(p) for p in paths],
+                                         "password": "ask", "steps": [{"tool": "repair_pdf"}]},
+                                   "batch_process")
+        assert f"opening {name}." in ctx.opened[0]
+    ctx = _Ctx(typed=[{"password": "n3w", "confirm": "n3w"}])
+    await S._resolve_passwords(ctx, {
+        "folder": str(folder), "password": "secret",
+        "steps": [{"tool": "encrypt_pdf", "args": {"user_password": "ask"}}]}, "batch_process")
+    assert ("the password that opens it, for each protected copy of the 4 PDFs in "
+            "“statements”") in ctx.opened[0]
+
+
+async def test_a_batch_is_checked_before_anyone_is_asked(batch, tmp_path):
+    folder, *_ = batch
+    (folder / "processed").mkdir()
+    (folder / "processed" / "may.pdf").write_bytes(b"x")
+    for kwargs, message in [
+        ({"folder": str(folder), "password": "ask"}, "already exist"),
+        ({"folder": str(tmp_path / "nope"), "password": "ask"}, "Not a folder"),
+        ({"folder": str(folder), "overwrite": True, "password": "ask",
+          "steps": [{"tool": "encrypt_pdf", "args": {"user_password": "x"}},
+                    {"tool": "repair_pdf"}]}, "must be the last step"),
+    ]:
+        ctx = _Ctx(typed=[{"password": "secret"}])
+        kwargs.setdefault("steps", [{"tool": "repair_pdf"}])
+        with pytest.raises(S.ToolError, match=message):
+            await S._resolve_passwords(ctx, kwargs, "batch_process")
+        assert ctx.opened == []
+
+
+async def test_a_password_typed_for_one_batch_serves_only_that_batch(batch, tmp_path):
+    folder, may, june = batch
+    steps = [{"tool": "repair_pdf"}]
+    with pytest.raises(S.ToolError) as caught:
+        await S._resolve_passwords(_Ctx(url_mode=False), {
+            "folder": str(folder), "password": "ask", "steps": steps}, "batch_process")
+    url, ref = _link(caught)
+    _http(url, "POST", {"password": "secret"})
+    with pytest.raises(S.ToolError, match="No password has been typed"):
+        await S._resolve_passwords(_Ctx(url_mode=False), {
+            "input_paths": [str(may)], "password": f"ask:{ref}", "steps": steps},
+            "batch_process")
+    with pytest.raises(S.ToolError, match="No password has been typed"):
+        await S._resolve_passwords(_Ctx(url_mode=False), {
+            "input_path": str(may), "password": f"ask:{ref}", "steps": steps}, "run_pipeline")
+    again = {"folder": str(folder), "password": f"ask:{ref}", "steps": steps}
+    await S._resolve_passwords(_Ctx(url_mode=False), again, "batch_process")
+    assert again["password"] == "secret"
+
+
+async def test_over_stdio_a_batch(server_env, tmp_path):
+    a, b = _make_pdf(tmp_path / "a.pdf", 2), _make_pdf(tmp_path / "b.pdf", 3)
+    res = await _call(server_env, "batch_process",
+                      {"input_paths": [str(a), str(b)],
+                       "steps": [{"tool": "encrypt_pdf", "args": {"user_password": "ask"}}]},
+                      {"password": "batched", "confirm": "batched"})
+    assert not _is_error(res) and _payload(res)["done"] == 2
+    with pikepdf.open(tmp_path / "processed" / "b.pdf", password="batched") as pdf:
+        assert len(pdf.pages) == 3
+
+
+async def test_a_batch_password_serves_only_the_files_it_was_typed_for(batch):
+    folder, may, june = batch
+    steps = [{"tool": "decrypt_pdf"}]
+    with pytest.raises(S.ToolError) as caught:
+        await S._resolve_passwords(_Ctx(url_mode=False), {
+            "folder": str(folder), "password": "ask", "steps": steps}, "batch_process")
+    url, ref = _link(caught)
+    _http(url, "POST", {"password": "secret"})
+    (folder / "deep").mkdir()
+    _locked(folder / "deep" / "later.pdf")          # arrives after the password was typed
+    with pytest.raises(S.ToolError, match="No password has been typed"):
+        await S._resolve_passwords(_Ctx(url_mode=False), {
+            "folder": str(folder), "recursive": True, "password": f"ask:{ref}",
+            "steps": steps, "output_dir": str(folder / "out")}, "batch_process")
+    assert not (folder / "out").exists()
+
+
+@pytest.mark.filterwarnings("ignore:A password was provided")
+async def test_a_batch_refuses_files_that_changed_while_the_password_was_typed(batch):
+    folder, *_ = batch
+
+    class Typing(_Ctx):
+        async def elicit_url(self, message, url, elicitation_id):
+            _locked(folder / "late.pdf")            # appears while the user is typing
+            return await super().elicit_url(message, url, elicitation_id)
+    tool = S._asking(S.batch_process)
+    with pytest.raises(S.ToolError, match="changed after the password was typed"):
+        await tool(folder=str(folder), password="ask", steps=[{"tool": "decrypt_pdf"}],
+                   paperboy_context=Typing(typed=[{"password": "secret"}]))
+    assert not (folder / "processed").exists()
+    res = await tool(folder=str(folder), password="secret", steps=[{"tool": "decrypt_pdf"}],
+                     paperboy_context=_Ctx())
+    # A password in the call isn't bound: the three locked files are decrypted (the
+    # unprotected ones fail, as they can't be decrypted).
+    assert (res["done"], res["failed"]) == (3, 3)
+    assert S._BATCH_BOUND.get() is None

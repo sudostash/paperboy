@@ -699,6 +699,25 @@ class PipelineResult(Protected):
     steps: list[PipelineStepResult]
 
 
+class BatchFileResult(Protected):
+    input: str
+    output: str | None                     # where the result was saved; null unless done
+    # done: saved. failed: this file's steps failed, nothing saved for it. not_run: the
+    # batch stopped first (see stopped).
+    status: Literal["done", "failed", "not_run"]
+    error: str | None                      # why it failed
+    steps: list[PipelineStepResult]        # empty unless done
+
+
+class BatchResult(TypedDict):
+    output_dir: str
+    done: int
+    failed: int
+    not_run: int
+    stopped: str | None                    # why the batch stopped before the last file
+    files: list[BatchFileResult]           # in the order they were processed
+
+
 class PdfFile(TypedDict):
     path: str
     relative_path: str                     # from the root

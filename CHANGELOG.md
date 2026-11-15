@@ -7,6 +7,14 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `batch_process`: run the same steps as `run_pipeline` on every PDF in a folder (with its
+  subfolders if asked) or on a list of up to 100 files, in one call. Results keep their
+  names and subfolders under an output folder (default: `processed`, which a later folder
+  batch leaves out), and inputs are never changed. Everything is checked before any file
+  runs, and existing results stop the batch unless `overwrite`. Each file succeeds or fails
+  on its own (`stop_on_error` stops at the first failure), and the result reports each one.
+  Progress goes to the client after each file. One `password` (or `"ask"`) opens every input
+  that needs it; a typed one serves only the files the user was asked about. With a tutorial and demo video.
 - `docs/tutorials.md`: a guide for each job you can ask your AI to do with Paperboy, with
   an example request (the one its demo video uses), the tools involved and what to know,
   linked from the README.
@@ -256,6 +264,8 @@ All notable changes to this project are documented here. The format follows
   an exact pdfminer.six, so a pdfminer.six security fix also needs a pdfplumber release.
 
 ### Changed
+- `run_pipeline` checks the order of its steps (`encrypt_pdf` and `convert_to_pdfa` last)
+  before asking for any `"ask"` password, not after.
 - `extract_tables` and `export_tables` now treat a worker reporting a page it wasn't asked
   for as an error (shared with the Markdown reader).
 - Every tool that changes a PDF now respects all of its permissions, not only copying;

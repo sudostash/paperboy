@@ -46,6 +46,11 @@ def _locked(path, user="pw", owner="owner"):
     return str(path)
 
 
+def _junk(path):
+    path.write_bytes(b"not a PDF")
+    return str(path)
+
+
 def _owner_only(path):
     return _locked(path, user="", owner="boss")
 
@@ -174,6 +179,11 @@ CASES = [
      lambda d: {"input_path": _pdf(d / "a.pdf"),
                 "steps": [{"tool": "delete_pages", "args": {"pages": "1"}},
                           {"tool": "encrypt_pdf", "args": {"user_password": "x"}}]}),
+    # Done, failed (not a PDF) and not run (stop_on_error): every kind of file result.
+    ("batch_process", "batch_process",
+     lambda d: {"input_paths": [_pdf(d / "a.pdf"), _junk(d / "bad.pdf"), _pdf(d / "b.pdf")],
+                "steps": [{"tool": "rotate_pages", "args": {"degrees": 90}}],
+                "stop_on_error": True}),
     ("compare_pdfs", "compare_pdfs",
      lambda d: {"path_a": _pdf(d / "a.pdf"), "path_b": _pdf(d / "b.pdf", pages=4)}),
     ("compare_pdfs-visual", "compare_pdfs",
