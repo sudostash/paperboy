@@ -678,6 +678,35 @@ SCENARIOS: dict[str, dict] = {
                                     "the taxi and hotel receipts on pages 2 and 3."},
         ],
     },
+    "markdown-to-pdf": {
+        "title": "Write a document as a PDF",
+        "subtitle": "The assistant writes Markdown; Paperboy lays it out as a real PDF.",
+        "files": [],
+        "prompt": "Write up my Leeds trip expenses as a one-page PDF I can send to finance.",
+        "steps": [
+            {"type": "call", "tool": "markdown_to_pdf",
+             "args": {"output_path": "leeds-expenses.pdf", "author": "Sam Taylor",
+                      "markdown": (
+                          "# Expense claim: Leeds depot visit\n\n"
+                          "**Trip:** 12-13 November 2026  \n"
+                          "**Purpose:** opening checks for the new Leeds depot\n\n"
+                          "## Costs\n\n"
+                          "| Item | Date | Amount |\n"
+                          "|:-----|:-----|-------:|\n"
+                          "| Taxi, station to depot | 12 Nov | \u20ac20.40 |\n"
+                          "| Hotel, one night with breakfast | 12 Nov | \u20ac108.50 |\n"
+                          "| **Total claimed** | | **\u20ac128.90** |\n\n"
+                          "## Notes\n\n"
+                          "- Receipts for both items are attached to the claim.\n"
+                          "- No meals were claimed: breakfast was included.\n\n"
+                          "> Approved in advance by *J. Okafor*, operations lead.\n")},
+             "show": {"after": "leeds-expenses.pdf"}},
+            {"type": "say", "text": "Done: leeds-expenses.pdf is one page, with the trip "
+                                    "details, a table of the two costs and the \u20ac128.90 "
+                                    "total, and your notes. Its headings are bookmarks, and its "
+                                    "title and author are set in the document properties."},
+        ],
+    },
     "metadata": {
         "title": "Set a PDF's title and author",
         "subtitle": "Read the document properties, then fix them before publishing.",
@@ -772,7 +801,7 @@ GROUPS: list[tuple[str, list[str]]] = [
                              "ocr", "compare"]),
     ("Organizing pages", ["organize", "extract-crop", "blank-pages", "interleave",
                           "page-layout", "bookmarks"]),
-    ("Creating PDFs", ["convert"]),
+    ("Creating PDFs", ["convert", "markdown-to-pdf"]),
     ("Editing and marking up", ["fill-form", "watermark-numbers", "comments", "metadata",
                                 "pipeline", "batch"]),
     ("Sharing safely", ["sanitize", "redaction", "protect", "ask-password", "permissions",

@@ -33,6 +33,7 @@ dependencies = [
                            # release pins one exactly: security fixes need a new pdfplumber
     "pdfminer.six>=20251230",  # MIT; earlier versions run code from malicious PDFs
                            # (CVE-2025-64512, CVE-2025-70559)
+    "markdown-it-py>=3.0", # Markdown to PDF (MIT); 2.2.0 fixed its known DoS bugs
     "typing-extensions>=4.11",
 ]
 

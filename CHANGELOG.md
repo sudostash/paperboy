@@ -7,6 +7,14 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `markdown_to_pdf`: lay out Markdown (written by the assistant, or a `.md` file) as a
+  formatted PDF: headings (also bookmarks), emphasis, strikethrough, lists, quotes, code,
+  tables with column alignment, rules, links (web, email, and headings in the document)
+  and pictures from files inside `PAPERBOY_ROOT`. Raw HTML is shown as text; web pictures
+  are never fetched; pictures left out are listed with the reason. Latin text uses the
+  standard fonts; other scripts switch to the bundled DejaVu fonts, and characters they
+  lack are drawn as "?" and listed. New dependency: `markdown-it-py` (MIT). With a
+  tutorial and demo video.
 - `batch_process`: run the same steps as `run_pipeline` on every PDF in a folder (with its
   subfolders if asked) or on a list of up to 100 files, in one call. Results keep their
   names and subfolders under an output folder (default: `processed`, which a later folder
@@ -264,6 +272,10 @@ All notable changes to this project are documented here. The format follows
   an exact pdfminer.six, so a pdfminer.six security fix also needs a pdfplumber release.
 
 ### Changed
+- `convert_to_pdf` lays out `.md` and `.markdown` files as formatted documents (as
+  `markdown_to_pdf` does) instead of as plain monospaced text. Its result doesn't list
+  pictures left out or missing characters (`markdown_to_pdf` does), and a file nested
+  too deeply or with a table of over 30 columns is now refused.
 - `run_pipeline` checks the order of its steps (`encrypt_pdf` and `convert_to_pdfa` last)
   before asking for any `"ask"` password, not after.
 - `extract_tables` and `export_tables` now treat a worker reporting a page it wasn't asked

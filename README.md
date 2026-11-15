@@ -94,7 +94,8 @@ and a demo video for each.
 | `optimize_pdf` | Linearize ("fast web view") and recompress to shrink; optionally lower picture resolution to a DPI (`max_image_dpi`) or step it down until the file fits a size (`target_size_mb`, keeping the smallest result and reporting `target_met`) |
 | `repair_pdf` | Rebuild a damaged file's structure, and report anything still wrong in the repaired copy (`problems_left`) |
 | `flatten_pdf` | Flatten form fields and annotations *(needs qpdf CLI)* |
-| `convert_to_pdf` | Image / text / Office / HTML → PDF *(Office needs LibreOffice)* |
+| `convert_to_pdf` | Image / text / Markdown / Office / HTML → PDF *(Office needs LibreOffice)*; Markdown is laid out as with `markdown_to_pdf` |
+| `markdown_to_pdf` | Markdown (written by the AI, or a `.md` file) → a formatted PDF: headings as bookmarks, emphasis, lists, quotes, code, tables, links, and pictures from files on your computer; title and author in the document properties |
 | `images_to_pdf` | Combine images into one PDF |
 | `view_pages` | Show up to 5 pages to the assistant as images, so it can see layouts, scans, charts, and signatures *(read-only)* |
 | `find_blank_pages` | Find blank pages (no text, no ink) to pass to `delete_pages`, and *nearly* blank ones (dust, a stamp, initials) to look at with `view_pages` first *(read-only)* |
@@ -298,6 +299,15 @@ All configuration is environment variables. Sensible defaults; nothing is requir
   starting new ones after 30 minutes, and each file runs as a pipeline with the same
   limits. A password typed for a batch (`"ask"`) serves only the files you were asked
   about: if they change before it runs, nothing is done.
+- **Markdown is laid out, never run.** `markdown_to_pdf` shows raw HTML as text, makes
+  links clickable only for web, email and headings in the same document (never
+  `javascript:` or `file:`), and never fetches anything from the web. Pictures come only
+  from files inside `PAPERBOY_ROOT`; each is decoded and re-encoded, scaled to at most
+  2400 px, and a document takes at most 100 of them (400 megapixels in all). Documents
+  are capped at 1,000,000 characters, the page limit and two minutes of layout (checked
+  at every step of the layout, so nothing can stall it); long tables are laid out in
+  parts. Markdown nested too deeply to lay out (about 20 lists or 40 quotes inside each
+  other) is refused rather than laid out with text missing.
 - **Extraction is bounded and careful with names.** `extract_attachments` and
   `extract_images` decode with byte budgets and refuse data they can't measure (decompression
   bombs, predictor or JPEG headers that disagree with the image's size); each call has a total
