@@ -103,13 +103,24 @@ def test_decompression_bomb_is_a_user_error(tmp_path, settings, monkeypatch):
 
 
 def test_text_file_becomes_pdf(tmp_path, settings):
-    src = tmp_path / "notes.md"
+    src = tmp_path / "notes.txt"
     src.write_text("# Title\nhello world\n")
     out = tmp_path / "notes.pdf"
     res = E.convert_to_pdf(src, out, settings)
     assert res == {"output": str(out), "pages": 1, "source_kind": "text"}
     text = page_labels(out)[0]
     assert "# Title" in text and "hello world" in text
+
+
+@pytest.mark.parametrize("ext", [".md", ".markdown"])
+def test_a_markdown_file_is_laid_out_as_a_document(tmp_path, settings, ext):
+    src = tmp_path / f"notes{ext}"
+    src.write_text("# Title\n\nhello **world**\n")
+    out = tmp_path / "notes.pdf"
+    res = E.convert_to_pdf(src, out, settings)
+    assert res == {"output": str(out), "pages": 1, "source_kind": "markdown"}
+    text = page_labels(out)[0]
+    assert "Title" in text and "# Title" not in text and "**" not in text
 
 
 def test_empty_text_file_gives_one_blank_page(tmp_path, settings):

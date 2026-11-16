@@ -19,7 +19,8 @@ from .extract import keep_mode
 
 IMAGE_FORMATS = ("PNG", "JPEG", "GIF", "BMP", "TIFF", "WEBP")
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tif", ".tiff", ".webp"}
-TEXT_EXTS = {".txt", ".md", ".log", ".csv", ".json", ".xml", ".yaml", ".yml"}
+MARKDOWN_EXTS = {".md", ".markdown"}  # laid out as formatted documents
+TEXT_EXTS = {".txt", ".log", ".csv", ".json", ".xml", ".yaml", ".yml"}
 MAX_TOTAL_PIXELS = 400_000_000  # per images_to_pdf call, like render_pages
 OFFICE_EXTS = {
     ".doc", ".docx", ".odt", ".rtf", ".xls", ".xlsx", ".ods",
@@ -193,6 +194,12 @@ def convert_to_pdf(path: Path, out: Path, settings: Settings) -> ConvertResult:
         raise PdfUserError("Input is already a PDF")
     if ext in IMAGE_EXTS:
         kind, make = "image", lambda made: _images_to_pdf([path], made)
+    elif ext in MARKDOWN_EXTS:
+        from .markdown_pdf import markdown_to_pdf
+
+        text = path.read_text(encoding="utf-8", errors="replace")
+        made = markdown_to_pdf(text, out, settings, base=path.parent)
+        return {"output": str(out), "pages": made["pages"], "source_kind": "markdown"}
     elif ext in TEXT_EXTS:
         kind, make = "text", lambda made: _text_to_pdf(path, made, settings.max_pages)
     elif ext in OFFICE_EXTS:
@@ -200,7 +207,8 @@ def convert_to_pdf(path: Path, out: Path, settings: Settings) -> ConvertResult:
     else:
         raise PdfUserError(
             f"Unsupported file type {ext!r}. Supported: images, "
-            f"text ({', '.join(sorted(TEXT_EXTS))}), and Office/HTML documents"
+            f"text ({', '.join(sorted(TEXT_EXTS))}), Markdown "
+            f"({', '.join(sorted(MARKDOWN_EXTS))}), and Office/HTML documents"
         )
     return {"output": str(out), "pages": _made(out, settings, make), "source_kind": kind}
 

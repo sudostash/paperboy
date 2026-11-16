@@ -16,7 +16,7 @@ import time
 from contextlib import contextmanager
 from contextvars import ContextVar, copy_context
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 import anyio
 from mcp.types import CallToolResult, ImageContent, TextContent, ToolAnnotations
@@ -56,6 +56,7 @@ from .results import (
     InfoResult,
     InsertBlankResult,
     InterleaveResult,
+    MarkdownPdfResult,
     MarkdownResult,
     MergeResult,
     MetadataResult,
@@ -1090,13 +1091,55 @@ def convert_to_pdf(
     output_path: str | None = None,
     overwrite: bool | None = None,
 ) -> ConvertResult:
-    """Create a PDF from an image, a text/markdown file, or an Office/HTML document.
+    """Create a PDF from an image, a text file, a Markdown file (.md, laid out as a
+    formatted document; use markdown_to_pdf to also hear which pictures were left out),
+    or an Office/HTML document.
 
     Office/HTML (docx, xlsx, pptx, odt, html, ...) requires LibreOffice installed.
     """
     src = require_input(input_path, SETTINGS)
     out = prepare_output(src, output_path, "", _overwrite(overwrite), SETTINGS)
     return engine.convert_to_pdf(src, out, SETTINGS)
+
+
+@_tool(_writes("Markdown to PDF"))
+@_guard
+def markdown_to_pdf(
+    output_path: str | None = None,
+    markdown: Annotated[str | None, Field(max_length=1_000_000)] = None,
+    input_path: str | None = None,
+    title: Annotated[str | None, Field(max_length=500)] = None,
+    author: Annotated[str | None, Field(max_length=500)] = None,
+    page_size: Literal["letter", "a4"] = "letter",
+    overwrite: bool | None = None,
+) -> MarkdownPdfResult:
+    """Make a formatted PDF from Markdown: write a report, letter or notes as markdown
+    and get a real document back. Give the text as markdown (with output_path), or a
+    Markdown file as input_path (default output "<name>.pdf"). Lays out headings (also
+    the PDF's bookmarks), bold/italic/strikethrough, inline code and code blocks,
+    bullet and numbered lists (nested), quotes, tables (with column alignment),
+    horizontal rules, and links (web, email, and "#heading" links within the document).
+    Pictures (![alt](path)) come from files inside the allowed folder, relative to
+    input_path's folder or else to PAPERBOY_ROOT; web pictures aren't fetched, and
+    images_skipped says which were left out and why. Raw HTML is shown as text. title
+    and author go in the document properties (title defaults to the first heading).
+    Latin text uses the standard fonts; other scripts switch to bundled DejaVu fonts
+    (Greek, Cyrillic, many symbols); characters they lack, e.g. Chinese, become "?" and
+    are listed in missing_characters. Limits: 1,000,000 characters, 100 pictures.
+    """
+    if (markdown is None) == (input_path is None):
+        raise ToolError("Give either markdown (the text) or input_path (a Markdown file)")
+    replace = _overwrite(overwrite)
+    if input_path is not None:
+        src = require_input(input_path, SETTINGS)
+        out = prepare_output(src, output_path, "", replace, SETTINGS)
+        text, base = src.read_text(encoding="utf-8", errors="replace"), src.parent
+    else:
+        if not output_path:
+            raise ToolError("output_path is needed when the Markdown is given as text")
+        out = _combined_output(output_path, [], overwrite)
+        text, base = markdown, SETTINGS.root
+    return engine.markdown_to_pdf(text, out, SETTINGS, base, title, author, page_size)
 
 
 @_tool(_writes("Images to PDF"))

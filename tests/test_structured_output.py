@@ -179,6 +179,9 @@ CASES = [
      lambda d: {"input_path": _pdf(d / "a.pdf"),
                 "steps": [{"tool": "delete_pages", "args": {"pages": "1"}},
                           {"tool": "encrypt_pdf", "args": {"user_password": "x"}}]}),
+    # A picture left out, and a character no bundled font has: every list filled.
+    ("markdown_to_pdf", "markdown_to_pdf",
+     lambda d: {"markdown": "# Plan\n\n![x](missing.png) \u4e2d", "output_path": str(d / "m.pdf")}),
     # Done, failed (not a PDF) and not run (stop_on_error): every kind of file result.
     ("batch_process", "batch_process",
      lambda d: {"input_paths": [_pdf(d / "a.pdf"), _junk(d / "bad.pdf"), _pdf(d / "b.pdf")],

@@ -27,7 +27,8 @@ connect it to your AI app with one command, and restart the app.
   [Combine double-sided scans](#combine-double-sided-scans) ·
   [Resize pages and print 2 per sheet](#resize-pages-and-print-2-per-sheet) ·
   [Add bookmarks](#add-bookmarks)
-- Creating PDFs: [Turn photos and notes into one PDF](#turn-photos-and-notes-into-one-pdf)
+- Creating PDFs: [Turn photos and notes into one PDF](#turn-photos-and-notes-into-one-pdf) ·
+  [Write a document as a PDF](#write-a-document-as-a-pdf)
 - Editing and marking up: [Fill in forms](#fill-in-forms) ·
   [Watermarks, stamps and page numbers](#watermarks-stamps-and-page-numbers) ·
   [Review with comments](#review-with-comments) ·
@@ -267,7 +268,8 @@ Video: [`bookmarks.webm`](https://github.com/sudostash/paperboy/releases/downloa
 > *"Make one PDF for my expense claim: my notes in trip-notes.txt, then the two receipt
 > photos."*
 
-`convert_to_pdf` turns a text, Markdown, image or Office file into a PDF, and
+`convert_to_pdf` turns a text, Markdown, image or Office file into a PDF (Markdown is
+laid out as a formatted document, as below), and
 `images_to_pdf` turns several photos into one PDF with a page each. `merge_pdfs` then
 joins them.
 
@@ -275,6 +277,25 @@ Good to know: Word, Excel, PowerPoint and HTML files need LibreOffice; text and 
 don't.
 
 Video: [`convert.webm`](https://github.com/sudostash/paperboy/releases/download/demo-videos/convert.webm)
+
+### Write a document as a PDF
+
+> *"Write up my Leeds trip expenses as a one-page PDF I can send to finance."*
+
+`markdown_to_pdf` lets your AI write a report, letter or notes and hand you a real PDF.
+The AI writes Markdown, and Paperboy lays it out with headings (which also become the
+PDF's bookmarks), bold and italic, lists, quotes, code, tables and links. It also sets
+the title and author. Ask it to convert a `.md` file you already have and it reads that
+instead.
+
+Good to know: pictures are used only from files on your computer, in the folder Paperboy
+may use; it never downloads pictures from the web, and it says which pictures it left
+out and why. Text in Latin scripts uses the standard fonts; Greek, Cyrillic and many
+symbols switch to fonts that come with Paperboy. Chinese, Japanese and Korean aren't
+covered yet: those characters come out as "?" and are listed in the result. Raw HTML in
+the Markdown is shown as text, not run.
+
+Video: [`markdown-to-pdf.webm`](https://github.com/sudostash/paperboy/releases/download/demo-videos/markdown-to-pdf.webm)
 
 ## Editing and marking up
 

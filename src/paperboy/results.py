@@ -134,12 +134,29 @@ class SetMetadataResult(Protected):
 class ConvertResult(TypedDict):
     output: str
     pages: int
-    source_kind: Literal["image", "text", "office"]
+    source_kind: Literal["image", "text", "markdown", "office"]
 
 
 class ImagesResult(TypedDict):
     output: str
     pages: int
+
+
+class ImageSkip(TypedDict):
+    source: str                            # as written in the Markdown
+    reason: str
+
+
+class MarkdownPdfResult(TypedDict):
+    output: str
+    pages: int
+    title: str | None                      # the given title, else the first heading's
+    headings: int                          # each is a bookmark
+    images: int                            # pictures embedded
+    images_skipped: list[ImageSkip]        # pictures left out, and why (first 50)
+    unicode_font: bool                     # the bundled DejaVu fonts were embedded
+    # Characters no bundled font has (e.g. Chinese), drawn as "?" (first 50).
+    missing_characters: list[str]
 
 
 class RenderResult(TypedDict):
