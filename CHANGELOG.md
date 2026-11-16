@@ -7,6 +7,15 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `inspect_pdfs`: a read-only report on every PDF in a folder (with its subfolders if
+  asked) or a list of up to 200 files, in one call. For each: pages, size, PDF version,
+  title, encryption, health (`check_pdf`'s first problems), risk verdict and indicator
+  codes (`scan_pdf`), kinds of hidden data (`inspect_hidden_data`), and form, signature
+  field and attachment counts, with totals. One `password` (or `"ask"`) is tried on the
+  files that need it; files it doesn't open, or that can't be read, are reported and the
+  rest still run. ClamAV only with `antivirus=true`, and then each file says whether it
+  was clean, infected, or not scanned (unavailable, error). Stops starting files after 10
+  minutes; progress goes to the client after each file. With a tutorial and demo video.
 - `markdown_to_pdf`: lay out Markdown (written by the assistant, or a `.md` file) as a
   formatted PDF: headings (also bookmarks), emphasis, strikethrough, lists, quotes, code,
   tables with column alignment, rules, links (web, email, and headings in the document)

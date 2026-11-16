@@ -13,6 +13,7 @@ connect it to your AI app with one command, and restart the app.
 - [Before you start](#before-you-start)
 - [Watching the videos](#watching-the-videos)
 - Getting started: [See which PDFs you have](#see-which-pdfs-you-have) ·
+  [Check a whole folder](#check-a-whole-folder) ·
   [What runs without asking](#what-runs-without-asking) ·
   [Typed, predictable results](#typed-predictable-results)
 - Reading and finding: [Look at pages and save them as images](#look-at-pages-and-save-them-as-images) ·
@@ -96,6 +97,25 @@ The assistant calls `list_pdfs`, which lists every PDF in your Paperboy folder w
 size and when it last changed (up to 1,000).
 
 Video: [`list-pdfs.webm`](https://github.com/sudostash/paperboy/releases/download/demo-videos/list-pdfs.webm)
+
+### Check a whole folder
+
+> *"Go through the PDFs in this folder and tell me which ones need attention."*
+
+`inspect_pdfs` reads every PDF in a folder, or a list of files (up to 200), and changes
+nothing. For each one it reports pages, size, whether it's password protected, whether
+its structure is healthy, its risk verdict (as `scan_pdf` gives it), the hidden data it
+carries, and its form fields, signature fields and attachments. Totals come at the top,
+so your AI can point you to the few files worth a closer look and then use the
+single-file tools on them. Your AI app shows progress as each file is read.
+
+Good to know: a password you give is tried only on the files that need one. A file it
+doesn't open is listed as needing a password, and a damaged file is listed as failed;
+the rest are still read. Malware scanning with ClamAV is off unless you ask, since it
+takes a while for each file; when it's on, each file says whether ClamAV found it clean
+or infected, or couldn't scan it.
+
+Video: [`inspect-pdfs.webm`](https://github.com/sudostash/paperboy/releases/download/demo-videos/inspect-pdfs.webm)
 
 ### What runs without asking
 
