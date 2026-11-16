@@ -255,6 +255,11 @@ function showTable(step) {
   const table = el("table", "schema-table");
   if (step.columns) {
     // A list of findings, one row each; a "severity" column is colour-coded.
+    if (step.headers) {
+      const head = el("tr");
+      step.columns.forEach((col) => head.append(el("th", null, col.replaceAll("_", " "))));
+      table.append(head);
+    }
     data.forEach((item, i) => {
       const row = el("tr");
       row.style.animationDelay = `${i * 70}ms`;

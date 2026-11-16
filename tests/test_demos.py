@@ -816,7 +816,8 @@ async def test_viewer_plays_scenario_to_completion(browser, tmp_path, slug):
                 "els => els.map(e => e.naturalWidth)"))  # every image actually loaded
         if calls and calls[-1].get("showTable"):
             table = calls[-1]["result"][calls[-1]["showTable"]]
-            assert await page.locator(".schema-table tr").count() == len(table)
+            heading = bool(calls[-1].get("headers"))     # a row of column names first
+            assert await page.locator(".schema-table tr").count() == len(table) + heading
         shown = [c for c in calls if any(c.get(k) for k in (
             "show", "showSchema", "showImages", "showTable", "showGrid", "showMarkdown"))]
         if shown and shown[-1].get("showMarkdown"):  # still on stage

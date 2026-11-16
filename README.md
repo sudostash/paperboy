@@ -77,6 +77,7 @@ and a demo video for each.
 | `compare_pdfs` | Compare two versions page by page: pages matched first (insertions don't shift everything), then the lines removed and added, and optionally how pages look (% of pixels changed, with red/green difference images) *(read-only)* |
 | `run_pipeline` | Run several one-file tools in one call (e.g. decrypt → delete pages → optimize → encrypt), each on the result of the last; only the final file is saved, and nothing if a step fails |
 | `batch_process` | Run the same steps (as for `run_pipeline`) on every PDF in a folder, or on a list of files, up to 100; results keep their names in a `processed` folder, each file succeeds or fails on its own, and progress is reported as each finishes |
+| `inspect_pdfs` | Report on every PDF in a folder, or a list of up to 200, in one call: pages, size, encryption, health, risk verdict, hidden data, forms, signature fields and attachments for each, with totals, so you know which files need attention. One `password` opens the files that need it; files it doesn't open are reported, not failed *(read-only)* |
 | `list_pdfs` | List the PDFs under `PAPERBOY_ROOT` (or a folder in it): path, size, last changed; up to 1,000 *(read-only)* |
 | `check_pdf` | Validate structural integrity and report problems, including damage qpdf works around while reading (a rebuilt index) |
 | `encrypt_pdf` | Add a password — AES-256 (default), AES-128, RC4 — with print/copy/modify restrictions |
@@ -286,6 +287,11 @@ All configuration is environment variables. Sensible defaults; nothing is requir
   you naming a file; it never reads their contents, follows links out of the root, or walks
   more than 50,000 entries. File names are passed on as data; ones with control characters
   are left out.
+- **Folder reports read, never write.** `inspect_pdfs` finds its files as `batch_process`
+  does, reads at most 200 per call and stops starting new ones after 10 minutes. ClamAV
+  runs only if you ask (`antivirus`). One password is tried only on the files that need
+  one, and a typed one (`"ask"`) serves only the files you were asked about. Titles and
+  problems are cut to 300 characters, and only each file's first 5 problems are listed.
 - **Pipelines run each step under its tool's own rules.** `run_pipeline` checks every
   step's arguments before running any, applies the file-size cap to each intermediate
   file, and keeps the input's protection (and owner password) through the chain. Steps

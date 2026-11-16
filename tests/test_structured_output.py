@@ -187,6 +187,9 @@ CASES = [
      lambda d: {"input_paths": [_pdf(d / "a.pdf"), _junk(d / "bad.pdf"), _pdf(d / "b.pdf")],
                 "steps": [{"tool": "rotate_pages", "args": {"degrees": 90}}],
                 "stop_on_error": True}),
+    # Inspected, needs a password, and failed (not a PDF): every kind of file entry.
+    ("inspect_pdfs", "inspect_pdfs",
+     lambda d: {"input_paths": [_pdf(d / "a.pdf"), _locked(d / "l.pdf"), _junk(d / "bad.pdf")]}),
     ("compare_pdfs", "compare_pdfs",
      lambda d: {"path_a": _pdf(d / "a.pdf"), "path_b": _pdf(d / "b.pdf", pages=4)}),
     ("compare_pdfs-visual", "compare_pdfs",

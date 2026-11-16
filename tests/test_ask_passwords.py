@@ -725,3 +725,44 @@ async def test_a_batch_refuses_files_that_changed_while_the_password_was_typed(b
     # unprotected ones fail, as they can't be decrypted).
     assert (res["done"], res["failed"]) == (3, 3)
     assert S._BATCH_BOUND.get() is None
+
+
+# --- inspect_pdfs ----------------------------------------------------------------------------
+
+
+@pytest.mark.filterwarnings("ignore:A password was provided")
+async def test_a_report_asks_once_for_the_password_its_locked_files_need(batch):
+    folder, may, june = batch
+    ctx = _Ctx(typed=[{"password": "secret"}])
+    tool = S._asking(S.inspect_pdfs)
+    res = await tool(folder=str(folder), password="ask", paperboy_context=ctx)
+    assert ctx.opened == ["Paperboy needs opening the 4 PDFs in \u201cstatements\u201d. Type "
+                          "it on this page, not in the chat."]
+    assert (res["inspected"], res["needs_password"], res["encrypted"]) == (4, 0, 2)
+
+
+async def test_a_report_password_serves_only_the_files_it_was_typed_for(batch):
+    folder, may, june = batch
+    with pytest.raises(S.ToolError) as caught:
+        await S._resolve_passwords(_Ctx(url_mode=False), {
+            "input_paths": [str(may)], "password": "ask"}, "inspect_pdfs")
+    url, ref = _link(caught)
+    _http(url, "POST", {"password": "secret"})
+    for kwargs, tool in (({"input_paths": [str(may), str(june)]}, "inspect_pdfs"),
+                         ({"input_paths": [str(may)], "steps": [{"tool": "repair_pdf"}]},
+                          "batch_process")):
+        with pytest.raises(S.ToolError, match="No password has been typed"):
+            await S._resolve_passwords(_Ctx(url_mode=False),
+                                       {**kwargs, "password": f"ask:{ref}"}, tool)
+    again = {"input_paths": [str(may)], "password": f"ask:{ref}"}
+    assert await S._resolve_passwords(_Ctx(url_mode=False), again, "inspect_pdfs")
+    assert again["password"] == "secret"
+
+
+async def test_a_report_is_checked_before_anyone_is_asked(batch, tmp_path):
+    ctx = _Ctx(typed=[{"password": "secret"}])
+    (tmp_path / "empty").mkdir()
+    with pytest.raises(S.ToolError, match="No PDFs in"):
+        await S._resolve_passwords(ctx, {"folder": str(tmp_path / "empty"),
+                                         "password": "ask"}, "inspect_pdfs")
+    assert ctx.opened == []

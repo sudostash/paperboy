@@ -735,6 +735,49 @@ class BatchResult(TypedDict):
     files: list[BatchFileResult]           # in the order they were processed
 
 
+class InspectedPdf(TypedDict):
+    path: str
+    # inspected: everything below was read. needs_password: it's protected and no
+    # password given opens it. failed: it couldn't be read (see error; what was learnt
+    # before is kept). not_run: the report stopped first (see stopped).
+    status: Literal["inspected", "needs_password", "failed", "not_run"]
+    error: str | None
+    size_bytes: int | None
+    pages: int | None
+    pdf_version: str | None
+    title: str | None                      # from its metadata, if it has one
+    encrypted: bool | None
+    healthy: bool | None                   # as check_pdf says
+    problems: list[str]                    # check_pdf's first 5
+    verdict: Literal["no_active_content_found", "active_content", "suspicious"] | None
+    risks: list[str]                       # scan_pdf's indicator codes
+    hidden_data: list[str]                 # inspect_hidden_data's kinds found
+    form_fields: int | None
+    signature_fields: int | None
+    attachments: int | None
+    # Only with antivirus=true: clean, infected, unavailable (ClamAV not installed) or
+    # error (it couldn't scan the file); never shown as clean when it didn't run.
+    antivirus: Literal["clean", "infected", "unavailable", "error"] | None
+
+
+class InspectPdfsResult(TypedDict):
+    folder: str                            # the folder the PDFs came from (or share)
+    files: int
+    inspected: int
+    needs_password: int
+    failed: int
+    not_run: int
+    pages: int                             # across the files inspected
+    encrypted: int                         # whatever their status
+    unhealthy: int                         # whatever their status
+    active_content: int                    # verdict active_content
+    suspicious: int                        # verdict suspicious
+    with_hidden_data: int
+    with_forms: int
+    stopped: str | None                    # why the report stopped before the last file
+    pdfs: list[InspectedPdf]               # sorted by path
+
+
 class PdfFile(TypedDict):
     path: str
     relative_path: str                     # from the root

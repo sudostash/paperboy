@@ -394,6 +394,27 @@ SCENARIOS: dict[str, dict] = {
                                     "the two contract versions, or get one ready to share?"},
         ],
     },
+    "inspect-pdfs": {
+        "title": "Check a whole folder",
+        "subtitle": "One read-only report on every PDF: what's in each, and which need a look.",
+        "files": ["report.pdf", "proposal.pdf", "invoice.pdf", "taxes.pdf",
+                  "delivery-form.pdf", "quote.pdf"],
+        "prompt": "Go through the PDFs in this folder and tell me which ones need attention.",
+        "steps": [
+            {"type": "call", "tool": "inspect_pdfs", "args": {"folder": "."},
+             "showTable": "pdfs", "columns": ["path", "status", "verdict", "healthy"],
+             "headers": True},
+            {"type": "say", "text": "I went through all six and changed nothing. Four need a look. "
+                                    "invoice.pdf and proposal.pdf are suspicious: each runs a "
+                                    "script when it opens and carries an attachment, and the "
+                                    "invoice's is a program disguised as something else. "
+                                    "quote.pdf is damaged (its index is missing), which "
+                                    "repair_pdf can fix. taxes.pdf is password protected, so I "
+                                    "couldn't look inside; type its password on the local page "
+                                    "and I'll check it too. report.pdf is fine, and "
+                                    "delivery-form.pdf is a form with 5 fields."},
+        ],
+    },
     "ask-password": {
         "title": "Type passwords yourself",
         "subtitle": "The password goes from you to Paperboy, never into the chat.",
@@ -796,7 +817,7 @@ PROMO: dict = {
 # How the gallery (viewer/index.html) groups the scenarios: the sections and order of
 # docs/tutorials.md. Every scenario is in exactly one group.
 GROUPS: list[tuple[str, list[str]]] = [
-    ("Getting started", ["list-pdfs", "tool-annotations", "structured-output"]),
+    ("Getting started", ["list-pdfs", "inspect-pdfs", "tool-annotations", "structured-output"]),
     ("Reading and finding", ["render-pages", "search", "markdown", "tables", "extract",
                              "ocr", "compare"]),
     ("Organizing pages", ["organize", "extract-crop", "blank-pages", "interleave",
