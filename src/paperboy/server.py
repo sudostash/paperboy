@@ -42,6 +42,7 @@ from .results import (
     BlankPagesResult,
     Bookmark,
     CheckResult,
+    CleanScansResult,
     CommentInput,
     CommentsResult,
     CompareResult,
@@ -199,6 +200,10 @@ def _wants(kwargs: dict, tool: str) -> tuple[list, list, str | None]:
     def subject(path) -> tuple[str, str]:
         """What a password is for, as (key, its name for the user): the file, or a
         batch's files. It must exist (and be allowed) before anyone is asked about it."""
+        if tool in _MANY_INPUT_TOOLS:  # its password opens the PDFs among its inputs
+            if not batch:
+                batch.append(_pdf_inputs_subject(kwargs))
+            return batch[0]
         if tool not in _BATCH_TOOLS:
             src = require_input(path or "", SETTINGS)
             return str(src), _label(src)
@@ -250,7 +255,22 @@ def _wants(kwargs: dict, tool: str) -> tuple[list, list, str | None]:
             _check_new_passwords(args)
     if len(asks) > MAX_ASKS:
         raise ToolError(f"A call can ask for at most {MAX_ASKS} passwords")
-    return asks, refs, batch[0][0] if batch and (asks or refs) else None
+    bound = batch[0][0] if batch and (asks or refs) and tool in _BATCH_TOOLS else None
+    return asks, refs, bound
+
+
+# Tools taking several files and one password, which opens the PDFs among them.
+_MANY_INPUT_TOOLS = {"clean_scans"}
+
+
+def _pdf_inputs_subject(kwargs: dict) -> tuple[str, str]:
+    """What a many-input tool's password is for: its PDF inputs, as (key, name)."""
+    pdfs = [require_input(p, SETTINGS) for p in kwargs.get("input_paths") or []
+            if isinstance(p, str) and p.lower().endswith(".pdf")]
+    if not pdfs:
+        raise ToolError("password opens PDF inputs, and input_paths names none")
+    name = _label(pdfs[0]) if len(pdfs) == 1 else f"the {len(pdfs)} PDFs"
+    return json.dumps(sorted(str(p.resolve()) for p in pdfs)), name
 
 
 def _check_new_passwords(args: dict) -> None:
@@ -1286,6 +1306,46 @@ def markdown_to_pdf(
         out = _combined_output(output_path, [], overwrite)
         text, base = markdown, SETTINGS.root
     return engine.markdown_to_pdf(text, out, SETTINGS, base, title, author, page_size)
+
+
+@_tool(_writes("Clean up scans"))
+@_guard
+def clean_scans(
+    input_paths: Annotated[list[str], Field(min_length=1, max_length=50)],
+    output_path: str | None = None,
+    mode: Literal["auto", "color", "grayscale", "black_and_white"] = "auto",
+    find_page: bool = True,
+    straighten: bool = True,
+    page_size: Literal["auto", "a4", "letter"] = "auto",
+    pages: str | None = None,
+    password: str | None = None,
+    overwrite: bool | None = None,
+) -> CleanScansResult:
+    """Make phone photos of documents (or scanned PDFs) look like clean scans, as one
+    PDF, a page for each photo or PDF page, in order. Each page: the sheet of paper is
+    found by its edges and flattened (find_page), so a page shot at an angle becomes a
+    rectangle and the table around it is cut away; text lines still at a slant are
+    levelled (straighten, up to 20 degrees); and the background is evened out to white,
+    removing shadows and a yellow cast. mode: auto keeps colour only for pages with
+    some (a stamp, a highlighter), else grey; or color, grayscale, black_and_white (the
+    smallest file). page_size: auto uses A4 or Letter when the page is that shape. For
+    PDF inputs, pages picks pages (e.g. "1-3") in every PDF, and password opens each PDF
+    that needs one; pages are ignored for photos, and a multi-page TIFF gives a page per
+    frame. The result is pictures of the pages, with no text layer: run ocr_pdf on it to
+    make it searchable.
+    Photos: JPEG, PNG, WebP, TIFF, BMP or GIF, turned the way the phone held them.
+    output_path defaults to "<first name>_clean.pdf" beside the first input. Needs the
+    optional scan extra (OpenCV); without it the reply says how to add it.
+    """
+    srcs = [require_input(p, SETTINGS) for p in input_paths]
+    if output_path is None:
+        out = prepare_output(srcs[0], None, "_clean", _overwrite(overwrite), SETTINGS)
+        if any(same_file(out, src) for src in srcs):  # e.g. a.png and a_clean.pdf
+            raise ToolError(f"{_label(out)} is one of the inputs; choose an output_path")
+    else:
+        out = _combined_output(output_path, srcs, overwrite)
+    return engine.clean_scans(srcs, out, SETTINGS, mode, find_page, straighten, page_size,
+                              pages, password)
 
 
 @_tool(_writes("Images to PDF"))

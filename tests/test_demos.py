@@ -6,6 +6,7 @@ skip cleanly without them.
 """
 from __future__ import annotations
 
+import importlib.util
 import json
 import re
 import shutil
@@ -216,6 +217,8 @@ async def test_scenario_runs_against_real_server(slug, tmp_path):
         pytest.skip("the client opens the password page through URL-mode elicitation")
     if slug == "ocr" and not shutil.which("tesseract"):
         pytest.skip("OCR needs Tesseract installed")
+    if slug == "clean-scans" and importlib.util.find_spec("cv2") is None:
+        pytest.skip("clean_scans needs the scan extra (OpenCV)")
     transcript = await record.run_scenario(slug, SCENARIOS[slug], out=tmp_path)
 
     files = tmp_path / slug / "files"

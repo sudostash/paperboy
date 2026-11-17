@@ -98,6 +98,7 @@ and a demo video for each.
 | `convert_to_pdf` | Image / text / Markdown / Office / HTML → PDF *(Office needs LibreOffice)*; Markdown is laid out as with `markdown_to_pdf` |
 | `markdown_to_pdf` | Markdown (written by the AI, or a `.md` file) → a formatted PDF: headings as bookmarks, emphasis, lists, quotes, code, tables, links, and pictures from files on your computer; title and author in the document properties |
 | `images_to_pdf` | Combine images into one PDF |
+| `clean_scans` | Make phone photos of documents (or scanned PDFs) look scanned: finds the sheet and flattens it (a page shot at an angle becomes a rectangle, the table around it goes), levels slanted text, and whitens the background (no shadows or yellow cast). Colour only where a page has some; or grey, or black and white. One PDF, a page each *(needs the `scan` extra)* |
 | `view_pages` | Show up to 5 pages to the assistant as images, so it can see layouts, scans, charts, and signatures *(read-only)* |
 | `find_blank_pages` | Find blank pages (no text, no ink) to pass to `delete_pages`, and *nearly* blank ones (dust, a stamp, initials) to look at with `view_pages` first *(read-only)* |
 | `list_form_fields` | List a form's fields: full name, type, value, allowed options, required/read-only *(read-only)* |
@@ -143,6 +144,14 @@ Requires Python 3.10+. The quickest path is [`uv`](https://docs.astral.sh/uv/):
 uvx --from paperboy-mcp paperboy          # run without installing
 # or
 pip install paperboy-mcp
+```
+
+To clean up phone photos of documents (`clean_scans`), add the optional `scan` extra
+(OpenCV and NumPy, about 60 MB):
+
+```bash
+pip install "paperboy-mcp[scan]"
+uvx --from "paperboy-mcp[scan]" paperboy  # or, run with it
 ```
 
 From source:
@@ -464,6 +473,18 @@ All configuration is environment variables. Sensible defaults; nothing is requir
   visible page. Only page text is searched (form values and comments shown on the page
   too), and only the page is redacted: copies in metadata, bookmarks, comment text or
   attachments stay, so use `sanitize_pdf` as well before sharing.
+- **Photos are decoded by Pillow, never OpenCV.** `clean_scans` opens photos as
+  `images_to_pdf` does (common formats only, with the decompression-bomb limit) and PDFs
+  as `render_pages` does (the copy permission respected). Only the decoded pixels reach
+  OpenCV. Every picture is worked on at most 6,000 pixels a side: photos are decoded and
+  shrunk to that, PDF pages are drawn at 200 dpi but no bigger, and a flattened page
+  never exceeds it. All the pages of a call share a 400 million pixel budget, and each
+  page is brought to the size it's stored at (300 dpi) before it's whitened. A call takes
+  at most 50 files and 100 pages, counted before any is cleaned, and stops starting pages
+  after 5 minutes. A typed password (`"ask"`) opens only the PDFs among the inputs. The
+  default output is never one of the inputs, and the result is written through a
+  private temporary file and checked against the size and page limits. Pages are
+  pictures with no text layer; `ocr_pdf` adds one.
 - **Passwords can stay out of the conversation.** Pass `"ask"` as any password argument and
   Paperboy opens a one-time page on `127.0.0.1` where you type the password; it goes straight
   to the server, never into the model's context, the client, or the tool-call log. Clients with

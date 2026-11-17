@@ -89,6 +89,18 @@ function showTools(tools) {
 }
 
 async function renderStrip(file, maxHeight, password, maxWidth = stage.clientWidth - 44) {
+  if (/\.(jpe?g|png|webp|gif|bmp|tiff?)$/i.test(file)) {  // a photo, shown as it is
+    const strip = el("div", "strip");
+    const img = document.createElement("img");
+    img.src = `${base}/files/${file}`;
+    img.alt = file;
+    await img.decode();
+    const scale = Math.min(maxHeight / img.naturalHeight, maxWidth / img.naturalWidth);
+    img.style.width = `${img.naturalWidth * scale}px`;
+    img.style.height = `${img.naturalHeight * scale}px`;
+    strip.append(img);
+    return strip;
+  }
   const doc = await pdfjs.getDocument({ url: `${base}/files/${file}`, password }).promise;
   const pages = [];
   for (let n = 1; n <= doc.numPages; n++) pages.push(await doc.getPage(n));

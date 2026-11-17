@@ -872,6 +872,119 @@ def build_new_starter(path: Path) -> Path:
     return path
 
 
+def _perspective(photo_corners, width: float, height: float) -> list[float]:
+    """Pillow's PERSPECTIVE coefficients taking each photo corner back to the matching
+    corner of a width x height picture (top-left, top-right, bottom-right, bottom-left)."""
+    rows, values = [], []
+    for (x, y), (u, v) in zip(photo_corners, [(0, 0), (width, 0), (width, height),
+                                              (0, height)], strict=True):
+        rows.append([x, y, 1, 0, 0, 0, -u * x, -u * y])
+        rows.append([0, 0, 0, x, y, 1, -v * x, -v * y])
+        values += [u, v]
+    n = 8  # Gaussian elimination: no NumPy needed to build the samples
+    m = [row + [val] for row, val in zip(rows, values, strict=True)]
+    for col in range(n):
+        pivot = max(range(col, n), key=lambda r: abs(m[r][col]))
+        m[col], m[pivot] = m[pivot], m[col]
+        for r in range(n):
+            if r != col:
+                f = m[r][col] / m[col][col]
+                m[r] = [a - f * b for a, b in zip(m[r], m[col], strict=True)]
+    return [m[r][n] / m[r][r] for r in range(n)]
+
+
+def _camera(tilt_x: float, tilt_y: float, size: tuple[int, int], aspect: float,
+            f: float = 2000, away: float = 16) -> list[tuple[float, float]]:
+    """Where a camera sees the corners of a sheet turned by these angles (degrees)."""
+    import math
+
+    h = 11.0
+    w = h * aspect
+    a, b = math.radians(tilt_x), math.radians(tilt_y)
+    found = []
+    for x, y in ((-w / 2, -h / 2), (w / 2, -h / 2), (w / 2, h / 2), (-w / 2, h / 2)):
+        y, z = y * math.cos(a), y * math.sin(a)                           # about x
+        x, z = x * math.cos(b) + z * math.sin(b), -x * math.sin(b) + z * math.cos(b)
+        z += away
+        found.append((f * x / z + size[0] / 2, f * y / z + size[1] / 2))
+    return found
+
+
+def build_lease_photo(path: Path) -> Path:
+    """The signed last page of a lease, photographed on a desk at an angle under a
+    warm lamp: the page skewed, the desk around it, a shadow and a yellow cast."""
+    import random
+
+    import pypdfium2
+    from PIL import Image, ImageChops, ImageDraw, ImageFilter
+
+    page_pdf = path.with_name(".lease-page.pdf")
+    c = canvas.Canvas(str(page_pdf), pagesize=letter)
+    width, height = letter
+    c.setFillColor(INK)
+    c.setFont("Helvetica-Bold", 20)
+    c.drawString(72, height - 96, "Residential Lease")
+    c.setFont("Helvetica", 11)
+    c.setFillColor(MUTED)
+    c.drawString(72, height - 116, "14 Harbour Lane, Leeds  -  page 4 of 4")
+    c.setFillColor(INK)
+    c.setFont("Helvetica", 12)
+    terms = ["12. The tenant may keep one small pet with the landlord's written consent.",
+             "13. Rent is reviewed once a year, on the anniversary of this lease.",
+             "14. Either party may end this lease with two months' written notice.",
+             "15. This lease is governed by the law of England and Wales."]
+    for n, line in enumerate(terms):
+        c.drawString(72, height - 170 - n * 26, line)
+    for n, (role, name) in enumerate((("Landlord", "Harbour Homes Ltd"),
+                                      ("Tenant", "Sam Okafor"))):
+        y = height - 380 - n * 120
+        c.setStrokeColor(MUTED)
+        c.line(72, y, 300, y)
+        c.setFillColor(MUTED)
+        c.drawString(72, y - 16, f"{role}: {name}")
+        c.drawString(340, y - 16, "Date: 14 November 2026")
+        c.setStrokeColor(colors.HexColor("#1f3fa8"))   # blue ink: worth keeping in colour
+        c.setLineWidth(1.6)
+        p = c.beginPath()
+        p.moveTo(80, y + 6)
+        for k in range(1, 40):
+            p.lineTo(80 + k * 5.5, y + 8 + 14 * __import__("math").sin(k / 2.3 + n) *
+                     __import__("math").cos(k / 7.0))
+        c.drawPath(p)
+    c.showPage()
+    c.save()
+    doc = pypdfium2.PdfDocument(str(page_pdf))
+    sheet = doc[0].render(scale=170 / 72).to_pil().convert("RGB")
+    doc.close()
+    page_pdf.unlink()
+
+    size = (1800, 2400)
+    rng = random.Random(7)
+    desk = Image.new("RGB", size, (92, 64, 44))
+    grain = ImageDraw.Draw(desk)
+    for x in range(0, size[0], 3):  # wood grain: darker and lighter streaks
+        shade = rng.randint(-14, 10)
+        grain.line([(x, 0), (x + rng.randint(-40, 40), size[1])],
+                   fill=(92 + shade, 64 + shade, 44 + shade), width=3)
+    desk = desk.filter(ImageFilter.GaussianBlur(1.2))
+    corners = _camera(24, 9, size, width / height)
+    coefficients = _perspective(corners, sheet.width, sheet.height)
+    seen = sheet.transform(size, Image.Transform.PERSPECTIVE, coefficients,
+                           Image.Resampling.BICUBIC)
+    mask = Image.new("L", sheet.size, 255).transform(
+        size, Image.Transform.PERSPECTIVE, coefficients, Image.Resampling.BILINEAR)
+    desk.paste(seen, (0, 0), mask)
+    down = Image.linear_gradient("L").resize(size)
+    across = Image.linear_gradient("L").rotate(90).transpose(
+        Image.Transpose.FLIP_LEFT_RIGHT).resize(size)
+    light = ImageChops.add(down, across, scale=2)              # darker towards the top left
+    light = light.point(lambda v: 140 + v * 115 // 255)
+    warm = Image.merge("RGB", (light, light.point(lambda v: v * 95 // 100),
+                               light.point(lambda v: v * 78 // 100)))
+    ImageChops.multiply(desk, warm).save(path, "JPEG", quality=88)
+    return path
+
+
 BUILDERS = {"report.pdf": build_report, "scan.pdf": build_scan,
             "delivery-form.pdf": build_delivery_form, "proposal.pdf": build_proposal,
             "invoice.pdf": build_invoice, "brochure.pdf": build_brochure,
@@ -883,7 +996,7 @@ BUILDERS = {"report.pdf": build_report, "scan.pdf": build_scan,
             "lease.pdf": build_lease, "handbook.pdf": build_handbook,
             "quote.pdf": build_quote, "receipt-taxi.jpg": build_receipt_taxi,
             "receipt-hotel.jpg": build_receipt_hotel, "trip-notes.txt": build_trip_notes,
-            "new-starter.pdf": build_new_starter}
+            "new-starter.pdf": build_new_starter, "lease-photo.jpg": build_lease_photo}
 
 
 def build(names: list[str], workspace: Path) -> None:

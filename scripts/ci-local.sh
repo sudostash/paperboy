@@ -41,16 +41,17 @@ run_job() {
     lint)
       bin=$(env_for lint 3.12 -e ".[dev]") && "$bin/ruff" check . ;;
     test-3.1[0-3])
-      bin=$(env_for "py${job#test-}" "${job#test-}" -e ".[dev]") &&
+      bin=$(env_for "py${job#test-}" "${job#test-}" -e ".[dev,scan]") &&
         "$bin/pytest" -q -p no:cacheprovider --cov=paperboy --cov-branch \
           --cov-report=term-missing:skip-covered --cov-fail-under=95 ;;
     test-mcp1)
+      # Without the scan extra, so clean_scans says how to add it.
       bin=$(env_for mcp1 3.12 -e ".[dev]" "mcp<2") && "$bin/pytest" -q -p no:cacheprovider ;;
     test-lowest)
-      bin=$(env_for lowest 3.10 --resolution lowest-direct -e ".[dev]") &&
+      bin=$(env_for lowest 3.10 --resolution lowest-direct -e ".[dev,scan]") &&
         "$bin/pytest" -q -p no:cacheprovider ;;
     demos)
-      bin=$(env_for demos 3.12 -e ".[dev,demo]") &&
+      bin=$(env_for demos 3.12 -e ".[dev,demo,scan]") &&
         "$bin/python" -m playwright install chromium >/dev/null &&
         "$bin/pytest" -q -p no:cacheprovider tests/test_demos.py ;;
     *)

@@ -7,6 +7,14 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `clean_scans`: phone photos of documents (or scanned PDFs) made to look like clean
+  scans, as one PDF. The sheet is found by its edges and flattened to its real shape (the
+  perspective solved from its corners), slanted text lines are levelled, and the
+  background is evened out to white. Colour is kept only for pages that have some;
+  grey, or black and white, otherwise or on request. Pages are A4 or Letter when they're
+  that shape. Photos are decoded by Pillow (EXIF orientation followed), never by OpenCV.
+  Needs the new optional `scan` extra: `pip install "paperboy-mcp[scan]"` (OpenCV,
+  NumPy). With a tutorial and demo video.
 - `find_sensitive_data` and `redact_sensitive_data`: find personal data in a PDF's text
   (email addresses, phone numbers, payment card numbers and IBANs with their check
   digits verified, US social security and UK National Insurance numbers, dates of birth
@@ -292,6 +300,11 @@ All notable changes to this project are documented here. The format follows
 - New: `pdfplumber>=0.11.9` and `pdfminer.six>=20251230` (both MIT). Earlier pdfminer.six
   releases run code from malicious PDFs (CVE-2025-64512, CVE-2025-70559). pdfplumber pins
   an exact pdfminer.six, so a pdfminer.six security fix also needs a pdfplumber release.
+- Pillow 10.3 or later is required (was 10.0): earlier versions can garble the last
+  block of a JPEG they write, which affected pictures `images_to_pdf` makes, and have
+  CVE-2023-50447 and CVE-2024-28219.
+- New optional `scan` extra: `opencv-python-headless>=4.10.0.84` (Apache-2.0) and
+  `numpy>=1.26` (BSD-3-Clause), for `clean_scans`.
 
 ### Changed
 - `convert_to_pdf` lays out `.md` and `.markdown` files as formatted documents (as
@@ -348,6 +361,10 @@ All notable changes to this project are documented here. The format follows
   permission is always granted, per PDF 2.0).
 
 ### Fixed
+- Worker processes (tables, Markdown, redaction patterns, OCR) run single-threaded. With
+  NumPy installed (as the `scan` extra does), older pypdfium2 loads it, and OpenBLAS's
+  threads spent a worker's CPU-time limit faster than the clock, so pages were skipped
+  as "too much time or memory" before their time was up.
 - `repair_pdf` no longer writes a damaged "repaired" copy of a file whose trailer was lost
   (cut off mid-download, say). qpdf rebuilds such a file without a `/Size` entry and qpdf 12
   saved it that way, so the copy failed `qpdf --check`; every tool now gives such a file a

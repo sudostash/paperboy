@@ -8,6 +8,7 @@ Every tool declares an ``outputSchema`` and returns ``structuredContent`` that:
 from __future__ import annotations
 
 import base64
+import importlib.util
 import io
 import json
 import os
@@ -269,6 +270,12 @@ CASES = [
     ("render_pages-jpeg", "render_pages",
      lambda d: {"input_path": _pdf(d / "a.pdf"), "pages": "2", "format": "jpeg"}),
 ]
+# clean_scans needs the optional scan extra (OpenCV); without it, it says how to add it.
+HAS_CV2 = importlib.util.find_spec("cv2") is not None
+if HAS_CV2:
+    CASES.append(("clean_scans", "clean_scans",
+                  lambda d: {"input_paths": [_image(d / "photo.png"), _pdf(d / "a.pdf")],
+                             "output_path": str(d / "clean.pdf"), "pages": "1"}))
 if HAS_QPDF:
     CASES.append(("flatten_pdf", "flatten_pdf", lambda d: {"input_path": _pdf(d / "a.pdf")}))
     CASES.append(("check_pdf-qpdf-locked", "check_pdf",
@@ -315,7 +322,8 @@ async def test_every_tool_declares_a_closed_output_schema(server_env):
 
 def test_every_tool_has_a_contract_case():
     covered = {tool for _, tool, _ in CASES}
-    expected = EXPECTED_TOOLS if HAS_QPDF else EXPECTED_TOOLS - {"flatten_pdf"}
+    expected = EXPECTED_TOOLS - (set() if HAS_QPDF else {"flatten_pdf"}) \
+        - (set() if HAS_CV2 else {"clean_scans"})
     assert covered == expected
 
 

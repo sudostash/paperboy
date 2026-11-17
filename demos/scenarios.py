@@ -415,6 +415,25 @@ SCENARIOS: dict[str, dict] = {
                                     "delivery-form.pdf is a form with 5 fields."},
         ],
     },
+    "clean-scans": {
+        "title": "Clean up phone photos of documents",
+        "subtitle": "A page shot at an angle on a desk becomes a flat, white scan.",
+        "files": ["lease-photo.jpg"],
+        "prompt": "I photographed the signed lease on my desk. Make it look like a proper "
+                  "scan.",
+        "steps": [
+            {"type": "call", "tool": "clean_scans",
+             "args": {"input_paths": ["lease-photo.jpg"]},
+             "show": {"before": "lease-photo.jpg", "after": "lease-photo_clean.pdf",
+                      "layout": "side-by-side"}},
+            {"type": "say", "text": "Done: lease-photo_clean.pdf is a Letter-size page. The "
+                                    "desk is gone, the page is flat and square, and the "
+                                    "shadow and yellow light are cleaned to white. The "
+                                    "signatures are in blue ink, so the page stays in "
+                                    "colour. It's a picture of the page: say the word and "
+                                    "I'll run OCR to make the text searchable."},
+        ],
+    },
     "sensitive-data": {
         "title": "Find and redact personal data",
         "subtitle": "Paperboy finds it; you choose, item by item, what is redacted.",
@@ -848,7 +867,7 @@ GROUPS: list[tuple[str, list[str]]] = [
                              "ocr", "compare"]),
     ("Organizing pages", ["organize", "extract-crop", "blank-pages", "interleave",
                           "page-layout", "bookmarks"]),
-    ("Creating PDFs", ["convert", "markdown-to-pdf"]),
+    ("Creating PDFs", ["convert", "clean-scans", "markdown-to-pdf"]),
     ("Editing and marking up", ["fill-form", "watermark-numbers", "comments", "metadata",
                                 "pipeline", "batch"]),
     ("Sharing safely", ["sanitize", "redaction", "sensitive-data", "protect",

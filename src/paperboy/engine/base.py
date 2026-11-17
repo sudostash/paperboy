@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import io
+import os
 import re
 import secrets
 import subprocess
@@ -15,6 +16,18 @@ import pikepdf.codec  # noqa: F401  registers the "pdfdoc" codec
 
 from ..config import Settings
 from ..errors import PdfUserError
+
+# Pools of threads that libraries start on import (OpenBLAS and OpenMP, through NumPy
+# when it is installed, as the optional scan extra does) would let a worker spend its
+# CPU-time limit several times faster than the clock, and be killed for it.
+_ONE_THREAD = {name: "1" for name in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS",
+                                      "MKL_NUM_THREADS", "VECLIB_MAXIMUM_THREADS",
+                                      "NUMEXPR_NUM_THREADS")}
+
+
+def worker_env() -> dict[str, str]:
+    """The environment for Paperboy's worker processes: this one, single-threaded."""
+    return {**os.environ, **_ONE_THREAD}
 
 
 def open_with_password(source: str | io.BytesIO, password: str | None) -> pikepdf.Pdf:

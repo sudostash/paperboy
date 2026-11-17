@@ -31,7 +31,7 @@ from ..config import Settings
 from ..errors import PdfUserError
 from ..pagespec import parse_pages
 from ..results import ExportTablesResult, TablesResult
-from .base import open_pdf, require_copy_permission
+from .base import open_pdf, require_copy_permission, worker_env
 from .extract import _check_all, _Writer
 from .render import _check_target
 from .search import _content_size
@@ -169,7 +169,8 @@ def _run(module: str, request: dict, seconds: float) -> tuple[list[dict], bool]:
                "memory_bytes": WORKER_MEMORY}
     name = module.rsplit(".", 1)[-1].replace("_", " ")
     with tempfile.TemporaryFile() as errors:
-        proc = subprocess.Popen([sys.executable, "-I", "-m", module], stdin=subprocess.PIPE,
+        proc = subprocess.Popen([sys.executable, "-I", "-m", module], env=worker_env(),
+                                stdin=subprocess.PIPE,
                                 stdout=subprocess.PIPE, stderr=errors)
         chunks: list[bytes] = []
         too_much = threading.Event()
