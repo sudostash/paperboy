@@ -34,6 +34,7 @@ EXPECTED_TOOLS = {
     "redact_pdf", "ocr_pdf",
     "convert_to_pdfa", "pdf_to_markdown", "export_markdown", "markdown_to_pdf",
     "list_comments", "add_comments", "find_sensitive_data", "redact_sensitive_data",
+    "clean_scans",
 }
 
 

@@ -812,6 +812,22 @@ class RedactSensitiveResult(TypedDict):
     redaction: RedactResult | None         # redact_pdf's report, when redacted
 
 
+class CleanedPage(TypedDict):
+    source: str                            # the photo or PDF it came from
+    page: int | None                       # its page in that PDF; None for a photo
+    page_found: bool                       # the sheet was found and cut out, flattened
+    straightened_degrees: float            # how far its text lines were levelled
+    mode: Literal["color", "grayscale", "black_and_white"]
+    width_px: int
+    height_px: int
+
+
+class CleanScansResult(TypedDict):
+    output: str
+    pages: int
+    cleaned: list[CleanedPage]             # in the order of the pages
+
+
 class PdfFile(TypedDict):
     path: str
     relative_path: str                     # from the root

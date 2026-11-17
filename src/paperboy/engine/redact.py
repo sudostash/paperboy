@@ -43,6 +43,7 @@ from .base import (
     require_copy_permission,
     require_modify_permission,
     signature_state,
+    worker_env,
 )
 from .extract import _page_resources
 from .redact_content import (
@@ -234,6 +235,7 @@ def _run_patterns(patterns: list[str], texts: list[str], ignore_case: bool,
                "memory_bytes": WORKER_MEMORY}
     try:
         proc = subprocess.run([sys.executable, "-I", "-m", "paperboy.engine.pattern_worker"],
+                              env=worker_env(),
                               input=json.dumps(request).encode(), capture_output=True,
                               timeout=max(seconds, 0.1))
     except subprocess.TimeoutExpired:

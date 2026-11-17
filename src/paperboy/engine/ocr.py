@@ -38,6 +38,7 @@ from .base import (
     require_copy_permission,
     require_modify_permission,
     signature_state,
+    worker_env,
 )
 from .images import (
     _DELIMITERS,
@@ -240,7 +241,7 @@ class _Pages:
             self.proc = subprocess.Popen(
                 [sys.executable, "-I", "-m", "paperboy.engine.ocr_worker"],
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=log,
-                start_new_session=True)
+                start_new_session=True, env=worker_env())
         self.started = False
         self.lines: queue.Queue = queue.Queue()
         self.outbox: queue.Queue = queue.Queue()

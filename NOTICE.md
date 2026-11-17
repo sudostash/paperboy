@@ -16,6 +16,8 @@ This project is MIT-licensed and builds on these libraries, which carry their ow
 | [pdfminer.six](https://github.com/pdfminer/pdfminer.six) (with charset-normalizer, MIT, and cryptography, Apache-2.0 / BSD-3-Clause) | MIT | Text layout for pdfplumber |
 | [typing-extensions](https://github.com/python/typing_extensions) | PSF-2.0 | Typed result shapes |
 | [markdown-it-py](https://github.com/executablebooks/markdown-it-py) (with mdurl, MIT) | MIT | Markdown parsing (`markdown_to_pdf`) |
+| [OpenCV](https://opencv.org/) (`opencv-python-headless`, optional `scan` extra) | Apache-2.0 | Finding and flattening pages in photos (`clean_scans`) |
+| [NumPy](https://numpy.org/) (optional `scan` extra) | BSD-3-Clause | Pixel arrays for OpenCV |
 | [DejaVu fonts](https://dejavu-fonts.github.io/) 2.37 (bundled: Sans, Sans Bold, Sans Oblique, Sans Mono, in `src/paperboy/fonts/`) | Bitstream Vera license (permissive; DejaVu changes public domain), see `src/paperboy/fonts/DejaVu-LICENSE.txt` | Non-Latin text in `markdown_to_pdf` |
 
 Optional runtime binaries (not bundled, invoked if present on PATH):

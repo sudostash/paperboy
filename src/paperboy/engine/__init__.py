@@ -7,6 +7,7 @@ is a thin adapter over these; a future HTTP transport can reuse them as-is.
 """
 from __future__ import annotations
 
+from .cleanscan import clean_scans
 from .comments import add_comments, list_comments
 from .compare import compare_pdfs
 from .create import convert_to_pdf, images_to_pdf
@@ -59,5 +60,5 @@ __all__ = [
     "extract_tables", "export_tables",
     "compare_pdfs", "list_pdfs", "redact_pdf", "ocr_pdf",
     "convert_to_pdfa", "pdf_to_markdown", "export_markdown", "markdown_to_pdf",
-    "list_comments", "add_comments", "find_sensitive_data",
+    "list_comments", "add_comments", "find_sensitive_data", "clean_scans",
 ]

@@ -297,3 +297,40 @@ def test_run_qpdf_decodes_output_safely(settings, monkeypatch):
     proc = run_qpdf(dataclasses.replace(settings, qpdf_path="qpdf"), ["x"], "pässword")
     assert proc.stdout == "caf�\r\n"  # raw bytes decoded, \r kept as-is
     assert proc.stderr == "oops �"
+
+
+def test_workers_run_single_threaded(monkeypatch):
+    # A library's pool of threads would spend a worker's CPU-time limit several times
+    # faster than the clock (NumPy's OpenBLAS, once the scan extra is installed).
+    from paperboy.engine.base import worker_env
+    monkeypatch.setenv("PAPERBOY_TEST_KEEP", "yes")
+    monkeypatch.setenv("OMP_NUM_THREADS", "16")
+    env = worker_env()
+    assert env["PAPERBOY_TEST_KEEP"] == "yes"
+    assert all(env[name] == "1" for name in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS",
+                                             "MKL_NUM_THREADS", "VECLIB_MAXIMUM_THREADS",
+                                             "NUMEXPR_NUM_THREADS"))
+
+
+def test_every_worker_is_started_single_threaded(monkeypatch, tmp_path):
+    import subprocess
+
+    from paperboy.engine import ocr, redact, tables
+
+    class Started(Exception):
+        pass
+    seen = []
+
+    def launch(*args, **kwargs):  # note what the worker would get, start nothing
+        seen.append(kwargs.get("env", {}).get("OPENBLAS_NUM_THREADS"))
+        raise Started
+    for module, name in ((tables, "Popen"), (redact, "run"), (ocr, "Popen")):
+        monkeypatch.setattr(module.subprocess, name, launch)
+    with pytest.raises(Started):
+        tables._run("paperboy.engine.table_worker", {}, 5)
+    with pytest.raises(Started):
+        redact._run_patterns(["a"], ["abc"], False, __import__("time").monotonic() + 10)
+    with pytest.raises(Started):
+        ocr._Pages(b"%PDF", {"work": str(tmp_path)})
+    assert seen == ["1", "1", "1"]
+    assert subprocess.Popen is launch

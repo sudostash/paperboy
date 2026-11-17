@@ -29,6 +29,7 @@ connect it to your AI app with one command, and restart the app.
   [Resize pages and print 2 per sheet](#resize-pages-and-print-2-per-sheet) ·
   [Add bookmarks](#add-bookmarks)
 - Creating PDFs: [Turn photos and notes into one PDF](#turn-photos-and-notes-into-one-pdf) ·
+  [Clean up phone photos of documents](#clean-up-phone-photos-of-documents) ·
   [Write a document as a PDF](#write-a-document-as-a-pdf)
 - Editing and marking up: [Fill in forms](#fill-in-forms) ·
   [Watermarks, stamps and page numbers](#watermarks-stamps-and-page-numbers) ·
@@ -299,6 +300,24 @@ Good to know: Word, Excel, PowerPoint and HTML files need LibreOffice; text and 
 don't.
 
 Video: [`convert.webm`](https://github.com/sudostash/paperboy/releases/download/demo-videos/convert.webm)
+
+### Clean up phone photos of documents
+
+> *"I photographed the signed lease on my desk. Make it look like a proper scan."*
+
+`clean_scans` turns phone photos (or a scanned PDF) into a PDF that looks scanned. It
+finds the sheet of paper and flattens it, so a page shot at an angle becomes a straight
+rectangle and the desk around it disappears. It levels text that's still at a slant,
+and whitens the background, taking out shadows and the yellow of indoor light. Pages
+stay in colour only when they have some, like a stamp or a signature in blue ink;
+otherwise they're grey. Black and white makes the smallest file.
+
+Good to know: it needs Paperboy's optional `scan` extra (`pip install
+"paperboy-mcp[scan]"`); without it, your AI tells you how to add it. The pages come
+out as pictures, so run `ocr_pdf` afterwards to make the text searchable. Shoot the
+whole page against a darker background so its edges are easy to find.
+
+Video: [`clean-scans.webm`](https://github.com/sudostash/paperboy/releases/download/demo-videos/clean-scans.webm)
 
 ### Write a document as a PDF
 
