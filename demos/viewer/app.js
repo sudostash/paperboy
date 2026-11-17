@@ -335,6 +335,69 @@ async function askPassword(card, question) {
   box.remove();
 }
 
+async function reviewPage(card, question) {
+  // The client offers to open Paperboy's review page; the user decides there, item by
+  // item, what is redacted, so neither the assistant nor the client chooses.
+  const box = el("div", "ask-box");
+  const message = el("span", null, ` ${question.message}`);
+  message.prepend(icon("link"));
+  box.append(message);
+  box.append(el("code", "link", `http://${question.host}/r/••••••••`));
+  const btns = el("div", "btns");
+  const open = el("button", "allow", "Open");
+  btns.append(el("button", null, "Cancel"), open);
+  box.append(btns);
+  card.append(box);
+  log.scrollTop = log.scrollHeight;
+  await sleep(1200);
+  open.classList.add("pressed");
+  await sleep(400);
+  box.replaceChildren(el("span", null, "Reviewing on Paperboy's page…"));
+  clearStage();
+  const page = el("div", "review-page");
+  const bar = el("div", "bar", ` ${question.host}`);
+  bar.prepend(icon("lock"));
+  const n = question.review.length;
+  page.append(bar, el("h2", null, "Review what to redact"),
+    el("p", null, `Paperboy found ${n} items of personal data. Ticked items will be ` +
+      "blacked out in a new copy; untick anything that should stay."));
+  const rows = question.review.map((item, i) => {
+    const row = el("div", "review-item ticked");
+    row.style.animationDelay = `${i * 70}ms`;
+    const head = el("div", "review-head");
+    head.append(el("span", "tick", "✓"), el("b", null, item.kind),
+      el("span", "muted", `page ${item.page}`), el("code", null, item.text));
+    row.append(head);
+    if (item.image) {
+      const img = document.createElement("img");
+      img.src = `${base}/${item.image}`;
+      img.alt = `Where it is on page ${item.page}`;
+      row.append(img);
+    }
+    page.append(row);
+    return row;
+  });
+  const go = el("button", "go", "Redact the ticked items");
+  page.append(go);
+  stage.append(page);
+  // A picture that doesn't load leaves its row without one; the review goes on.
+  await Promise.all([...page.querySelectorAll("img")].map((img) => img.decode().catch(() => {})));
+  await sleep(1800);
+  for (const [i, item] of question.review.entries()) {
+    if (item.ticked) continue;
+    rows[i].scrollIntoView({ block: "center", behavior: "smooth" });
+    await sleep(700);
+    rows[i].classList.remove("ticked");
+    rows[i].querySelector(".tick").textContent = "";
+    await sleep(900);
+  }
+  go.scrollIntoView({ block: "end", behavior: "smooth" });
+  await sleep(600);
+  go.classList.add("pressed");
+  await sleep(600);
+  box.remove();
+}
+
 async function approve(card, title) {
   const bar = el("div", "approve");
   bar.append(el("span", null, `Allow Paperboy to run “${title}”?`));
@@ -361,7 +424,9 @@ async function call(step) {
   await sleep(900);
   if (!step.readOnly) await approve(card, step.title);
   // The tool asks while it runs, after it was allowed to.
-  for (const question of step.asked || []) await askPassword(card, question);
+  for (const question of step.asked || []) {
+    await (question.review ? reviewPage(card, question) : askPassword(card, question));
+  }
   await sleep(300);
   card.append(step.isError
     ? el("pre", "result refused", `✕ ${String(step.result).replace(/^Error executing tool \S+: /, "")}`)

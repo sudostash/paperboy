@@ -415,6 +415,32 @@ SCENARIOS: dict[str, dict] = {
                                     "delivery-form.pdf is a form with 5 fields."},
         ],
     },
+    "sensitive-data": {
+        "title": "Find and redact personal data",
+        "subtitle": "Paperboy finds it; you choose, item by item, what is redacted.",
+        "files": ["new-starter.pdf"],
+        "prompt": "I'm sharing new-starter.pdf with the facilities team. Find the personal "
+                  "data in it and let me pick what gets redacted.",
+        "steps": [
+            {"type": "call", "tool": "find_sensitive_data",
+             "args": {"input_path": "new-starter.pdf", "texts": ["Priya Shah"]},
+             "showTable": "findings", "columns": ["kind", "page", "preview"],
+             "headers": True},
+            {"type": "say", "text": "Seven items: her name, email address, mobile number, "
+                                    "date of birth, National Insurance number and bank "
+                                    "account, plus the HR helpdesk number. I'll open "
+                                    "Paperboy's review page so you can choose what goes; "
+                                    "nothing changes until you do."},
+            {"type": "call", "tool": "redact_sensitive_data",
+             "args": {"input_path": "new-starter.pdf", "texts": ["Priya Shah"]},
+             "answers": [{"untick": ["0800 555 0142"]}],
+             "show": {"before": "new-starter.pdf", "after": "new-starter_redacted.pdf"}},
+            {"type": "say", "text": "Done: new-starter_redacted.pdf has the 6 items you "
+                                    "ticked removed from the file, not just covered over. "
+                                    "You kept the helpdesk number, so it's still there, "
+                                    "and new-starter.pdf is unchanged."},
+        ],
+    },
     "ask-password": {
         "title": "Type passwords yourself",
         "subtitle": "The password goes from you to Paperboy, never into the chat.",
@@ -825,7 +851,7 @@ GROUPS: list[tuple[str, list[str]]] = [
     ("Creating PDFs", ["convert", "markdown-to-pdf"]),
     ("Editing and marking up", ["fill-form", "watermark-numbers", "comments", "metadata",
                                 "pipeline", "batch"]),
-    ("Sharing safely", ["sanitize", "redaction", "protect", "ask-password", "permissions",
-                        "scan"]),
+    ("Sharing safely", ["sanitize", "redaction", "sensitive-data", "protect",
+                        "ask-password", "permissions", "scan"]),
     ("File health and size", ["repair", "target-size", "pdfa"]),
 ]

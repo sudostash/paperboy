@@ -111,6 +111,8 @@ and a demo video for each.
 | `scan_pdf` | Risk report for a PDF you didn't make: scripts (especially ones that run on open), actions that run without a click, program-launching actions, attachments that are programs or disguise their type (attached PDFs are scanned too), disguised names, data hidden around the file, and known malware if ClamAV is installed. Verdict: no active content found / active content / suspicious, never "safe" *(read-only)* |
 | `sanitize_pdf` | Write a copy safe to share without that hidden data (comments optional); links, bookmarks and accessibility structure are kept |
 | `redact_pdf` | Redact for real: text (words, phrases or regular expressions such as email addresses) and areas of pages (a signature, a photo) are removed from the file, not just covered. Characters are taken out of the page, pictures have their pixels blanked, drawings and annotations there go, and the same text is replaced in metadata, bookmarks, comments and form values. Every page is checked afterwards; one that can't be redacted exactly becomes a picture of itself |
+| `find_sensitive_data` | Find personal data in the text: email addresses, phone numbers, payment card numbers and IBANs (check digits verified), US social security and UK National Insurance numbers, dates of birth, and any names or addresses the assistant names. Listed by kind and page, masked, so the data stays out of the chat *(read-only)* |
+| `redact_sensitive_data` | Redact the personal data you approve: you review every item on a local page, each shown where it is on its page, and untick what should stay. Only what you leave ticked is redacted, for real (as `redact_pdf`) |
 | `ocr_pdf` | Make scans searchable: Tesseract OCR reads each page and an invisible text layer is placed over the words, so they can be searched, selected and copied; the pages look exactly as before. Pages that already have text are skipped; any installed language *(needs Tesseract)* |
 | `convert_to_pdfa` | PDF/A-2b copy for long-term archiving (courts, governments, archives): adds the sRGB colour profile and PDF/A metadata, removes what PDF/A forbids (scripts, attachments, encryption, hidden annotations), never redraws pages. Checked by veraPDF when installed and written only if it passes; refuses with reasons what it can't fix (fonts not embedded, CMYK colour) |
 | `add_watermark` | Text ("CONFIDENTIAL", "DRAFT") or image watermark, or a corner stamp ("APPROVED"): position, size, colour, opacity, rotation, over or under the content |
@@ -442,6 +444,26 @@ All configuration is environment variables. Sensible defaults; nothing is requir
   (`overwrite=true` can replace an existing file), so clients keep asking first. No tool
   touches the network (`openWorldHint: false`). Hints are advisory; the server-side checks
   above are what enforce safety.
+- **You approve each redaction of personal data.** `redact_sensitive_data` never redacts
+  what the assistant picks. It opens a one-time review page on `127.0.0.1` (served as the
+  password page is: unguessable token, exact `Host`, never logged, expires after 30
+  minutes) listing every item found with a picture of where it is. Only the items you
+  leave ticked are redacted. The page shows the data and takes the approval, so its link
+  never goes to the assistant: clients with URL-mode elicitation open it and wait (a
+  client that also shows that link to its model would undo this). With other clients
+  Paperboy opens it in the browser on this computer itself (with the system's own
+  opener, detached, never a console browser), the reply carries only a reference, and your decision is taken on the next call as `"review:<ref>"`, once. With
+  no browser to open, nothing is reviewed or redacted. Forms posted from another site
+  are refused. An assistant that can run commands on your computer could still find the
+  link where the browser keeps it (its history), so let only assistants you trust run
+  commands while a review is open. A decision works only for that file's exact bytes and those findings: if
+  the file changes, nothing is redacted. The assistant sees findings masked
+  (`j***@e***.com`, `***1111`); patterns run in the same time-limited worker as
+  `redact_pdf`'s, items are checked as ASCII, and a review holds at most 300 items and
+  16 MB of pictures. Approved items are redacted where they are found, even off the
+  visible page. Only page text is searched (form values and comments shown on the page
+  too), and only the page is redacted: copies in metadata, bookmarks, comment text or
+  attachments stay, so use `sanitize_pdf` as well before sharing.
 - **Passwords can stay out of the conversation.** Pass `"ask"` as any password argument and
   Paperboy opens a one-time page on `127.0.0.1` where you type the password; it goes straight
   to the server, never into the model's context, the client, or the tool-call log. Clients with

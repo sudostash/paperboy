@@ -306,6 +306,34 @@ body {
   background: #fff; border: 1px solid #e4e7eb; border-radius: 6px;
 }
 
+.review-page { display: flex; flex-direction: column; gap: 8px; }
+.review-page .bar {
+  font-family: var(--mono); font-size: 12px; color: #52606d; padding: 4px 8px;
+  background: #fff; border: 1px solid #e4e7eb; border-radius: 6px;
+}
+.review-page h2 { margin: 4px 0 0; }
+.review-page p { margin: 0 0 4px; color: var(--muted); font-size: 13px; }
+.review-item {
+  border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px;
+  animation: rise .25s ease-out both; transition: background .3s, border-color .3s;
+}
+.review-item.ticked { border-color: #d62828; background: #fff7f7; }
+.review-head { display: flex; gap: 10px; align-items: center; font-size: 13px; }
+.review-head .tick {
+  width: 16px; height: 16px; border: 2px solid #9aa5b1; border-radius: 4px;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 12px;
+  color: #fff;
+}
+.review-item.ticked .tick { background: #d62828; border-color: #d62828; }
+.review-head .muted { color: var(--muted); }
+.review-head code { font-family: var(--mono); font-size: 12px; }
+.review-item img { display: block; max-width: 100%; max-height: 40px; margin-top: 4px; }
+.review-page .go {
+  align-self: flex-start; padding: 8px 14px; border: 0; border-radius: 6px;
+  background: #d62828; color: #fff; font: inherit;
+}
+.review-page .go.pressed { transform: scale(.96); }
+
 .markdown {
   margin: 0;
   padding: 16px 20px;

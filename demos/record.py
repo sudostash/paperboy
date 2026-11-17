@@ -82,6 +82,44 @@ def _server(workspace: Path) -> StdioServerParameters:
                                  env=env, cwd=str(workspace))
 
 
+def _review(url: str, untick: list[str], folder: Path, step: int) -> list[dict]:
+    """Act as the user on Paperboy's review page: keep every item ticked except those
+    whose text is in *untick*, and submit. Returns the items as the page showed them,
+    with each picture saved for the viewer."""
+    import html
+    import http.client
+    import re
+    import urllib.parse
+
+    parts = urllib.parse.urlsplit(url)
+
+    def fetch(path: str, body: bytes | None = None) -> bytes:
+        conn = http.client.HTTPConnection(parts.hostname, parts.port, timeout=10)
+        headers = {"Content-Type": "application/x-www-form-urlencoded"} if body else {}
+        conn.request("POST" if body else "GET", path, body, headers)
+        data = conn.getresponse().read()
+        conn.close()
+        return data
+
+    page = fetch(parts.path).decode()
+    items = []
+    for match in re.finditer(r'data-id="(\d+)" data-kind="([^"]*)" data-page="(\d+)">'
+                             r'.*?<code>(.*?)</code></span>(?:<img src="([^"]+)")?', page):
+        found, kind, number, text, src = match.groups()
+        text = html.unescape(text)
+        image = None
+        if src:
+            image = f"images/step{step}-review-{found}.jpg"
+            (folder / image).parent.mkdir(exist_ok=True)
+            (folder / image).write_bytes(fetch(src))
+        items.append({"id": int(found), "kind": html.unescape(kind), "page": int(number),
+                      "text": text, "image": image, "ticked": text not in untick})
+    approved = [str(i["id"]) for i in items if i["ticked"]]
+    fetch(parts.path, urllib.parse.urlencode({"action": "redact", "f": approved},
+                                             doseq=True).encode())
+    return items
+
+
 async def run_scenario(slug: str, scenario: dict, out: Path = OUT) -> dict:
     """Execute the scenario's steps against the server; return the transcript."""
     workspace = out / slug / "files"
@@ -105,6 +143,12 @@ async def run_scenario(slug: str, scenario: dict, out: Path = OUT) -> dict:
         from mcp import types
         reply = pending.pop(0)
         parts = urllib.parse.urlsplit(params.url)
+        if parts.path.startswith("/r/"):  # the review page: the user unticks some items
+            review = await anyio.to_thread.run_sync(
+                _review, params.url, reply.get("untick", []), out / slug, len(steps))
+            asked.append({"message": params.message, "host": parts.netloc,
+                          "review": review})
+            return types.ElicitResult(action="accept")
 
         def post():
             conn = http.client.HTTPConnection(parts.hostname, parts.port, timeout=10)
