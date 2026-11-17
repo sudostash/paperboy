@@ -834,6 +834,44 @@ def build_trip_notes(path: Path) -> Path:
     return path
 
 
+def build_new_starter(path: Path) -> Path:
+    """An HR form for a new employee: their personal details, and the company's own
+    helpdesk number, which isn't personal data and should stay."""
+    c = canvas.Canvas(str(path), pagesize=letter)
+    c.setTitle("New starter form")
+    width, height = letter
+    c.setFillColor(ACCENT)
+    c.rect(0, height - 14, width, 14, stroke=0, fill=1)
+    c.setFillColor(INK)
+    c.setFont("Helvetica-Bold", 24)
+    c.drawString(72, height - 100, "New starter form")
+    c.setFont("Helvetica", 12)
+    c.setFillColor(MUTED)
+    c.drawString(72, height - 122, "Northwind Logistics, People team")
+    rows = [("Employee", "Priya Shah"),
+            ("Email", "priya.shah@example.com"),
+            ("Mobile", "07700 900461"),
+            ("Date of birth", "23/08/1991"),
+            ("NI number", "AB 12 34 56 C"),
+            ("Salary paid to", "GB29 NWBK 6016 1331 9268 19"),
+            ("Start date", "3 November 2026"),
+            ("Team", "Logistics, Leeds depot")]
+    y = height - 170
+    for label, value in rows:
+        c.setFillColor(MUTED)
+        c.drawString(72, y, label)
+        c.setFillColor(INK)
+        c.drawString(200, y, value)
+        c.setStrokeColor(RULE)
+        c.line(72, y - 8, width - 72, y - 8)
+        y -= 30
+    c.setFillColor(MUTED)
+    c.drawString(72, y - 20, "Questions? Call the HR helpdesk on 0800 555 0142.")
+    c.showPage()
+    c.save()
+    return path
+
+
 BUILDERS = {"report.pdf": build_report, "scan.pdf": build_scan,
             "delivery-form.pdf": build_delivery_form, "proposal.pdf": build_proposal,
             "invoice.pdf": build_invoice, "brochure.pdf": build_brochure,
@@ -844,7 +882,8 @@ BUILDERS = {"report.pdf": build_report, "scan.pdf": build_scan,
             "scanned-letter.pdf": build_scanned_letter, "minutes.pdf": build_minutes,
             "lease.pdf": build_lease, "handbook.pdf": build_handbook,
             "quote.pdf": build_quote, "receipt-taxi.jpg": build_receipt_taxi,
-            "receipt-hotel.jpg": build_receipt_hotel, "trip-notes.txt": build_trip_notes}
+            "receipt-hotel.jpg": build_receipt_hotel, "trip-notes.txt": build_trip_notes,
+            "new-starter.pdf": build_new_starter}
 
 
 def build(names: list[str], workspace: Path) -> None:

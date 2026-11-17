@@ -1156,12 +1156,18 @@ def redact_pdf(
     rasterize: str = "if_needed",
     dpi: int = 150,
     password: str | None = None,
+    data: bytes | None = None,
+    located: dict[int, list[tuple]] | None = None,
 ) -> RedactResult:
-    """Write a copy with the texts, pattern matches and areas redacted."""
+    """Write a copy with the texts, pattern matches and areas redacted. *data*: the
+    file's bytes, when the caller has already read (and checked) them. *located*: areas
+    of text already found, by page index, used as found (like matches, not clipped to
+    the media box: text outside it is invisible but can still be read)."""
     texts, patterns = _check_inputs(texts, patterns, fill, rasterize, dpi)
     paint = None if fill == "none" else fill
     deadline = time.monotonic() + REDACT_TIME_LIMIT_S
-    with open_pdf(path.read_bytes(), settings, password) as pdf:
+    with open_pdf(path.read_bytes() if data is None else data, settings,
+                  password) as pdf:
         require_modify_permission(pdf)
         if texts or patterns:
             require_copy_permission(pdf, "finding the text to redact")
@@ -1171,6 +1177,8 @@ def redact_pdf(
                                "the signature")
         total = len(pdf.pages)
         wanted = _given_areas(areas, pdf)
+        for index, rects in (located or {}).items():
+            wanted.setdefault(index, []).extend(tuple(r) for r in rects)
         if not (texts or patterns or wanted):
             raise PdfUserError("Give texts, patterns or areas to redact")
         targets = parse_pages(pages, total, dedupe=True) if pages else list(range(total))

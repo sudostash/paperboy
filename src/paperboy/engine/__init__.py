@@ -36,6 +36,7 @@ from .sanitize import inspect_hidden_data, sanitize_pdf
 from .scan import scan_pdf
 from .search import search_text
 from .security import decrypt_pdf, encrypt_pdf
+from .sensitive import find_sensitive_data
 from .stamp import add_page_numbers, add_watermark
 from .tables import export_tables, extract_tables
 from .text import extract_text
@@ -58,5 +59,5 @@ __all__ = [
     "extract_tables", "export_tables",
     "compare_pdfs", "list_pdfs", "redact_pdf", "ocr_pdf",
     "convert_to_pdfa", "pdf_to_markdown", "export_markdown", "markdown_to_pdf",
-    "list_comments", "add_comments",
+    "list_comments", "add_comments", "find_sensitive_data",
 ]

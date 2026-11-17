@@ -51,6 +51,14 @@ def _junk(path):
     return str(path)
 
 
+def _personal(path):
+    c = canvas.Canvas(str(path))
+    c.drawString(72, 720, "Ada, ada@example.com, card 4111 1111 1111 1111")
+    c.showPage()
+    c.save()
+    return str(path)
+
+
 def _owner_only(path):
     return _locked(path, user="", owner="boss")
 
@@ -234,6 +242,10 @@ CASES = [
     ("redact_pdf", "redact_pdf",
      lambda d: {"input_path": _pdf(d / "a.pdf"), "texts": ["PAGE-2"], "patterns": ["-3"],
                 "areas": [{"page": 1, "rect": [0, 0, 50, 50]}]}),
+    ("find_sensitive_data", "find_sensitive_data",
+     lambda d: {"input_path": _personal(d / "p.pdf"), "texts": ["Ada"]}),
+    # Nothing found: no review to do. test_sensitive covers a review over stdio.
+    ("redact_sensitive_data", "redact_sensitive_data", lambda d: {"input_path": _pdf(d / "a.pdf")}),
     ("redact_pdf-locked", "redact_pdf",
      lambda d: {"input_path": _locked(d / "l.pdf"), "password": "pw", "texts": ["PAGE"],
                 "rasterize": "always", "dpi": 72}),

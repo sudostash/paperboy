@@ -778,6 +778,40 @@ class InspectPdfsResult(TypedDict):
     pdfs: list[InspectedPdf]               # sorted by path
 
 
+SensitiveKind = Literal["email", "card_number", "iban", "us_ssn", "uk_ni_number",
+                        "date_of_birth", "phone", "custom"]
+
+
+class SensitiveFinding(TypedDict):
+    id: int                                # the same in a review of the same file
+    kind: SensitiveKind                    # custom: one of the texts given
+    page: int
+    preview: str                           # masked, e.g. "j***@e***.com", "***1111"
+
+
+class SensitiveDataResult(TypedDict):
+    path: str
+    kinds_searched: list[str]
+    count: int
+    by_kind: dict[str, int]
+    findings: list[SensitiveFinding]       # in reading order
+    pages_searched: int
+    pages_without_text: list[int]          # scans: run ocr_pdf first
+    limits: str                            # what isn't found this way
+
+
+class RedactSensitiveResult(TypedDict):
+    # redacted: what the user approved was redacted. nothing_found: nothing to review.
+    # none_approved: the user unticked everything. cancelled: the user said not to.
+    status: Literal["redacted", "nothing_found", "none_approved", "cancelled"]
+    output: str | None                     # the redacted copy; only when redacted
+    found: int
+    approved: list[SensitiveFinding]       # what the user ticked
+    skipped: int                           # found but left as it is
+    pages_without_text: list[int]
+    redaction: RedactResult | None         # redact_pdf's report, when redacted
+
+
 class PdfFile(TypedDict):
     path: str
     relative_path: str                     # from the root

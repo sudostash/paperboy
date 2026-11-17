@@ -37,7 +37,9 @@ connect it to your AI app with one command, and restart the app.
   [Several steps in one go](#several-steps-in-one-go) ·
   [Process a whole folder](#process-a-whole-folder)
 - Sharing safely: [Remove hidden data](#remove-hidden-data) ·
-  [Redact for real](#redact-for-real) · [Lock a finished form](#lock-a-finished-form) ·
+  [Redact for real](#redact-for-real) ·
+  [Find and redact personal data](#find-and-redact-personal-data) ·
+  [Lock a finished form](#lock-a-finished-form) ·
   [Type passwords yourself](#type-passwords-yourself) ·
   [When a PDF says no](#when-a-pdf-says-no) ·
   [Check a PDF for malicious content](#check-a-pdf-for-malicious-content)
@@ -409,6 +411,30 @@ signature) from the file itself, not just painted over. A search afterwards find
 nothing.
 
 Video: [`redaction.webm`](https://github.com/sudostash/paperboy/releases/download/demo-videos/redaction.webm)
+
+### Find and redact personal data
+
+> *"I'm sharing new-starter.pdf with the facilities team. Find the personal data in it
+> and let me pick what gets redacted."*
+
+`find_sensitive_data` looks through the text for email addresses, phone numbers, card
+numbers, bank account numbers (IBANs), US social security and UK National Insurance
+numbers, and dates of birth. Your AI can add names or addresses it noticed. It shows
+your AI each finding masked, so the details stay out of the chat.
+
+`redact_sensitive_data` then opens a review page on your computer. It lists every item,
+with a picture of where it is on its page. Everything starts ticked; untick anything
+that should stay, like the company helpdesk number in the video. Only what you leave
+ticked is removed from a new copy, for real. Your AI can't choose for you, and nothing
+changes until you decide. If your AI app can't open the page itself, Paperboy opens it
+in your browser (your AI never gets the link); once you've finished, your AI runs the
+tool again to apply your choice.
+
+Good to know: names and postal addresses aren't recognised on their own, so ask your
+AI to look for them by name. Scans need `ocr_pdf` first. Metadata and attachments
+aren't searched, so run `sanitize_pdf` too before sharing.
+
+Video: [`sensitive-data.webm`](https://github.com/sudostash/paperboy/releases/download/demo-videos/sensitive-data.webm)
 
 ### Lock a finished form
 

@@ -7,6 +7,19 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `find_sensitive_data` and `redact_sensitive_data`: find personal data in a PDF's text
+  (email addresses, phone numbers, payment card numbers and IBANs with their check
+  digits verified, US social security and UK National Insurance numbers, dates of birth
+  after a label, and any texts the assistant names), and redact only what the user
+  approves, item by item, on a new local review page. The page shows each item with a
+  picture of where it is, and is served like the password page: loopback only, one-time
+  link, expiring. Its link never reaches the assistant: it opens through URL-mode
+  elicitation, or Paperboy opens it in the local browser and the decision is taken on the
+  next call as `"review:<ref>"`. A decision is bound to the file's exact bytes and its
+  findings, and used once. The assistant sees findings masked. Redaction is
+  `redact_pdf`'s, on the areas where the approved items were found (even off the visible
+  page); internally `redact_pdf` can now take the bytes already checked and those areas,
+  so the bytes reviewed are the bytes redacted. With a tutorial and demo video.
 - `inspect_pdfs`: a read-only report on every PDF in a folder (with its subfolders if
   asked) or a list of up to 200 files, in one call. For each: pages, size, PDF version,
   title, encryption, health (`check_pdf`'s first problems), risk verdict and indicator

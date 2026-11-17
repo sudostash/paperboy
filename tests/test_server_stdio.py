@@ -33,7 +33,7 @@ EXPECTED_TOOLS = {
     "compare_pdfs", "run_pipeline", "batch_process", "inspect_pdfs", "list_pdfs",
     "redact_pdf", "ocr_pdf",
     "convert_to_pdfa", "pdf_to_markdown", "export_markdown", "markdown_to_pdf",
-    "list_comments", "add_comments",
+    "list_comments", "add_comments", "find_sensitive_data", "redact_sensitive_data",
 }
 
 
@@ -80,7 +80,7 @@ READ_ONLY_TOOLS = {"pdf_info", "get_metadata", "check_pdf", "extract_text", "vie
                    "scan_pdf", "get_outline",
                    "list_attachments", "search_text",
                    "extract_tables", "compare_pdfs", "list_pdfs", "pdf_to_markdown",
-                   "list_comments", "inspect_pdfs"}
+                   "list_comments", "inspect_pdfs", "find_sensitive_data"}
 
 
 async def test_tool_annotations(server_env):
