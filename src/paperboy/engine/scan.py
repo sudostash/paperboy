@@ -19,7 +19,7 @@ import pikepdf
 from ..config import Settings
 from ..errors import PdfUserError
 from ..results import ScanResult
-from .base import open_pdf
+from .base import open_pdf, warnings_of
 from .sanitize import RISKY, _action_kind, _dictionaries, _is_annotation, _subtype, _threat
 from .streams import decode as _decode
 
@@ -350,7 +350,7 @@ def _structure_indicators(pdf: pikepdf.Pdf, data: bytes, dicts: list) -> list[di
     if chains:
         found.append(_indicator("unusual_filter_chains", "warning", chains,
                                 "streams compressed in unusual layers, which can hide content"))
-    warnings = list(pdf.get_warnings())
+    warnings = warnings_of(pdf)
     if warnings:
         found.append(_indicator("damaged_structure", "info", len(warnings),
                                 "; ".join(_BYTESIO.sub("file", str(w)) for w in warnings[:3])))

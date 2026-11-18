@@ -16,7 +16,7 @@ from ..errors import PdfUserError
 from ..pagespec import parse_pages
 from ..paths import same_file
 from ..results import BlankPagesResult, RenderResult, ViewResult
-from .base import open_pdf, require_copy_permission
+from .base import open_pdf, repaired, require_copy_permission
 
 DPI_RANGE = (36, 600)
 MAX_PIXELS = 40_000_000         # per image, about 6300 x 6300; bounds memory per page
@@ -49,11 +49,33 @@ def _plain_copy(data: bytes, settings: Settings, password: str | None, *,
     with open_pdf(data, settings, password) as pdf:
         if exporting:
             require_copy_permission(pdf, "exporting pages as images")
-        if not pdf.is_encrypted:
-            return data, len(pdf.pages)
-        plain = io.BytesIO()
-        pdf.save(plain)  # without encryption=, the copy is decrypted
-        return plain.getvalue(), len(pdf.pages)
+        return pdfium_data(pdf, data), len(pdf.pages)
+
+
+def pdfium_data(pdf, data: bytes) -> bytes:
+    """What PDFium should read of the file *pdf* (opened by open_pdf) was opened from
+    (*data*): the file itself, unless it is encrypted (PDFium never sees a password) or
+    PDFium would see other pages than qpdf did, repairing it differently (a page qpdf
+    dropped); then qpdf's copy of it, decrypted and as qpdf reads it, so page numbers
+    mean the same pages in every tool. That copy is saved in memory: a few seconds for
+    a large file."""
+    if not pdf.is_encrypted:
+        if not repaired(pdf):
+            return data
+        with _PDFIUM_LOCK:
+            try:
+                doc = pdfium.PdfDocument(data)
+            except pdfium.PdfiumError:
+                doc = None
+            try:
+                if doc is not None and len(doc) == len(pdf.pages):
+                    return data
+            finally:
+                if doc is not None:
+                    doc.close()
+    plain = io.BytesIO()
+    pdf.save(plain, fix_metadata_version=False)  # without encryption=: decrypted
+    return plain.getvalue()
 
 
 def _open(data: bytes) -> pdfium.PdfDocument:

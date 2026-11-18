@@ -12,7 +12,6 @@ past a budget, and a call stops after a time limit, saying so.
 """
 from __future__ import annotations
 
-import io
 import re
 import time
 import unicodedata
@@ -27,7 +26,7 @@ from ..errors import PdfUserError
 from ..pagespec import parse_pages
 from ..results import SearchResult
 from .base import open_pdf, require_copy_permission
-from .render import _PDFIUM_LOCK, _close, _open
+from .render import _PDFIUM_LOCK, _close, _open, pdfium_data
 from .streams import decoded_size
 
 MAX_QUERY = 200            # characters in a query
@@ -171,10 +170,7 @@ def _prepare(data: bytes, settings: Settings, password: str | None, pages: str |
             size = _content_size(pdf.pages[i], MAX_PAGE_CONTENT, sizes)
             if size is None or size > MAX_PAGE_CONTENT:
                 heavy.add(i)
-        if pdf.is_encrypted:
-            plain = io.BytesIO()
-            pdf.save(plain)  # without encryption=, the copy is decrypted
-            data = plain.getvalue()
+        data = pdfium_data(pdf, data)
     return data, targets, heavy
 
 

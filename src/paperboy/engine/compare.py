@@ -33,7 +33,7 @@ from ..config import Settings
 from ..errors import PdfUserError
 from ..results import CompareResult
 from .base import open_pdf, require_copy_permission
-from .render import _PDFIUM_LOCK, _close, _open, _page_size, _render
+from .render import _PDFIUM_LOCK, _close, _open, _page_size, _render, pdfium_data
 from .search import _content_size
 
 MODES = ("text", "visual", "both")
@@ -284,10 +284,7 @@ def _prepare(path: Path, settings: Settings, password: str | None, mode: str,
             size = _content_size(page, MAX_PAGE_CONTENT, sizes)
             if size is None or size > MAX_PAGE_CONTENT:
                 heavy.add(i)
-        if pdf.is_encrypted:
-            plain = io.BytesIO()
-            pdf.save(plain)  # without encryption=, the copy is decrypted
-            data = plain.getvalue()
+        data = pdfium_data(pdf, data)
     return data, total, heavy, late
 
 

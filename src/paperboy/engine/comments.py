@@ -37,7 +37,7 @@ from .base import (
     require_annotation_permission,
     require_copy_permission,
 )
-from .render import _PDFIUM_LOCK, _close, _open
+from .render import _PDFIUM_LOCK, _close, _open, pdfium_data
 from .search import MAX_PAGE_CONTENT, _content_size, _page_matches, _query
 from .stamp import _color, _latin, _rotation, _visible_box
 
@@ -216,11 +216,7 @@ def _ids(pdf: pikepdf.Pdf) -> dict[tuple[int, int], str]:
 def _pdfium_bytes(pdf: pikepdf.Pdf, data: bytes) -> bytes:
     """What PDFium reads: the file itself, or a decrypted copy (it never sees a
     password)."""
-    if not pdf.is_encrypted:
-        return data
-    plain = io.BytesIO()
-    pdf.save(plain)  # without encryption=, the copy is decrypted
-    return plain.getvalue()
+    return pdfium_data(pdf, data)
 
 
 def _marked_texts(pdf: pikepdf.Pdf, data: bytes,

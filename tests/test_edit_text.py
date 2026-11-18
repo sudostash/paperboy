@@ -1003,3 +1003,98 @@ def test_timeouts_name_what_was_being_done():
         RC.Budget(-1, action="Editing").check()
     with pytest.raises(PdfUserError, match="Redacting took too long"):
         RC.Budget(-1).check()
+
+
+# --- new text must show ---------------------------------------------------------------
+
+
+def test_new_text_cut_off_by_a_clip_is_refused(tmp_path, settings):
+    clipped = (b"q 72 690 60 30 re W n BT /F1 12 Tf 72 700 Td (Hi) Tj ET Q "
+               b"BT /F1 12 Tf 72 600 Td (other) Tj ET")
+    with pytest.raises(PdfUserError, match="would be partly hidden"):
+        edit(tmp_path, settings, clipped,
+             edits=[{"find": "Hi", "replace": "Hello everybody here"}])
+    assert not (tmp_path / "out.pdf").exists()
+
+
+def test_new_text_under_a_later_drawing_is_refused(tmp_path, settings):
+    covered = SENTENCE + b" 1 1 1 rg 150 690 120 30 re f"   # white box over the date
+    with pytest.raises(PdfUserError, match="would be partly hidden"):
+        edit(tmp_path, settings, covered)
+
+
+def test_new_text_the_colour_of_what_is_under_it_is_fine(tmp_path, settings):
+    # Black on a black square, like the old text was: hidden by colour, not cut off.
+    content = b"0 g 160 695 40 20 re f " + SENTENCE
+    r, out = edit(tmp_path, settings, content)
+    assert "15 December 2026" in text_of(out)
+
+
+def test_one_new_character_under_a_later_drawing_is_refused(tmp_path, settings):
+    # A white box over just the "1" of "15 December": the rest shows, that one doesn't.
+    first = build(tmp_path / "plain.pdf", SENTENCE)
+    E.edit_text(first, tmp_path / "plain_out.pdf", settings, DATE)
+    one = box_of(tmp_path / "plain_out.pdf", "1")
+    cover = b" q 1 1 1 rg %.2f %.2f %.2f %.2f re f Q" % (
+        one[0] - 0.3, one[1] - 0.3, one[2] - one[0] + 0.6, one[3] - one[1] + 0.6)
+    with pytest.raises(PdfUserError, match="would be partly hidden"):
+        edit(tmp_path, settings, SENTENCE + cover)
+
+
+@pytest.mark.parametrize("new", ["1500 g", "12500 g", "2 500 g", "1 2 3 rg", "0 0 1 k"])
+def test_new_text_that_reads_like_a_colour_is_drawn(tmp_path, settings, new):
+    r, out = edit(tmp_path, settings, SENTENCE,
+                  edits=[{"find": "30 November 2026", "replace": new}])
+    assert new in text_of(out)
+
+
+def test_faint_text_stays_faint_and_is_drawn(tmp_path, settings):
+    def faint(pdf):
+        pdf.pages[0].obj.Resources.ExtGState = pikepdf.Dictionary(
+            Fa=pikepdf.Dictionary(Type=Name.ExtGState, ca=0.05))
+    r, out = edit(tmp_path, settings, b"/Fa gs " + SENTENCE, prepare=faint)
+    assert "15 December 2026" in text_of(out)
+
+
+def test_a_removal_draws_nothing_to_check(tmp_path, settings):
+    r, out = edit(tmp_path, settings, SENTENCE,
+                  edits=[{"find": " 30 November 2026", "replace": ""}])
+    assert "November" not in text_of(out)
+
+
+def test_each_page_has_its_own_budget_for_reading_fonts(tmp_path, settings, monkeypatch):
+    from reportlab.pdfbase.ttfonts import TTFont
+    from reportlab.pdfgen import canvas
+
+    from paperboy.engine.markdown_pdf import FONTS
+
+    pdfmetrics.registerFont(TTFont("TestDejaVu", str(FONTS / "DejaVuSans.ttf")))
+    src = tmp_path / "in.pdf"
+    c = canvas.Canvas(str(src), pagesize=(595, 842))
+    for _ in range(3):
+        c.setFont("TestDejaVu", 11)
+        c.drawString(60, 720, "Dear Jordan Lee, your start date is 3 March 2027.")
+        c.showPage()
+    c.save()
+    monkeypatch.setattr(T, "SURVEY_GLYPHS", 60)   # one page's characters, not three's
+    r = E.edit_text(src, tmp_path / "out.pdf", settings,
+                    [{"find": "Lee", "replace": "Leeds"}])
+    assert [c["same_font"] for c in r["changes"]] == [True, True, True]
+
+
+def test_reading_fonts_has_a_small_budget_of_its_own(tmp_path, settings, monkeypatch):
+    src = build(tmp_path / "in.pdf", SENTENCE)
+    with pikepdf.open(src) as pdf:
+        budget = RC.Budget(time.monotonic() + 60, action="Editing")
+        budget.glyphs_left = 3
+        assert T._survey(pdf, 0, budget, {}).near(80, 704, 50) is None
+    monkeypatch.setattr(T, "SURVEY_GLYPHS", 3)   # past it: standard fonts, never refused
+    r, out = edit(tmp_path, settings, SENTENCE)
+    assert "15 December 2026" in text_of(out)
+
+
+def test_a_page_too_large_to_check_says_so(tmp_path, settings):
+    src = build(tmp_path / "in.pdf", b"BT /F1 6 Tf 72 700 Td (Due 30 November 2026.) Tj ET",
+                size=(14400, 14400))
+    with pytest.raises(PdfUserError, match="too large to check that the new text shows"):
+        E.edit_text(src, tmp_path / "out.pdf", settings, DATE)

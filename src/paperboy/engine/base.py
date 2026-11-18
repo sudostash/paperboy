@@ -68,6 +68,22 @@ def _with_size(pdf: pikepdf.Pdf) -> pikepdf.Pdf:
 
 # A badly damaged file can produce thousands of warnings; the first ones say enough.
 MAX_PROBLEMS = 100
+# What qpdf has warned about each document open_pdf has open, by id(): qpdf hands its
+# warnings over only once, and more than one part of a call asks.
+_WARNED: dict[int, list[str]] = {}
+# Those of them that open_pdf has open which qpdf repaired opening (reading the file's
+# index and page tree): not just a stream it later found damaged.
+_REPAIRED: set[int] = set()
+
+
+def warnings_of(pdf: pikepdf.Pdf) -> list[str]:
+    """Every warning qpdf has given about *pdf* (what it repaired, reading it), however
+    often this is asked while open_pdf has it open (once otherwise)."""
+    new = [str(w) for w in pdf.get_warnings()]
+    if id(pdf) not in _WARNED:
+        return new
+    _WARNED[id(pdf)] += new
+    return list(_WARNED[id(pdf)])
 
 
 def pdf_problems(pdf: pikepdf.Pdf) -> list[str]:
@@ -75,7 +91,7 @@ def pdf_problems(pdf: pikepdf.Pdf) -> list[str]:
     opening it (qpdf silently rebuilds a damaged index, say) and its syntax check.
     At most MAX_PROBLEMS, each cut to 500 characters."""
     check = getattr(pdf, "check_pdf_syntax", None) or pdf.check  # renamed in pikepdf 9
-    found = [*pdf.get_warnings(), *(str(problem) for problem in check())]
+    found = [*warnings_of(pdf), *(str(problem) for problem in check())]
     return [problem[:500] for problem in found[:MAX_PROBLEMS]]
 
 
@@ -118,14 +134,19 @@ def open_pdf(path: Path | bytes, settings: Settings, password: str | None = None
         detail = re.sub(r"^stream <_io\.BytesIO object at 0x[0-9a-fA-F]+>:?\s*", "",
                         str(exc))
         raise PdfUserError(f"Could not open PDF: {detail}") from exc
+    _WARNED[id(pdf)] = []
     try:
         n = len(pdf.pages)
+        if warnings_of(pdf):   # opening and reading the page tree: kept for whoever asks
+            _REPAIRED.add(id(pdf))
         if n > settings.max_pages:
             raise PdfUserError(
                 f"Document has {n} pages, over the {settings.max_pages} page limit"
             )
         yield pdf
     finally:
+        _WARNED.pop(id(pdf), None)
+        _REPAIRED.discard(id(pdf))
         pdf.close()
 
 
@@ -147,6 +168,12 @@ class Protection:
         result["permissions_restricted"] = encrypted and not self.encryption.user
         result["user_password_changed"] = self.user_password_changed
         return result
+
+
+def repaired(pdf: pikepdf.Pdf) -> bool:
+    """Whether qpdf repaired the document open_pdf has open, reading its index and page
+    tree."""
+    return id(pdf) in _REPAIRED
 
 
 def inherit_protection(src: pikepdf.Pdf, password: str | None) -> Protection:

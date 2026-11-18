@@ -397,7 +397,10 @@ All configuration is environment variables. Sensible defaults; nothing is requir
   to have them, with codes taken from the font's own map and checked against what the
   page shows; otherwise a standard font. Every page is read back before anything is
   written: only the matched characters may be gone, everything else must be where it was
-  (or where its line was moved to), and the new text must be found. Text that's invisible
+  (or where its line was moved to), and the new text must be found and must show: the page
+  is drawn without it and with it (in black, then white), and each new character must
+  change the picture, so text cut off by a clipping path or under something drawn later
+  is refused. Text that's invisible
   (a scan's OCR layer) or outlined, over more than one line, overlapping another edit, or
   too long to fit is refused, as are right-to-left replacements and signed PDFs. A font's
   map is read in one pass of at most 1 MB and 200,000 tokens, each code looked up once;
