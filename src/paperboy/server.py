@@ -50,6 +50,7 @@ from .results import (
     CropResult,
     DecryptResult,
     DeleteResult,
+    EditTextResult,
     EncryptResult,
     ExportMarkdownResult,
     ExportTablesResult,
@@ -94,6 +95,7 @@ from .results import (
     SetOutlineResult,
     SplitResult,
     TablesResult,
+    TextEdit,
     TextResult,
     ViewResult,
     WatermarkResult,
@@ -1641,6 +1643,55 @@ def redact_pdf(
     out = prepare_output(src, output_path, "_redacted", _overwrite(overwrite), SETTINGS)
     return engine.redact_pdf(src, out, SETTINGS, texts, patterns, areas, pages, match_case,
                              whole_word, fill, rasterize, dpi, password)
+
+
+@_tool(_writes("Edit text"))
+@_guard
+def edit_text(
+    input_path: str,
+    edits: list[TextEdit],
+    output_path: str | None = None,
+    pages: str | None = None,
+    match_case: bool = True,
+    whole_word: bool = False,
+    password: str | None = None,
+    overwrite: bool | None = None,
+) -> EditTextResult:
+    """Change words on the pages of a PDF: write a copy (default "<name>_edited.pdf")
+    where every place each edit's find text is found (as search_text finds it, here
+    matching case by default) shows its replace text instead, e.g.
+    [{"find": "30 November 2026", "replace": "15 December 2026"}]. pages limits where
+    (default all). Use it for a typo, a date, a name or an amount on one line; it
+    doesn't rewrap paragraphs or add lines. replace "" removes the text.
+
+    The old characters are removed from the page's content (not covered over), and
+    pictures and drawings around them are left as they were. The new text is drawn on
+    the same baseline, at the same size, angle and colour, in the old text's place in
+    the page's reading order. It uses the page's own font when that font has every
+    character needed (same_font); otherwise the closest of Helvetica, Times and Courier
+    (bold or italic as the original; DejaVu Sans for text those can't show), which may
+    look a little different: check with view_pages. align ("left", default; "right"
+    for amounts in a column; "center") says which part of the old text the new keeps
+    in place. With "left", the rest of the line moves along to keep its spacing
+    (line_moved) when it is drawn together with the old text; otherwise longer text
+    is squeezed to fit before the next text on the line (to at most 80% of its width),
+    and text that still won't fit is refused.
+
+    Every match is checked first, and the whole call refused (nothing written) if one
+    can't be edited exactly: text over more than one line, edits overlapping, text that
+    won't fit, outlined text, a scan's invisible OCR layer (its visible words are
+    pixels), right-to-left replacement text, or content that can't be read precisely.
+    Each page is read back to confirm only the old text went, and the new text is found.
+    Only the pages change: old_text_elsewhere lists where else the old wording is still
+    written (document info, XMP metadata, bookmarks, comments, form fields); use
+    redact_pdf or sanitize_pdf for those. new_text_untagged warns that a tagged PDF's
+    accessibility tags don't cover some new text. Needs the owner password if the PDF
+    forbids changes or copying text. Signed PDFs are refused.
+    """
+    src = require_input(input_path, SETTINGS)
+    out = prepare_output(src, output_path, "_edited", _overwrite(overwrite), SETTINGS)
+    return engine.edit_text(src, out, SETTINGS, edits, pages, match_case, whole_word,
+                            password)
 
 
 SensitiveKindInput = Literal["email", "phone", "card_number", "iban", "us_ssn",

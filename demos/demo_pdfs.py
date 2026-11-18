@@ -872,6 +872,51 @@ def build_new_starter(path: Path) -> Path:
     return path
 
 
+def build_venue_booking(path: Path) -> Path:
+    """A venue's booking confirmation, with details that change after it's sent: the
+    date, the number of guests, and the amounts (right-aligned in a column)."""
+    c = canvas.Canvas(str(path), pagesize=letter)
+    c.setTitle("Booking confirmation VB-2961")
+    width, height = letter
+    c.setFillColor(ACCENT)
+    c.rect(0, height - 14, width, 14, stroke=0, fill=1)
+    c.setFillColor(INK)
+    c.setFont("Helvetica-Bold", 24)
+    c.drawString(72, height - 100, "Booking confirmation")
+    c.setFont("Helvetica", 12)
+    c.setFillColor(MUTED)
+    c.drawString(72, height - 122, "Harbour Hall events team, booking ref VB-2961")
+    c.setFillColor(INK)
+    y = height - 170
+    for line in ("Event: Spring product launch for Northwind Logistics",
+                 "Date: Thursday 14 May 2026, 18:00 to 22:00",
+                 "Room: Harbour Room, set for 80 guests at round tables"):
+        c.drawString(72, y, line)
+        y -= 22
+    y -= 24
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(72, y, "Item")
+    c.drawRightString(width - 72, y, "Amount")
+    c.setStrokeColor(RULE)
+    c.line(72, y - 8, width - 72, y - 8)
+    c.setFont("Helvetica", 12)
+    for item, amount in (("Room hire (evening)", "£1,200.00"),
+                         ("Catering, 80 guests at £30.00", "£2,400.00"),
+                         ("Total due by 30 April 2026", "£3,600.00")):
+        y -= 28
+        if item.startswith("Total"):
+            c.setFont("Helvetica-Bold", 12)
+        c.drawString(72, y, item)
+        c.drawRightString(width - 72, y, amount)
+        c.line(72, y - 8, width - 72, y - 8)
+    c.setFont("Helvetica", 12)
+    c.setFillColor(MUTED)
+    c.drawString(72, y - 44, "Thank you for booking with Harbour Hall.")
+    c.showPage()
+    c.save()
+    return path
+
+
 def _perspective(photo_corners, width: float, height: float) -> list[float]:
     """Pillow's PERSPECTIVE coefficients taking each photo corner back to the matching
     corner of a width x height picture (top-left, top-right, bottom-right, bottom-left)."""
@@ -996,7 +1041,8 @@ BUILDERS = {"report.pdf": build_report, "scan.pdf": build_scan,
             "lease.pdf": build_lease, "handbook.pdf": build_handbook,
             "quote.pdf": build_quote, "receipt-taxi.jpg": build_receipt_taxi,
             "receipt-hotel.jpg": build_receipt_hotel, "trip-notes.txt": build_trip_notes,
-            "new-starter.pdf": build_new_starter, "lease-photo.jpg": build_lease_photo}
+            "new-starter.pdf": build_new_starter, "lease-photo.jpg": build_lease_photo,
+            "venue-booking.pdf": build_venue_booking}
 
 
 def build(names: list[str], workspace: Path) -> None:

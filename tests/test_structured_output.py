@@ -247,6 +247,12 @@ CASES = [
      lambda d: {"input_path": _personal(d / "p.pdf"), "texts": ["Ada"]}),
     # Nothing found: no review to do. test_sensitive covers a review over stdio.
     ("redact_sensitive_data", "redact_sensitive_data", lambda d: {"input_path": _pdf(d / "a.pdf")}),
+    ("edit_text", "edit_text",
+     lambda d: {"input_path": _pdf(d / "a.pdf"),
+                "edits": [{"find": "PAGE-2", "replace": "PAGE-20", "align": "left"}]}),
+    ("edit_text-locked", "edit_text",
+     lambda d: {"input_path": _locked(d / "l.pdf"), "password": "pw",
+                "edits": [{"find": "PAGE", "replace": "Sheet"}]}),
     ("redact_pdf-locked", "redact_pdf",
      lambda d: {"input_path": _locked(d / "l.pdf"), "password": "pw", "texts": ["PAGE"],
                 "rasterize": "always", "dpi": 72}),

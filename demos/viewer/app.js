@@ -88,7 +88,9 @@ function showTools(tools) {
   stage.append(grid);
 }
 
-async function renderStrip(file, maxHeight, password, maxWidth = stage.clientWidth - 44) {
+// crop: [left, top, right, bottom], fractions of each page, to show only that part.
+async function renderStrip(file, maxHeight, password, maxWidth = stage.clientWidth - 44,
+  crop = [0, 0, 1, 1]) {
   if (/\.(jpe?g|png|webp|gif|bmp|tiff?)$/i.test(file)) {  // a photo, shown as it is
     const strip = el("div", "strip");
     const img = document.createElement("img");
@@ -104,19 +106,25 @@ async function renderStrip(file, maxHeight, password, maxWidth = stage.clientWid
   const doc = await pdfjs.getDocument({ url: `${base}/files/${file}`, password }).promise;
   const pages = [];
   for (let n = 1; n <= doc.numPages; n++) pages.push(await doc.getPage(n));
-  const views = pages.map((p) => p.getViewport({ scale: 1 }));
+  const [left, top, right, bottom] = crop;
+  const views = pages.map((p) => {
+    const v = p.getViewport({ scale: 1 });
+    return { width: v.width * (right - left), height: v.height * (bottom - top) };
+  });
   const gap = 14;
   const width = maxWidth - gap * (views.length - 1);
   const scale = Math.min(maxHeight / Math.max(...views.map((v) => v.height)),
     width / views.reduce((s, v) => s + v.width, 0));
   const strip = el("div", "strip");
   for (const page of pages) {
-    const vp = page.getViewport({ scale: scale * 2 });
+    const whole = page.getViewport({ scale: scale * 2 });
+    const vp = page.getViewport({ scale: scale * 2, offsetX: -whole.width * left,
+      offsetY: -whole.height * top });
     const canvas = document.createElement("canvas");
-    canvas.width = vp.width;
-    canvas.height = vp.height;
-    canvas.style.width = `${vp.width / 2}px`;
-    canvas.style.height = `${vp.height / 2}px`;
+    canvas.width = whole.width * (right - left);
+    canvas.height = whole.height * (bottom - top);
+    canvas.style.width = `${canvas.width / 2}px`;
+    canvas.style.height = `${canvas.height / 2}px`;
     await page.render({ canvasContext: canvas.getContext("2d"), viewport: vp }).promise;
     strip.append(canvas);
   }
@@ -148,7 +156,7 @@ async function showFiles(show, result) {
   const review = new Set(show.review ? result[show.review] : []);
   for (const [label, file] of [["Before", show.before], ["After", show.after]]) {
     if (!file) continue;
-    const strip = await renderStrip(file, height, show.password);
+    const strip = await renderStrip(file, height, show.password, undefined, show.crop);
     if (!both) {
       [...strip.children].forEach((canvas, i) => {
         if (flagged.has(i + 1)) canvas.classList.add("flagged");

@@ -24,6 +24,7 @@ import math
 import re
 import time
 import zlib
+from collections.abc import Callable
 
 import pikepdf
 from PIL import Image
@@ -458,8 +459,8 @@ class Budget:
     deadline ends the call)."""
 
     def __init__(self, deadline: float, content: int = MAX_TOTAL_CONTENT,
-                 tokens: int = MAX_TOKENS) -> None:
-        self.deadline = deadline
+                 tokens: int = MAX_TOKENS, action: str = "Redacting") -> None:
+        self.deadline, self.action = deadline, action
         self.content_left = content
         self.tokens_left = tokens
         self.ops_left = MAX_OPS
@@ -468,8 +469,8 @@ class Budget:
 
     def check(self) -> None:
         if time.monotonic() > self.deadline:
-            raise PdfUserError("Redacting took too long; nothing was written. Try fewer "
-                               "pages at a time")
+            raise PdfUserError(f"{self.action} took too long; nothing was written. Try "
+                               "fewer pages at a time")
 
     def spend_font(self, size: int) -> None:
         self.check()
@@ -750,11 +751,34 @@ class Redactor:
     """Rewrites the content of pages (and the forms they draw) without what lies under
     a page's areas. Counts what it removed in *stats*; *gone* collects the originals it
     replaced or dropped (pictures, forms, property lists, content), which must not stay
-    reachable elsewhere in the file. *fonts* may be shared between pages."""
+    reachable elsewhere in the file. *fonts* may be shared between pages. With
+    *text_only*, only characters are removed: pictures and drawings stay as they are
+    (for edit_text, which draws new words where old ones were). *draw*, given the
+    indexes of areas text was just removed from and the matrix back to the page's own
+    space, and whether that place is inside marked content, returns content to add
+    there, and how far (in points) to move the rest of the line along it to make room.
+    It is added at the page's level: between the pieces of the line's text-showing
+    operators, which can be moved, or else after the text object (or form) that held
+    them. Areas left in *pending* when the page is done had no such place (or a text
+    clip was in force). *seen*, if set, is told of every character placed: its font (key, font),
+    code, centre, and where its advance ends (at the same height)."""
 
     def __init__(self, pdf: pikepdf.Pdf, areas: list, budget: Budget,
-                 fonts: dict | None = None) -> None:
+                 fonts: dict | None = None, text_only: bool = False,
+                 draw: Callable[[frozenset, tuple, bool], tuple[list, float]] | None = None
+                 ) -> None:
         self.pdf, self.areas, self.budget = pdf, areas, budget
+        self.text_only, self.draw = text_only, draw
+        self.modes: set[int] = set()   # the render modes of the characters removed
+        self.pending: set[int] = set()
+        # Areas text was removed from earlier on the line in hand, whose new text can
+        # still go before the next text kept on it; how far that line has moved (in
+        # text space); and whether a text clip now in force rules out drawing anything
+        # before the page's end.
+        self._carry: set[int] = set()
+        self._moved = 0.0
+        self._clipped = False
+        self.seen: Callable[..., None] | None = None
         self._index = Areas(areas)
         self.stats = {"text_removed": 0, "images_edited": 0, "images_removed": 0,
                       "drawings_removed": 0}
@@ -795,6 +819,8 @@ class Redactor:
         areas, budget, stats = self.areas, self.budget, self.stats
         out, stack, changed, in_text = [], [], False, False
         tm = tlm = _IDENTITY
+        marks_at_bt = lowest = 0
+        clipped = False
         shape = _Path()
         # Open marked content: [index, operator, something removed, something kept].
         marks: list = []
@@ -812,7 +838,7 @@ class Redactor:
                 budget.check()
             if isinstance(ins, pikepdf.ContentStreamInlineImage):
                 box = _bbox(gs.ctm, 0, 0, 1, 1)
-                if _overlaps(box, areas):
+                if not self.text_only and _overlaps(box, areas):
                     if not _within(box, areas):
                         raise Unsure("a picture stored in its content is partly under an area")
                     stats["images_removed"] += 1
@@ -829,7 +855,7 @@ class Redactor:
                 shape.clip.append(ins)
                 continue
             if op in _PAINT or op == "n":
-                painted = self._paint(shape, ins, op, gs)
+                painted = None if self.text_only else self._paint(shape, ins, op, gs)
                 if painted is not None:
                     changed = True
                     touch()
@@ -866,7 +892,7 @@ class Redactor:
                     gs.fill_pattern = pattern
                 else:
                     gs.stroke_pattern = pattern
-            elif op == "sh" and operands:
+            elif op == "sh" and operands and not self.text_only:
                 shading = res.get("/Shading", operands[0])
                 if _risky_shading(shading):
                     box = _rect(shading.get("/BBox")) if isinstance(
@@ -886,8 +912,14 @@ class Redactor:
             elif op == "BT":
                 tm = tlm = _IDENTITY
                 in_text = True
+                marks_at_bt = lowest = len(marks)
+                clipped = False
+                self._new_line()
             elif op == "ET":
                 in_text = False
+                self._new_line()
+                # Text clipping takes effect here, for the rest of the graphics state.
+                self._clipped = self._clipped or (top and clipped)
             elif op == "Tf" and len(operands) == 2:
                 font = res.get("/Font", operands[0])
                 key = ("o", font.objgen) if isinstance(font, pikepdf.Object) and \
@@ -913,11 +945,14 @@ class Redactor:
                     gs.tl = -ty
                 tlm = _mul((1.0, 0.0, 0.0, 1.0, tx, ty), tlm)
                 tm = tlm
+                self._new_line()
             elif op == "Tm":
                 tm = tlm = _matrix(operands)
+                self._new_line()
             elif op == "T*":
                 tlm = _mul((1.0, 0.0, 0.0, 1.0, 0.0, -gs.tl), tlm)
                 tm = tlm
+                self._new_line()
             elif op in _SHOW and operands:
                 before = []
                 if op in ("'", '"'):
@@ -930,13 +965,23 @@ class Redactor:
                     tlm = _mul((1.0, 0.0, 0.0, 1.0, 0.0, -gs.tl), tlm)
                     tm = tlm
                     before.append(_instruction([], "T*"))
+                    self._new_line()
                 items = operands[-1]
                 items = list(items) if isinstance(items, pikepdf.Array) else [items]
-                shown, tm, kept = self._show(items, gs, tm)
-                touch(shown is not None, kept)
+                clipped = clipped or gs.tr >= 4
+                start = tm
+                # New text may be drawn mid-line, between this text's pieces, only at the
+                # page's level, and where closing and reopening the text object changes
+                # nothing: no marked content opened or closed inside it, no text clipping.
+                split = top and self.draw is not None and in_text and not clipped and \
+                    not self._clipped and len(marks) == marks_at_bt == lowest and \
+                    _invert(gs.ctm) is not None
+                shown, tm, kept, splits, removed = self._show(items, gs, tm, split)
+                touch(removed, kept)
                 if shown is not None:
                     changed = True
-                    out += [*before, _instruction([pikepdf.Array(shown)], "TJ")]
+                    out += before
+                    self._split(out, shown, splits, start, tlm, gs, bool(marks))
                     continue
             elif op == "Do" and operands:
                 drawn = res.get("/XObject", operands[0])
@@ -949,16 +994,36 @@ class Redactor:
                     touch()
                     if replaced is not None:
                         out.append(_instruction([replaced], "Do"))
+                    if top:
+                        self._place(out, gs, bool(marks))
                     continue
             elif op in ("BDC", "BMC"):
                 marks.append([len(out), ins, False, False])
             elif op == "EMC" and marks:
                 self._close(marks.pop(), out, res, top)
+                lowest = min(lowest, len(marks))
             out.append(ins)
+            if top and op == "ET":
+                self._place(out, gs, bool(marks))
         out += shape.instructions()
         while marks:
             self._close(marks.pop(), out, res, top)
         return (out if changed else None), len(stack), in_text
+
+    def _new_line(self) -> None:
+        """The line in hand ends: what it removed can no longer go mid-line."""
+        self.pending |= self._carry
+        self._carry, self._moved = set(), 0.0
+
+    def _place(self, out: list, gs: _State, marked: bool) -> None:
+        """Add what *draw* gives for the areas text was removed from since last time."""
+        if not self.pending or self.draw is None or self._clipped:
+            return   # left pending: the caller draws it at the end
+        back = _invert(gs.ctm)
+        if back is None:
+            return
+        out += self.draw(frozenset(self.pending), back, marked)[0]   # nothing can move
+        self.pending.clear()
 
     def _paint(self, shape: _Path, ins, op: str, gs: _State) -> list | None:
         """A painted path without what's under the areas (None if nothing is): subpaths
@@ -1007,9 +1072,38 @@ class Redactor:
             out += [*shape.instructions(), _instruction([], "n")]
         return out
 
-    def _show(self, items: list, gs: _State, tm) -> tuple:
+    def _split(self, out: list, shown: list, splits: list, start, tlm, gs: _State,
+               marked: bool) -> None:
+        """Add a text-showing operator's remaining strings, closing the text object at
+        each split to draw what replaces the text removed before it, then reopening it
+        where the line was (moved on as far as *draw* asks, and earlier splits on the
+        line did)."""
+        size, th, done = gs.size, gs.th, 0
+        lead: list = []   # until a split, the text goes on from where the last left off
+        line = _mul(tlm, gs.ctm)
+        unit = math.hypot(line[0], line[1])   # points per unit along the line
+        for at, x, held in splits:
+            dx = _along(_mul((1.0, 0.0, 0.0, 1.0, x, 0.0), start), tlm)
+            if dx is None or not unit:   # the line can't be found again: draw it after
+                self.pending |= held
+                continue
+            if lead + shown[done:at]:
+                out.append(_instruction([pikepdf.Array(_merged(lead + shown[done:at]))],
+                                        "TJ"))
+            out.append(_instruction([], "ET"))
+            drawn, shift = self.draw(held, _invert(gs.ctm), marked)
+            out += drawn
+            out += [_instruction([], "BT"), _instruction(list(tlm), "Tm")]
+            self._moved += shift / unit
+            lead, done = [-(dx + self._moved) * 1000 / (size * th)], at
+        out.append(_instruction([pikepdf.Array(_merged(lead + shown[done:]))], "TJ"))
+
+    def _show(self, items: list, gs: _State, tm, split: bool = False) -> tuple:
         """A text-showing operator's strings with the characters under the areas taken
-        out (None if none are), the text matrix after it, and whether any are kept."""
+        out (None if none are, and none follow removed text), the text matrix after it,
+        whether any are kept, (with *split*, for *draw*) where kept text follows removed
+        text (index in the strings, x, the areas it was removed from; removed earlier on
+        the line, it may be from before this operator), and whether any were removed."""
         if gs.font is None:
             raise Unsure("text uses a font that is missing")
         font = self.font(*gs.font)
@@ -1018,6 +1112,10 @@ class Redactor:
         middle = (font.ascent + font.descent) / 2 * size + gs.rise
         low, high = font.descent * size + gs.rise, font.ascent * size + gs.rise
         shown, run, x, removed, kept = [], bytearray(), 0.0, False, False
+        splits: list = []
+        # Areas text was removed from since the last split (on this line, if it can split).
+        held: set[int] = self._carry if split else set()
+        self._carry = set()
         for item in items:
             if isinstance(item, pikepdf.String):
                 for code, width, spaced in font.codes(bytes(item)):
@@ -1028,6 +1126,9 @@ class Redactor:
                         self.budget.check()
                     advance = (width * size + gs.tc + (gs.tw if spaced else 0.0)) * th
                     cx, cy = _point(base, x + width * size * th / 2, middle)
+                    if self.seen is not None:
+                        self.seen(gs.font, code, cx, cy,
+                                  *_point(base, x + width * size * th, middle))
                     if self._index.hold(cx, cy):
                         if gs.tr >= 4:
                             raise Unsure("text that clips other content is under an area")
@@ -1038,10 +1139,17 @@ class Redactor:
                             run = bytearray()
                         shown.append(-advance * 1000 / (size * th))
                         removed = True
+                        self.modes.add(gs.tr)
+                        if self.draw is not None:
+                            held.update(k for k, a in enumerate(self.areas)
+                                        if _inside(cx, cy, (a,)))
                         self.stats["text_removed"] += 1
                     else:
                         self._partly(font, base, x, width * size * th, low, high, size, th,
                                      gs.rise)
+                        if held and split:  # (a removal has just ended the run)
+                            splits.append((len(shown), x, frozenset(held)))
+                            held = set()
                         run += code
                         kept = True
                     x += advance
@@ -1058,17 +1166,13 @@ class Redactor:
         if run:
             shown.append(pikepdf.String(bytes(run)))
         tm = _mul((1.0, 0.0, 0.0, 1.0, x, 0.0), tm)
-        if not removed:
-            return None, tm, kept
-        merged: list = []
-        for item in shown:  # neighbouring numbers become one
-            if merged and not isinstance(item, pikepdf.String) and \
-                    not isinstance(merged[-1], pikepdf.String):
-                merged[-1] += item
-            else:
-                merged.append(item)
-        return [round(v, 3) if not isinstance(v, pikepdf.String) else v
-                for v in merged], tm, kept
+        if split:   # the next text kept on this line may still come after it
+            self._carry = held
+        else:
+            self.pending |= held
+        if not removed and not splits:
+            return None, tm, kept, [], False
+        return shown, tm, kept, splits, removed
 
     def _partly(self, font: Font, base, x: float, width: float, low: float, high: float,
                 size: float, th: float, rise: float) -> None:
@@ -1098,6 +1202,8 @@ class Redactor:
         if not isinstance(xobject, pikepdf.Stream):
             return False
         subtype = xobject.get("/Subtype")
+        if subtype == pikepdf.Name.Image and self.text_only:
+            return False
         if subtype == pikepdf.Name.Image:
             box = _bbox(gs.ctm, 0, 0, 1, 1)
             if not _overlaps(box, self.areas):
@@ -1121,7 +1227,7 @@ class Redactor:
                                                            math.inf, math.inf)
         if not _overlaps(box, self.areas):
             return False
-        if _within(box, self.areas):
+        if _within(box, self.areas) and not self.text_only:
             self.stats["drawings_removed"] += 1
             self._forget(xobject)
             return None
@@ -1172,6 +1278,29 @@ class Redactor:
             self._forget(found)
             kept = res.add("/Properties", self.pdf.make_indirect(kept), "RdP")
         out[index] = _instruction([tag, kept], "BDC")
+
+
+def _merged(shown: list) -> list:
+    """A TJ operator's items with neighbouring numbers made one."""
+    merged: list = []
+    for item in shown:
+        if merged and not isinstance(item, pikepdf.String) and \
+                not isinstance(merged[-1], pikepdf.String):
+            merged[-1] += item
+        else:
+            merged.append(item)
+    return [round(v, 3) if not isinstance(v, pikepdf.String) else v for v in merged]
+
+
+def _along(tm, tlm) -> float | None:
+    """How far along its line text matrix *tm* is from the line's start *tlm* (text
+    shown moves it only that way); None if the line matrix can't say."""
+    a, b = tlm[0], tlm[1]
+    if abs(a) >= abs(b) and abs(a) > 1e-9:
+        return (tm[4] - tlm[4]) / a
+    if abs(b) > 1e-9:
+        return (tm[5] - tlm[5]) / b
+    return None
 
 
 def _path_points(op: str, operands: list, ctm, points: list):
