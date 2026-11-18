@@ -42,6 +42,7 @@ from .sensitive import find_sensitive_data
 from .stamp import add_page_numbers, add_watermark
 from .tables import export_tables, extract_tables
 from .text import extract_text
+from .translate import get_text_blocks, translate_pdf
 
 __all__ = [
     "pdf_info", "check_pdf", "get_metadata", "set_metadata", "extract_text",
@@ -62,4 +63,5 @@ __all__ = [
     "compare_pdfs", "list_pdfs", "redact_pdf", "edit_text", "ocr_pdf",
     "convert_to_pdfa", "pdf_to_markdown", "export_markdown", "markdown_to_pdf",
     "list_comments", "add_comments", "find_sensitive_data", "clean_scans",
+    "get_text_blocks", "translate_pdf",
 ]

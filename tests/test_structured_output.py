@@ -8,6 +8,7 @@ Every tool declares an ``outputSchema`` and returns ``structuredContent`` that:
 from __future__ import annotations
 
 import base64
+import hashlib
 import importlib.util
 import io
 import json
@@ -45,6 +46,13 @@ def _locked(path, user="pw", owner="owner"):
             user=user, owner=owner, R=6,
             allow=pikepdf.Permissions(print_highres=False, modify_assembly=True)))
     return str(path)
+
+
+def _translating(path: str) -> dict:
+    """translate_pdf's arguments for a file made by _pdf: its first block in German."""
+    digest = hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    return {"input_path": path, "digest": digest, "language": "de",
+            "translations": [{"block": "p1-b1", "text": "SEITE-1"}]}
 
 
 def _junk(path):
@@ -253,6 +261,10 @@ CASES = [
     ("edit_text-locked", "edit_text",
      lambda d: {"input_path": _locked(d / "l.pdf"), "password": "pw",
                 "edits": [{"find": "PAGE", "replace": "Sheet"}]}),
+    ("get_text_blocks", "get_text_blocks", lambda d: {"input_path": _pdf(d / "a.pdf")}),
+    ("translate_pdf", "translate_pdf", lambda d: _translating(_pdf(d / "a.pdf"))),
+    ("translate_pdf-locked", "translate_pdf",
+     lambda d: {**_translating(_locked(d / "l.pdf")), "password": "pw"}),
     ("redact_pdf-locked", "redact_pdf",
      lambda d: {"input_path": _locked(d / "l.pdf"), "password": "pw", "texts": ["PAGE"],
                 "rasterize": "always", "dpi": 72}),

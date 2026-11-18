@@ -686,6 +686,59 @@ class EditTextResult(Protected):
     originals_kept: int
 
 
+class TextBlock(TypedDict):
+    id: str                                # "p2-b5": page 2's fifth block; for translate_pdf
+    page: int                              # 1-based
+    # Its text, lines joined; "\n" where a line ends short on purpose (an address).
+    text: str
+    lines: int                             # lines it is printed on: the room it has
+
+
+class TextBlocksResult(TypedDict):
+    # Identifies this version of the file: translate_pdf needs it, to be sure its block
+    # ids are this file's.
+    digest: str
+    page_count: int
+    pages_read: list[int]
+    blocks: list[TextBlock]                # in reading order; those with letters only
+    next_page: int | None                  # more pages to read: call again from this one
+    pages_without_text: list[int]          # scans: run ocr_pdf (their words stay pixels)
+    # Pages with a scan's invisible OCR text, which is in no block: its visible words
+    # are pixels that can't be translated.
+    pages_with_invisible_text: list[int]
+
+
+class Translation(TypedDict):
+    """One block's translation for translate_pdf."""
+
+    __pydantic_config__ = ConfigDict(extra="forbid")  # type: ignore[misc]
+
+    block: str                             # its id from get_text_blocks, like "p1-b2"
+    text: str                              # keep the block's "\n" line breaks
+
+
+class ShrunkBlock(TypedDict):
+    block: str
+    scale: float                           # drawn at this share of the original size
+
+
+class TranslateResult(Protected):
+    output: str
+    blocks_translated: int
+    pages_translated: list[int]
+    shrunk: list[ShrunkBlock]              # drawn smaller to fit (no smaller than 0.6)
+    fonts: list[str]                       # the fonts the translations are drawn in
+    language: str | None                   # set as the document's language, if given
+    # The PDF has accessibility tags, and some new text isn't in them (it was drawn
+    # outside the old text's marked content): screen readers following tags may skip it.
+    new_text_untagged: bool
+    # Where else the file has text translate_pdf leaves as it is: "document info",
+    # "XMP metadata", "bookmarks", "comments", "form fields".
+    not_translated: list[str]
+    # Forms holding translated text that other pages still draw untranslated.
+    originals_kept: int
+
+
 class CompareResult(TypedDict):
     path_a: str
     path_b: str

@@ -26,6 +26,7 @@ import re
 import time
 import unicodedata
 from contextlib import ExitStack
+from itertools import islice
 from pathlib import Path
 
 import pikepdf
@@ -962,7 +963,7 @@ def _elsewhere(pdf: pikepdf.Pdf, finds: list[str], match_case: bool) -> list[str
     looked = 0
     for page in pdf.pages:
         annots = page.obj.get("/Annots")
-        for annot in list(annots)[:MAX_LOOKED] if isinstance(annots, pikepdf.Array) else []:
+        for annot in islice(annots, MAX_LOOKED) if isinstance(annots, pikepdf.Array) else ():
             looked += 1
             if not isinstance(annot, pikepdf.Dictionary):
                 continue

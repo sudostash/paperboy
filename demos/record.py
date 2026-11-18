@@ -120,6 +120,19 @@ def _review(url: str, untick: list[str], folder: Path, step: int) -> list[dict]:
     return items
 
 
+def _resolve(args, previous: object):
+    """*args* with each {"$previous": "<field>"} replaced by that field of the previous
+    call's result: what the assistant copies from one tool's reply into the next (a
+    digest, an id)."""
+    if isinstance(args, dict):
+        if set(args) == {"$previous"}:
+            return previous[args["$previous"]]
+        return {k: _resolve(v, previous) for k, v in args.items()}
+    if isinstance(args, list):
+        return [_resolve(v, previous) for v in args]
+    return args
+
+
 async def run_scenario(slug: str, scenario: dict, out: Path = OUT) -> dict:
     """Execute the scenario's steps against the server; return the transcript."""
     workspace = out / slug / "files"
@@ -130,6 +143,7 @@ async def run_scenario(slug: str, scenario: dict, out: Path = OUT) -> dict:
     params = _server(workspace)
     steps = []
     failure = None
+    previous: object = None    # the last call's result
     pending: list[dict] = []   # what the user types on the page Paperboy opens
     asked: list[dict] = []     # what it asked: shown as a dialog (never the password)
 
@@ -178,10 +192,11 @@ async def run_scenario(slug: str, scenario: dict, out: Path = OUT) -> dict:
             elif step["type"] == "call":
                 pending[:] = step.pop("answers", [])
                 asked.clear()
+                step["args"] = _resolve(step["args"], previous)
                 result = await session.call_tool(step["tool"], step["args"])
                 step["asked"] = list(asked)
                 step["isError"] = bool(_field(result, "is_error", "isError", False))
-                step["result"] = _payload(result)
+                step["result"] = previous = _payload(result)
                 tool = next(t for t in (await session.list_tools()).tools
                             if t.name == step["tool"])
                 step["readOnly"] = bool(_hint(tool.annotations, "readOnlyHint",
