@@ -117,6 +117,8 @@ and a demo video for each.
 | `ocr_pdf` | Make scans searchable: Tesseract OCR reads each page and an invisible text layer is placed over the words, so they can be searched, selected and copied; the pages look exactly as before. Pages that already have text are skipped; any installed language *(needs Tesseract)* |
 | `convert_to_pdfa` | PDF/A-2b copy for long-term archiving (courts, governments, archives): adds the sRGB colour profile and PDF/A metadata, removes what PDF/A forbids (scripts, attachments, encryption, hidden annotations), never redraws pages. Checked by veraPDF when installed and written only if it passes; refuses with reasons what it can't fix (fonts not embedded, CMYK colour) |
 | `edit_text` | Change words on a page (a date, a name, an amount, a typo): the old text is removed from the page, not covered, and the new drawn in its place at the same size, angle and colour, in the page's own font when it has the characters (else the closest standard font). Amounts in a column can stay right-aligned, and the rest of a line moves along to keep its spacing. One line at a time; nothing is written unless every edit fits and checks out |
+| `get_text_blocks` | Read the text as blocks to translate (paragraphs, headings, list items, table cells), each with an id, for `translate_pdf` *(read-only)* |
+| `translate_pdf` | Translate a PDF and keep its layout: your assistant translates each block, and Paperboy removes the original words from the page (not covered) and draws the translation in the same place, size and colour, wrapped to fit, made a little smaller only when it needs the room. Latin, Greek and Cyrillic scripts; nothing is written unless every block fits and checks out |
 | `add_watermark` | Text ("CONFIDENTIAL", "DRAFT") or image watermark, or a corner stamp ("APPROVED"): position, size, colour, opacity, rotation, over or under the content |
 | `add_page_numbers` | Page numbers ("Page {n} of {total}") or Bates numbers ("ACME-{n:06}"), any corner or edge, with a start number and page selection |
 | `render_pages` | Save pages as PNG or JPEG files at 36-600 dpi (copy-protected PDFs need the owner password) |
@@ -402,6 +404,23 @@ All configuration is environment variables. Sensible defaults; nothing is requir
   every pass over a page's characters is indexed by line and stops at the call's
   2-minute limit. Only pages change: the result lists where else the old wording is
   still written (document info, XMP, bookmarks, comments, form fields).
+- **Translation never leaves your computer through Paperboy.** Paperboy has no
+  translation service and makes no network calls: your assistant translates the text that
+  `get_text_blocks` reads (so the text goes wherever your assistant's model runs, as any
+  text you show it does). `translate_pdf` checks the file is the one that was read (by
+  its SHA-256), then removes each translated block's characters as `edit_text` does and
+  draws the translation in their place: wrapped to the block's width, kept clear of other
+  text, pictures, drawings and form fields (measured part by part), and refused if two
+  blocks would overlap. Every page is read back before anything is written: only the
+  translated blocks' characters may be gone, everything else must be where it was, and
+  exactly the translations must be found where they were drawn. Each page is also drawn
+  with and without the translations, and every new character must show where it was
+  placed (not cut off by a clipping path, nor under something drawn later); text drawn
+  fully transparent is never listed. Text that's invisible
+  (a scan's OCR layer) or outlined is refused, as are right-to-left scripts, scripts
+  whose letters must be shaped (Indic, Thai), characters the fonts lack (Chinese,
+  Japanese, Korean) and signed PDFs. Reading is limited to 100,000 characters per page
+  and per reply, 20,000 objects and 200,000 path parts per page, and 3 minutes per call.
 - **OCR adds text and changes nothing else.** `ocr_pdf` checks and renders each page as
   displayed (rotation and crop box applied) with PDFium in a separate process, from a
   decrypted copy handed over in memory, with a CPU limit; it is killed at the call's

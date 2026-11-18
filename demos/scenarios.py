@@ -459,6 +459,66 @@ SCENARIOS: dict[str, dict] = {
                                     "a search for \"80 guests\" finds nothing."},
         ],
     },
+    "translate": {
+        "title": "Translate a PDF",
+        "subtitle": "The assistant translates; Paperboy puts each block back where it was.",
+        "files": ["welcome-guide.pdf"],
+        "prompt": "Guests from Spain arrive tomorrow. Translate welcome-guide.pdf into "
+                  "Spanish, keeping the layout.",
+        "steps": [
+            {"type": "call", "tool": "get_text_blocks",
+             "args": {"input_path": "welcome-guide.pdf"},
+             "showTable": "blocks", "columns": ["id", "text"], "headers": True},
+            {"type": "say", "text": "13 blocks of text: the heading, a paragraph, the "
+                                    "opening times and a list. I'll translate each one "
+                                    "and leave the times as they are."},
+            {"type": "call", "tool": "translate_pdf",
+             "args": {"input_path": "welcome-guide.pdf",
+                      "digest": {"$previous": "digest"}, "language": "es",
+                      "translations": [
+                 {"block": "p1-b1",
+                  "text": "Bienvenido a Harbour House"},
+                 {"block": "p1-b2",
+                  "text": "Todo lo que necesita para una estancia tranquila"},
+                 {"block": "p1-b3",
+                  "text": "Estamos encantados de tenerle con nosotros. Su habitación "
+                          "tiene toallas limpias, un hervidor con té y café, y una caja "
+                          "fuerte para sus objetos de valor. Si falta algo, llame a "
+                          "recepción y se lo subiremos enseguida."},
+                 {"block": "p1-b4",
+                  "text": "Horarios"},
+                 {"block": "p1-b5",
+                  "text": "Desayuno"},
+                 {"block": "p1-b6",
+                  "text": "Restaurante"},
+                 {"block": "p1-b7",
+                  "text": "Piscina"},
+                 {"block": "p1-b8",
+                  "text": "Salida"},
+                 {"block": "p1-b9",
+                  "text": "Información útil"},
+                 {"block": "p1-b10",
+                  "text": "• El wifi es gratuito: elija Harbour-Guest y use su número "
+                          "de habitación."},
+                 {"block": "p1-b11",
+                  "text": "• El horario de silencio es de 22:00 a 07:00."},
+                 {"block": "p1-b12",
+                  "text": "• Puede pedir prestada una bicicleta en recepción sin "
+                          "coste."},
+                 {"block": "p1-b13",
+                  "text": "La recepción está abierta las 24 horas. Marque el 0 desde "
+                          "su habitación."},
+             ]},
+             "show": {"before": "welcome-guide.pdf",
+                      "after": "welcome-guide_translated.pdf",
+                      "crop": [0.08, 0.06, 0.92, 0.66], "layout": "side-by-side"}},
+            {"type": "say", "text": "Done: welcome-guide_translated.pdf is in Spanish, in "
+                                    "the same places, sizes and colours, with the times "
+                                    "table and list as they were. The paragraph is drawn "
+                                    "slightly smaller to fit its space. The English was "
+                                    "taken out of the page, not covered over."},
+        ],
+    },
     "sensitive-data": {
         "title": "Find and redact personal data",
         "subtitle": "Paperboy finds it; you choose, item by item, what is redacted.",
@@ -893,8 +953,8 @@ GROUPS: list[tuple[str, list[str]]] = [
     ("Organizing pages", ["organize", "extract-crop", "blank-pages", "interleave",
                           "page-layout", "bookmarks"]),
     ("Creating PDFs", ["convert", "clean-scans", "markdown-to-pdf"]),
-    ("Editing and marking up", ["fill-form", "edit-text", "watermark-numbers", "comments",
-                                "metadata", "pipeline", "batch"]),
+    ("Editing and marking up", ["fill-form", "edit-text", "translate", "watermark-numbers",
+                                "comments", "metadata", "pipeline", "batch"]),
     ("Sharing safely", ["sanitize", "redaction", "sensitive-data", "protect",
                         "ask-password", "permissions", "scan"]),
     ("File health and size", ["repair", "target-size", "pdfa"]),

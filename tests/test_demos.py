@@ -121,6 +121,18 @@ def test_scenario_is_well_formed(slug):
             assert step["text"].strip()
 
 
+def test_resolve_copies_fields_from_the_previous_result():
+    args = {"a": {"$previous": "digest"}, "b": [{"$previous": "n"}, 1], "c": "x"}
+    assert record._resolve(args, {"digest": "d", "n": 2}) == {"a": "d", "b": [2, 1],
+                                                              "c": "x"}
+
+
+def test_build_welcome_guide_is_one_english_page(tmp_path):
+    reader = PdfReader(demo_pdfs.build_welcome_guide(tmp_path / "w.pdf"))
+    assert len(reader.pages) == 1
+    assert "Welcome to Harbour House" in reader.pages[0].extract_text()
+
+
 def test_every_tool_appears_in_a_scenario():
     # Each tool has a tutorial video showing it in use.
     used = {step["tool"] for s in SCENARIOS.values() for step in s["steps"]

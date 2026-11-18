@@ -7,6 +7,21 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `get_text_blocks` and `translate_pdf`: translate a PDF and keep its layout. Paperboy
+  doesn't translate (it makes no network calls): `get_text_blocks` reads each page's
+  text as blocks (paragraphs, headings, list items, table cells, with deliberate line
+  breaks kept) with ids and the file's SHA-256, the assistant translates them, and
+  `translate_pdf` removes each block's characters from the page (as `edit_text` does)
+  and draws its translation in the block's place and reading position: same size,
+  colour and kind of font, aligned as it was, wrapped to its width. A translation may
+  run on into free space beside or below its block, kept clear of other text,
+  pictures, drawings and form fields; otherwise it is made smaller (to no less than
+  60%), and refused if it still won't fit. Every page is read back before anything is
+  written, and drawn with and without the translations to confirm every new character
+  shows (one cut off by a clip, or hidden under something drawn later, is refused). Latin, Greek and Cyrillic scripts; `language` sets the document's language.
+  With a tutorial and demo video.
+- Demo recorder: a scenario's call can take a field from the previous call's result
+  (`{"$previous": "digest"}`).
 - `edit_text`: change words on a PDF's pages, such as a date, a name, an amount or a
   typo. The old characters are removed from the page's content (as `redact_pdf` removes
   them, but leaving pictures and drawings), and the new text is drawn in their place:

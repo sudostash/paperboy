@@ -33,6 +33,7 @@ connect it to your AI app with one command, and restart the app.
   [Write a document as a PDF](#write-a-document-as-a-pdf)
 - Editing and marking up: [Fill in forms](#fill-in-forms) ·
   [Change words in a PDF](#change-words-in-a-pdf) ·
+  [Translate a PDF](#translate-a-pdf) ·
   [Watermarks, stamps and page numbers](#watermarks-stamps-and-page-numbers) ·
   [Review with comments](#review-with-comments) ·
   [Set the title and author](#set-the-title-and-author) ·
@@ -367,6 +368,25 @@ words don't fit, nothing is changed and you're told how much room there is. Chec
 result with `view_pages`.
 
 Video: [`edit-text.webm`](https://github.com/sudostash/paperboy/releases/download/demo-videos/edit-text.webm)
+
+### Translate a PDF
+
+> *"Guests from Spain arrive tomorrow. Translate welcome-guide.pdf into Spanish, keeping
+> the layout."*
+
+Your assistant does the translating; Paperboy keeps the page looking the same.
+`get_text_blocks` reads the text in pieces (a heading, a paragraph, a list item, a table
+cell), and `translate_pdf` puts each translated piece back where the original was, in the
+same size and colour. The original words are taken out of the file, not hidden. Longer
+translations are wrapped to fit, and made a little smaller only if they really need the
+room. Numbers, times and anything without words are left as they are.
+
+It works for languages written in Latin, Greek or Cyrillic letters, such as Spanish,
+German, French, Polish, Greek and Russian. It can't yet do Chinese, Japanese, Korean,
+Arabic, Hebrew, Hindi or Thai. A bold or italic word inside a paragraph comes out in the
+paragraph's usual style. Check the result with `view_pages`.
+
+Video: [`translate.webm`](https://github.com/sudostash/paperboy/releases/download/demo-videos/translate.webm)
 
 ### Watermarks, stamps and page numbers
 

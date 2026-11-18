@@ -917,6 +917,56 @@ def build_venue_booking(path: Path) -> Path:
     return path
 
 
+def build_welcome_guide(path: Path) -> Path:
+    """A hotel's one-page welcome guide in English, to be translated: a heading, two
+    paragraphs, times in a small table, a list and a footer."""
+    c = canvas.Canvas(str(path), pagesize=letter)
+    c.setTitle("Welcome to Harbour House")
+    width, height = letter
+    c.setFillColor(ACCENT)
+    c.rect(0, height - 14, width, 14, stroke=0, fill=1)
+    c.setFillColor(INK)
+    c.setFont("Helvetica-Bold", 26)
+    c.drawString(72, height - 100, "Welcome to Harbour House")
+    c.setFont("Helvetica", 12)
+    c.setFillColor(MUTED)
+    c.drawString(72, height - 124, "Everything you need for a relaxing stay")
+    c.setFillColor(INK)
+    c.setFont("Helvetica", 11)
+    y = height - 168
+    for line in ("We are delighted to have you with us. Your room has fresh towels, a",
+                 "kettle with tea and coffee, and a safe for your valuables. If anything",
+                 "is missing, please call reception and we will bring it straight up."):
+        c.drawString(72, y, line)
+        y -= 16
+    y -= 22
+    c.setFont("Helvetica-Bold", 13)
+    c.drawString(72, y, "Opening times")
+    c.setStrokeColor(RULE)
+    for label, time in (("Breakfast", "07:00 - 10:30"), ("Restaurant", "18:00 - 22:00"),
+                        ("Swimming pool", "08:00 - 20:00"), ("Check-out", "11:00")):
+        y -= 24
+        c.setFont("Helvetica", 11)
+        c.drawString(72, y, label)
+        c.drawRightString(width - 72, y, time)
+        c.line(72, y - 8, width - 72, y - 8)
+    y -= 46
+    c.setFont("Helvetica-Bold", 13)
+    c.drawString(72, y, "Good to know")
+    c.setFont("Helvetica", 11)
+    for item in ("Wi-Fi is free: choose Harbour-Guest and use your room number.",
+                 "Quiet hours are from 22:00 to 07:00.",
+                 "Bicycles can be borrowed at reception at no charge."):
+        y -= 20
+        c.drawString(72, y, "\u2022  " + item)
+    c.setFont("Helvetica", 10)
+    c.setFillColor(MUTED)
+    c.drawString(72, 60, "Reception is open 24 hours a day. Dial 0 from your room.")
+    c.showPage()
+    c.save()
+    return path
+
+
 def _perspective(photo_corners, width: float, height: float) -> list[float]:
     """Pillow's PERSPECTIVE coefficients taking each photo corner back to the matching
     corner of a width x height picture (top-left, top-right, bottom-right, bottom-left)."""
@@ -1042,7 +1092,8 @@ BUILDERS = {"report.pdf": build_report, "scan.pdf": build_scan,
             "quote.pdf": build_quote, "receipt-taxi.jpg": build_receipt_taxi,
             "receipt-hotel.jpg": build_receipt_hotel, "trip-notes.txt": build_trip_notes,
             "new-starter.pdf": build_new_starter, "lease-photo.jpg": build_lease_photo,
-            "venue-booking.pdf": build_venue_booking}
+            "venue-booking.pdf": build_venue_booking,
+            "welcome-guide.pdf": build_welcome_guide}
 
 
 def build(names: list[str], workspace: Path) -> None:
