@@ -390,6 +390,23 @@ All notable changes to this project are documented here. The format follows
   permission is always granted, per PDF 2.0).
 
 ### Fixed
+- `edit_text` checks the new text can be seen: the page is drawn without it, and with it
+  all black and all white (opaque), and each new character must change the picture
+  inside its outline in one of them. New text cut off by a clipping path or hidden under
+  something drawn later is refused (reading the text back couldn't tell); text the
+  colour of what is under it, as the old text was, is fine. `translate_pdf` shares the
+  check, which no longer misjudges letters with an empty middle ("O"), and both draw the
+  black and white copies themselves, so figures in the text ("1500 g") are never taken
+  for colours. A page too large to check closely enough is refused, saying so.
+- `edit_text` reads each page for its fonts within a smaller budget of its own (100,000
+  characters): a dense page took 8 s and 700 MB doing so before; past it the new text is
+  drawn in a standard font. The budget is per page, so later pages of a long document
+  keep their font.
+- Every tool numbers pages alike in a damaged file: when qpdf repaired a file opening
+  it, PDFium reads qpdf's copy (saved in memory, as for encrypted files). Before, a page
+  qpdf dropped (a page dictionary holding a 39-digit integer) was still seen by PDFium,
+  so `view_pages`, `render_pages`, `search_text`, `compare_pdfs` and the comment tools
+  could show or report a different page from the one other tools meant.
 - Worker processes (tables, Markdown, redaction patterns, OCR) run single-threaded. With
   NumPy installed (as the `scan` extra does), older pypdfium2 loads it, and OpenBLAS's
   threads spent a worker's CPU-time limit faster than the clock, so pages were skipped

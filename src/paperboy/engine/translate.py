@@ -46,7 +46,6 @@ from pathlib import Path
 
 import pikepdf
 import pypdfium2.raw as pdfium_raw
-from PIL import ImageChops
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfgen import canvas
 
@@ -74,9 +73,10 @@ from .redact import (
     _verify,
 )
 from .redact_content import Budget, Unsure, _rect
-from .render import _PDFIUM_LOCK, MAX_PIXELS, _close, _open
+from .render import _PDFIUM_LOCK, _close, _open
 from .search import MAX_PAGE_CONTENT, _content_size
 from .stamp import _visible_box
+from .visible import GREYS, OPAQUE, Known, drawn_docs, glyphs, make_opaque, shown
 
 MAX_REPLY_TEXT = 100_000     # characters of block text one get_text_blocks reply lists
 MAX_PAGE_TEXT = 100_000      # characters of text on one page
@@ -87,10 +87,6 @@ MAX_TRANSLATIONS = 2_000     # blocks one translate_pdf call translates
 MAX_TRANSLATION = 8_000      # characters of one block's translation
 MAX_TRANSLATED = 400_000     # characters of translation one call draws
 MAX_FRAMES = 8               # directions of text a page's drawings are measured in
-INK_PIXELS = 10.0            # the smallest new text's size, in pixels, when checked
-INK_MAX_SCALE = 4.0          # pixels per point at most, checking
-INK_CONTRAST = 16            # grey levels of change that count as drawn
-INK_REACH = 0.3              # of the size: how near a character's middle it must show
 TRANSLATE_TIME_LIMIT_S = 180  # per call
 MIN_SHRINK = 0.6             # smallest share of its size a translation is drawn at
 SHRINK_STEP = 0.05
@@ -954,20 +950,21 @@ def _fit(block: _Block, text: str, page: _Page, translated: set[int]) -> bool:
 # --- drawing ----------------------------------------------------------------------------
 
 
-def _drawings(pdf: pikepdf.Pdf, blocks: list[_Block]
-              ) -> tuple[pikepdf.Pdf, dict[int, pikepdf.Stream], dict[int, bytes]]:
-    """A form drawing each block's translation (by its place in *blocks*), and the
-    content each form gets once the removal is checked (they are empty until then).
-    Returns the Pdf the forms came from too: keep it open until saved."""
+def _canvas(blocks: list[_Block], grey: float | None = None) -> pikepdf.Pdf:
+    """A page per block drawing its translation, in its colour; or all in *grey* (then
+    opacity is left to whoever draws it: see visible.OPAQUE)."""
     buf = io.BytesIO()
     c = canvas.Canvas(buf)
     for block in blocks:
-        r, g, b, alpha = block.colour
         c.setPageSize((100, 100))   # each form's box is set to its page's below
         c.saveState()
         c.transform(*block.matrix, 0, 0)
-        c.setFillColorRGB(r / 255, g / 255, b / 255)
-        c.setFillAlpha(alpha / 255)
+        if grey is None:
+            r, g, b, alpha = block.colour
+            c.setFillColorRGB(r / 255, g / 255, b / 255)
+            c.setFillAlpha(alpha / 255)
+        else:
+            c.setFillColorRGB(grey, grey, grey)
         for x, y, line, _ in block.placed:
             text = c.beginText(x, y)
             text.setFont(block.font, block.drawn_size)
@@ -977,15 +974,30 @@ def _drawings(pdf: pikepdf.Pdf, blocks: list[_Block]
         c.restoreState()
         c.showPage()
     c.save()
-    source = pikepdf.open(buf)
+    return pikepdf.open(buf)
+
+
+def _drawings(pdf: pikepdf.Pdf, blocks: list[_Block]
+              ) -> tuple[pikepdf.Pdf, dict[int, pikepdf.Stream], dict[int, bytes], list[dict]]:
+    """A form drawing each block's translation (by its place in *blocks*), the content
+    each form gets once the removal is checked (they are empty until then), and the
+    same content drawn all black and all white (visible.GREYS), to check it shows.
+    Returns the Pdf the forms came from too: keep it open until saved."""
+    source = _canvas(blocks)
     forms, content = {}, {}
     reset = b"0 Tc 0 Tw 100 Tz 0 Ts 0 Tr\n"   # a form inherits the page's text state
     for n, block in enumerate(blocks):
         forms[n] = pdf.copy_foreign(source.pages[n].as_form_xobject())
         content[n] = reset + forms[n].read_bytes()
         forms[n].BBox = pikepdf.Array([float(v) for v in pdf.pages[block.page].mediabox])
+        make_opaque(pdf, forms[n])
         forms[n].write(b"")
-    return source, forms, content
+    variants = []
+    for grey in GREYS:
+        with _canvas(blocks, grey) as drawn:
+            variants.append({n: reset + OPAQUE + drawn.pages[n].as_form_xobject().read_bytes()
+                             for n in forms})
+    return source, forms, content, variants
 
 
 def _clashes(page: _Page, blocks: list[_Block]) -> None:
@@ -1143,7 +1155,7 @@ def translate_pdf(path: Path, out: Path, settings: Settings, digest: str,
                                "was written")
         for index, page in pages.items():
             _clashes(page, [b for b in chosen if b.page == index])
-        source, forms, content = _drawings(pdf, chosen)
+        source, forms, content, variants = _drawings(pdf, chosen)
         stack.callback(source.close)
 
         budget = Budget(deadline, action="Translating")
@@ -1181,7 +1193,7 @@ def translate_pdf(path: Path, out: Path, settings: Settings, digest: str,
                 raise PdfUserError(f"The text on page {index + 1} can't be translated "
                                    "exactly: text outside the translated blocks would "
                                    "have changed. Nothing was written")
-        before = {index: _glyphs(check, index) for index in areas}
+        before = {index: glyphs(check, index) for index in areas}
 
         _strip_alt_text(pdf, touched)
         for index in areas:
@@ -1192,15 +1204,17 @@ def translate_pdf(path: Path, out: Path, settings: Settings, digest: str,
         if usage_rights:  # Reader's usage rights are a signature this would break
             del pdf.Root.Perms
         originals_kept = _cut_loose(pdf, gone, deadline)
+        drawn = drawn_docs(pdf, forms, variants, lambda p: _open(_plain(p)), _close, stack,
+                           budget)
         for n, form in forms.items():
             form.write(content[n])
         final = _open(_plain(pdf))
         stack.callback(_close, final)
         for index in sorted(areas):
             budget.check()
-            drawn = _confirm(index, before[index], _glyphs(final, index),
+            boxes = _confirm(index, before[index], glyphs(final, index),
                              [b for b in chosen if b.page == index], wanted, budget)
-            if not _shown(check, final, index, drawn, budget):
+            if not shown(check, drawn, index, boxes, budget):
                 raise PdfUserError(f"A translation on page {index + 1} would be partly "
                                    "hidden: cut off where the page clips its text, or under "
                                    "something drawn over it. Nothing was written")
@@ -1261,18 +1275,8 @@ def _confirm(index: int, before: list, after: list, blocks: list[_Block],
              wanted: dict[str, str], budget: Budget) -> list[tuple]:
     """The text drawn on a page must be the translations, no more and no less, each
     read back where it was drawn (text there already, like a watermark, aside).
-    Returns the new characters' centres with the size each was drawn at."""
-    there: dict[tuple, list] = {}   # by character and cell of TOLERANCE
-    for u, x, y in before:
-        there.setdefault((u, math.floor(x / TOLERANCE), math.floor(y / TOLERANCE)),
-                         []).append((x, y))
-
-    def known(u: int, x: float, y: float) -> bool:
-        cx, cy = math.floor(x / TOLERANCE), math.floor(y / TOLERANCE)
-        return any(abs(x - px) <= TOLERANCE and abs(y - py) <= TOLERANCE
-                   for dx in (-1, 0, 1) for dy in (-1, 0, 1)
-                   for px, py in there.get((u, cx + dx, cy + dy), ()))
-
+    *before* and *after* are visible.glyphs; returns the new characters' boxes."""
+    known = Known(before)
     lines = _Cells()
     for block in blocks:
         for area in _drawn_areas(block):
@@ -1281,11 +1285,11 @@ def _confirm(index: int, before: list, after: list, blocks: list[_Block],
     # What each block still needs to be read: a character drawn where two blocks'
     # lines cross (text over a watermark) counts for the one it is part of.
     need = {block.number: Counter(_bare(wanted[block.id])) for block in blocks}
-    new, drawn = [], []
-    for n, (u, x, y) in enumerate(after):
+    new, boxes = [], []
+    for n, (u, x, y, box) in enumerate(after):
         if not n & 0x3FF:
             budget.check()
-        if known(u, x, y):
+        if (u, x, y) in known:
             continue
         new.append(chr(u))
         owners = [block for _, block in lines.at(x, y) if _holds(block, x, y)]
@@ -1295,7 +1299,7 @@ def _confirm(index: int, before: list, after: list, blocks: list[_Block],
         owner = next((block for block in owners
                       if all(need[block.number][c] > 0 for c in read)), owners[0])
         need[owner.number].subtract(read)
-        drawn.append((x, y, owner.drawn_size))
+        boxes.append(box)
     expected: Counter = Counter()
     for block in blocks:
         expected += Counter(_bare(wanted[block.id]))
@@ -1305,46 +1309,4 @@ def _confirm(index: int, before: list, after: list, blocks: list[_Block],
     if Counter(_bare("".join(new))) != expected:
         raise PdfUserError(f"The translations on page {index + 1} couldn't be confirmed; "
                            "nothing was written")
-    return drawn
-
-
-def _picture(doc, index: int, points: list[tuple]) -> tuple:
-    """Page *index* of *doc* rendered in grey, at a scale where the smallest of the
-    *points*' sizes is INK_PIXELS high (within MAX_PIXELS), with each point's place in
-    the picture and its size there in pixels."""
-    smallest = min(size for _, _, size in points)
-    with _PDFIUM_LOCK:
-        page = doc[index]
-        try:
-            width, height = page.get_size()
-            scale = min(INK_MAX_SCALE, max(1.0, INK_PIXELS / smallest),
-                        math.sqrt(MAX_PIXELS / max(width * height, 1.0)))
-            bitmap = page.render(scale=scale, grayscale=True)
-            image = bitmap.to_pil().convert("L").copy()
-            dx, dy = ctypes.c_int(), ctypes.c_int()
-            placed = []
-            for x, y, size in points:
-                pdfium_raw.FPDF_PageToDevice(page.raw, 0, 0, image.width, image.height, 0,
-                                             x, y, dx, dy)
-                placed.append((dx.value, dy.value, size * scale))
-        finally:
-            page.close()
-    return image, placed
-
-
-def _shown(check, final, index: int, drawn: list[tuple], budget: Budget) -> bool:
-    """Whether every new character on page *index* changes the picture where it was
-    drawn: not cut off by a clipping path, nor hidden under something drawn later."""
-    budget.check()   # (_confirm found each block's characters: there are some)
-    before, _ = _picture(check, index, drawn)
-    budget.check()
-    after, placed = _picture(final, index, drawn)
-    changed = ImageChops.difference(before, after).point(
-        lambda v: 255 if v > INK_CONTRAST else 0)
-    for n, (x, y, size) in enumerate(placed):
-        if not n & 0x3FF:
-            budget.check()
-        r = max(1, round(INK_REACH * size))
-        if changed.crop((x - r, y - r, x + r + 1, y + r + 1)).getbbox() is None:
-            return False
-    return True
+    return boxes

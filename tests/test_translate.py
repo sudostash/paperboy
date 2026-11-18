@@ -811,13 +811,16 @@ def test_extra_text_on_the_page_fails_the_read_back(tmp_path, settings):
     page_ = page_of(src)
     block = page_.listed[0]
     block.placed, block.drawn_size = [(200, 780, "Hi", 30)], 20
-    before = [(ord("Z"), 50.0, 50.0)]
+    def glyph(c, x, y):
+        return (ord(c), x, y, (x - 3, y - 3, x + 3, y + 3))
+    before = [glyph("Z", 50.0, 50.0)]
     budget = page_.budget
-    T._confirm(0, before, [(ord("Z"), 50.2, 50.1), (ord("H"), 205, 785),
-                           (ord("i"), 215, 785)], [block], {block.id: "Hi"}, budget)
+    boxes = T._confirm(0, before, [glyph("Z", 50.2, 50.1), glyph("H", 205, 785),
+                                   glyph("i", 215, 785)], [block], {block.id: "Hi"}, budget)
+    assert boxes == [(202, 782, 208, 788), (212, 782, 218, 788)]   # the new ones only
     with pytest.raises(PdfUserError, match="translations on page 1 couldn't be confirmed"):
-        T._confirm(0, before, [(ord("H"), 205, 785), (ord("i"), 215, 785),
-                               (ord("Q"), 400, 400)], [block], {block.id: "Hi"}, budget)
+        T._confirm(0, before, [glyph("H", 205, 785), glyph("i", 215, 785),
+                               glyph("Q", 400, 400)], [block], {block.id: "Hi"}, budget)
 
 
 def test_translating_takes_a_time_limit(tmp_path, settings, monkeypatch):
@@ -969,14 +972,17 @@ def test_a_colour_change_splits_a_line_and_transparent_text_is_hidden(tmp_path, 
     assert found["pages_with_invisible_text"] == [1]
 
 
-def test_white_text_on_white_cant_be_translated(tmp_path, settings):
+def test_white_text_on_white_stays_white(tmp_path, settings):
+    # Hidden by its colour, not clipped or covered: translated, and still not drawn
+    # where anyone can see it.
     def page(c):
         c.setFont("Helvetica", 11)
         c.setFillColorRGB(1, 1, 1)
         c.drawString(72, 700, "Hidden words")
     src = make(tmp_path / "in.pdf", page)
-    with pytest.raises(PdfUserError, match="would be partly hidden"):
-        translate(src, settings, {"Hidden words": "Versteckte Wörter"})
+    _, out = translate(src, settings, {"Hidden words": "Versteckte Wörter"})
+    assert "Versteckte Wörter" in text_of(out)
+    assert not inked(out, (60, 690, 400, 720))
 
 
 def test_every_kind_of_space_and_line_break_is_tidied():
@@ -1029,3 +1035,26 @@ def test_many_neighbours_are_checked_within_the_time_limit(tmp_path, settings):
     page_.budget.deadline = 0
     with pytest.raises(PdfUserError, match="took too long"):
         T._clashes(page_, [hi])
+
+
+def test_the_check_drawings_use_the_real_drawings_fonts(tmp_path, settings):
+    # The black and white drawings share the real one's resources: every font they name
+    # must be one it has.
+    import re
+    src = make(tmp_path / "in.pdf", guide)
+    page_ = page_of(src)
+    title, paragraph = page_.listed[:2]
+    assert T._fit(title, "Καλώς ήρθατε", page_, {title.number})
+    assert T._fit(paragraph, "Kurz.", page_, {paragraph.number})
+    title.page = paragraph.page = 0
+    with pikepdf.open(src) as pdf:
+        source, forms, content, variants = T._drawings(pdf, [title, paragraph])
+        try:
+            for n, form in forms.items():
+                have = {str(k) for k in form.Resources.Font.keys()}
+                for drawn in (content[n], *(v[n] for v in variants)):
+                    used = {"/" + m.decode() for m in re.findall(rb"/(\w+) [\d.]+ Tf", drawn)}
+                    assert used and used <= have
+                assert "/Pv" in form.Resources.ExtGState
+        finally:
+            source.close()

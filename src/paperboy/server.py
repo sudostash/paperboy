@@ -1684,7 +1684,9 @@ def edit_text(
     can't be edited exactly: text over more than one line, edits overlapping, text that
     won't fit, outlined text, a scan's invisible OCR layer (its visible words are
     pixels), right-to-left replacement text, or content that can't be read precisely.
-    Each page is read back to confirm only the old text went, and the new text is found.
+    Each page is read back to confirm only the old text went, and the new text is found
+    and shows (new text cut off by the page's clipping, or under something drawn over
+    it, is refused).
     Only the pages change: old_text_elsewhere lists where else the old wording is still
     written (document info, XMP metadata, bookmarks, comments, form fields); use
     redact_pdf or sanitize_pdf for those. new_text_untagged warns that a tagged PDF's

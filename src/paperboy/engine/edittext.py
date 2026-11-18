@@ -72,6 +72,8 @@ from .render import _PDFIUM_LOCK, _close, _open
 from .search import MAX_PAGE_CONTENT, _content_size, _query
 from .stamp import _isolate, _own_resources, _visible_box
 from .streams import decode
+from .visible import GREYS, OPAQUE, Known, drawn_docs, make_opaque, shown
+from .visible import glyphs as page_glyphs
 
 MAX_EDITS = 50
 MAX_REPLACE = 500          # characters of new text per edit
@@ -83,6 +85,9 @@ MAX_CELL = 64              # characters filed at one spot (more are stacked: hos
 MAX_LOOKED = 10_000        # bookmarks, annotations or info entries looked at for old text
 MAX_XMP = 4 * 2**20        # bytes of XMP metadata looked at for old text
 EDIT_TIME_LIMIT_S = 120    # per call
+SURVEY_GLYPHS = 100_000    # characters read to find the fonts pages draw them in
+SURVEY_OPS = 1_000_000     # operators followed doing so
+SURVEY_CONTENT = 4 * 2**20  # bytes of content read doing so
 MIN_SQUEEZE = 0.8          # narrowest new text may be made to fit (of its natural width)
 GAP = 0.25                 # of the font size: kept clear before the next text on the line
 EDGE = 2.0                 # points kept clear of the page's edge
@@ -818,24 +823,23 @@ def _count(doc, index: int, text: str) -> int:
 # --- drawing ----------------------------------------------------------------------------
 
 
-def _drawings(pdf: pikepdf.Pdf, changes: list[_Change], edits: list
-              ) -> tuple[pikepdf.Pdf, dict[int, pikepdf.Stream], dict[int, bytes]]:
-    """A form drawing each change's new text (by change index; none for text removed
-    without replacement), and the content each form gets once the removal is checked
-    (they are empty until then). Returns the Pdf the standard fonts' forms came from
-    too: keep it open until saved."""
-    drawn = [n for n, change in enumerate(changes) if edits[change.edit][1]]
-    standard = [n for n in drawn if changes[n].own is None]
+def _canvas(changes: list[_Change], standard: list[int], edits: list,
+            grey: float | None = None) -> pikepdf.Pdf:
+    """A page per change in *standard* drawing its new text in a standard font, in its
+    colour; or all in *grey* (opacity then left to whoever draws it: visible.OPAQUE)."""
     buf = io.BytesIO()
     c = canvas.Canvas(buf)
     for n in standard:
         change = changes[n]
-        r, g, b, alpha = change.colour
         c.setPageSize((100, 100))   # each form's box is set to its page's below
         c.saveState()
         c.transform(*change.matrix, *change.origin)
-        c.setFillColorRGB(r / 255, g / 255, b / 255)
-        c.setFillAlpha(alpha / 255)
+        if grey is None:
+            r, g, b, alpha = change.colour
+            c.setFillColorRGB(r / 255, g / 255, b / 255)
+            c.setFillAlpha(alpha / 255)
+        else:
+            c.setFillColorRGB(grey, grey, grey)
         text = c.beginText(change.x, 0)
         text.setFont(change.font, change.size)
         text.setHorizScale(change.scale * 100)
@@ -844,13 +848,31 @@ def _drawings(pdf: pikepdf.Pdf, changes: list[_Change], edits: list
         c.restoreState()
         c.showPage()
     c.save()
-    source = pikepdf.open(io.BytesIO(buf.getvalue()))
+    return pikepdf.open(io.BytesIO(buf.getvalue()))
+
+
+def _drawings(pdf: pikepdf.Pdf, changes: list[_Change], edits: list
+              ) -> tuple[pikepdf.Pdf, dict[int, pikepdf.Stream], dict[int, bytes], list[dict]]:
+    """A form drawing each change's new text (by change index; none for text removed
+    without replacement), the content each form gets once the removal is checked (they
+    are empty until then), and the same drawn all black and all white (visible.GREYS),
+    to check it shows. Returns the Pdf the standard fonts' forms came from too: keep it
+    open until saved."""
+    drawn = [n for n, change in enumerate(changes) if edits[change.edit][1]]
+    standard = [n for n in drawn if changes[n].own is None]
+    source = _canvas(changes, standard, edits)
     forms, content = {}, {}
+    variants: list[dict] = [{} for _ in GREYS]
     # Drawn inside the page's content, a form inherits its text state: reset it.
     reset = b"0 Tc 0 Tw 100 Tz 0 Ts 0 Tr\n"
     for page, n in enumerate(standard):
         forms[n] = pdf.copy_foreign(source.pages[page].as_form_xobject())
         content[n] = reset + forms[n].read_bytes()
+    for k, grey in enumerate(GREYS):
+        with _canvas(changes, standard, edits, grey) as greyed:
+            for page, n in enumerate(standard):
+                variants[k][n] = reset + OPAQUE + \
+                    greyed.pages[page].as_form_xobject().read_bytes()
     for n in drawn:
         change = changes[n]
         if change.own is None:
@@ -858,10 +880,11 @@ def _drawings(pdf: pikepdf.Pdf, changes: list[_Change], edits: list
         obj, data, _ = change.own
         r, g, b, alpha = (v / 255 for v in change.colour)
         numbers = " ".join(f"{v:.6f}" for v in (*change.matrix, *change.origin))
-        content[n] = reset + (
-            f"q {numbers} cm {r:.4f} {g:.4f} {b:.4f} rg /Pa gs BT /Pf {change.size:.4f} Tf "
-            f"{change.scale * 100:.3f} Tz {change.x:.4f} 0 Td <{data.hex()}> Tj ET Q\n"
-        ).encode()
+        text = (f"BT /Pf {change.size:.4f} Tf {change.scale * 100:.3f} Tz {change.x:.4f} 0 Td "
+                f"<{data.hex()}> Tj ET Q\n")
+        content[n] = reset + f"q {numbers} cm {r:.4f} {g:.4f} {b:.4f} rg /Pa gs {text}".encode()
+        for k, grey in enumerate(GREYS):
+            variants[k][n] = reset + OPAQUE + f"q {numbers} cm {grey:.1f} g {text}".encode()
         forms[n] = pdf.make_stream(b"", Type=pikepdf.Name.XObject,
                                    Subtype=pikepdf.Name.Form, Resources=pikepdf.Dictionary(
                                        Font=pikepdf.Dictionary(Pf=obj),
@@ -869,8 +892,9 @@ def _drawings(pdf: pikepdf.Pdf, changes: list[_Change], edits: list
                                            Type=pikepdf.Name.ExtGState, ca=alpha))))
     for n, form in forms.items():
         form.BBox = pikepdf.Array([float(v) for v in pdf.pages[changes[n].page].mediabox])
+        make_opaque(pdf, form)
         form.write(b"")
-    return source, forms, content
+    return source, forms, content, variants
 
 
 def _remove(pdf: pikepdf.Pdf, index: int, page_changes: list[int], changes: list[_Change],
@@ -1015,9 +1039,6 @@ def _attempt(data: bytes, out: Path, settings: Settings, checked: list, pages: s
             raise PdfUserError(f"Edits {names} weren't found.{hint} Nothing was written")
 
         budget = Budget(deadline, action="Editing")
-        # Reading pages for their fonts has a budget of its own: running out of it only
-        # means drawing in standard fonts, never refusing the edit.
-        survey = Budget(deadline, action="Editing")
         fonts: dict = {}
         maps: dict = {}
         by_page: dict[int, list[int]] = {}
@@ -1025,6 +1046,10 @@ def _attempt(data: bytes, out: Path, settings: Settings, checked: list, pages: s
             by_page.setdefault(change.page, []).append(n)
         for index, ns in by_page.items():
             lines = _Lines(page_chars[index], budget)
+            # Reading a page for its fonts has a smaller budget of its own, page by page:
+            # running out of it only means drawing in a standard font, never refusing.
+            survey = Budget(deadline, content=SURVEY_CONTENT, action="Editing")
+            survey.glyphs_left, survey.ops_left = SURVEY_GLYPHS, SURVEY_OPS
             glyphs = _survey(pdf, index, survey, {})
             for n in ns:
                 _, new, align = checked[changes[n].edit]
@@ -1033,7 +1058,7 @@ def _attempt(data: bytes, out: Path, settings: Settings, checked: list, pages: s
                 _fit(changes[n], new, align,
                      _own_font(changes[n], glyphs, new, fonts, maps, survey), reflow)
         _follow(changes)
-        source, forms, content = _drawings(pdf, changes, checked)
+        source, forms, content, variants = _drawings(pdf, changes, checked)
         stack.callback(source.close)
 
         gone: set = set()
@@ -1060,27 +1085,26 @@ def _attempt(data: bytes, out: Path, settings: Settings, checked: list, pages: s
                     f"The text to edit on page {index + 1} is drawn in outline; edit_text "
                     "can only draw filled text. Nothing was written")
             touched[pdf.pages[index].obj.objgen] = redactor.mcids
-        check = _open(_plain(pdf))
-        try:
-            for index in sorted(areas):
-                budget.check()
-                if _unchanged(_glyphs(doc, index), _glyphs(check, index), areas[index],
-                              changes, index, budget):
-                    continue
-                if any(c.shift and c.page == index for c in changes):
-                    raise _NoRoom()
-                raise PdfUserError(f"The text on page {index + 1} can't be edited exactly: "
-                                   "text outside the edits would have changed. Nothing was "
-                                   "written")
-            expected: dict = {}
-            for change in changes:
-                new = checked[change.edit][1]
-                if new.strip():
-                    key = (change.page, _query(new))
-                    expected[key] = expected.get(key, 0) + 1
-            already = {key: _count(check, *key) for key in expected}
-        finally:
-            _close(check)
+        check = _open(_plain(pdf))   # the pages without the old text, nor the new
+        stack.callback(_close, check)
+        for index in sorted(areas):
+            budget.check()
+            if _unchanged(_glyphs(doc, index), _glyphs(check, index), areas[index],
+                          changes, index, budget):
+                continue
+            if any(c.shift and c.page == index for c in changes):
+                raise _NoRoom()
+            raise PdfUserError(f"The text on page {index + 1} can't be edited exactly: "
+                               "text outside the edits would have changed. Nothing was "
+                               "written")
+        expected: dict = {}
+        for change in changes:
+            new = checked[change.edit][1]
+            if new.strip():
+                key = (change.page, _query(new))
+                expected[key] = expected.get(key, 0) + 1
+        already = {key: _count(check, *key) for key in expected}
+        before = {index: Known(page_glyphs(check, index)) for index in areas}
 
         _strip_alt_text(pdf, touched)
         for index in areas:
@@ -1091,16 +1115,23 @@ def _attempt(data: bytes, out: Path, settings: Settings, checked: list, pages: s
         if usage_rights:  # Reader's usage rights are a signature this would break
             del pdf.Root.Perms
         originals_kept = _cut_loose(pdf, gone, deadline)
+        drawn = drawn_docs(pdf, forms, variants, lambda p: _open(_plain(p)), _close, stack,
+                           budget) if forms else []
         for n, form in forms.items():
             form.write(content[n])
         final = _open(_plain(pdf))
-        try:
-            for key, n in expected.items():
-                if _count(final, *key) < already[key] + n:
-                    raise PdfUserError(f"The new text on page {key[0] + 1} couldn't be "
-                                       "confirmed; nothing was written")
-        finally:
-            _close(final)
+        stack.callback(_close, final)
+        for key, n in expected.items():
+            if _count(final, *key) < already[key] + n:
+                raise PdfUserError(f"The new text on page {key[0] + 1} couldn't be "
+                                   "confirmed; nothing was written")
+        for index in sorted(areas) if drawn else ():   # it shows: not clipped, nor covered
+            new = [box for u, x, y, box in page_glyphs(final, index)
+                   if (u, x, y) not in before[index]]
+            if not shown(check, drawn, index, new, budget):
+                raise PdfUserError(f"The new text on page {index + 1} would be partly "
+                                   "hidden: cut off where the page clips its text, or under "
+                                   "something drawn over it. Nothing was written")
         protection = inherit_protection(pdf, password)
         pdf.save(str(out), encryption=protection.encryption,
                  deterministic_id=not protection.encryption,
