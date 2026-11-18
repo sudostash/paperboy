@@ -11,6 +11,7 @@ from .cleanscan import clean_scans
 from .comments import add_comments, list_comments
 from .compare import compare_pdfs
 from .create import convert_to_pdf, images_to_pdf
+from .edittext import edit_text
 from .extract import extract_attachments, extract_images, list_attachments
 from .files import list_pdfs
 from .forms import fill_form, list_form_fields
@@ -58,7 +59,7 @@ __all__ = [
     "search_text",
     "crop_pages", "resize_pages", "n_up", "insert_blank_pages", "interleave_pdfs",
     "extract_tables", "export_tables",
-    "compare_pdfs", "list_pdfs", "redact_pdf", "ocr_pdf",
+    "compare_pdfs", "list_pdfs", "redact_pdf", "edit_text", "ocr_pdf",
     "convert_to_pdfa", "pdf_to_markdown", "export_markdown", "markdown_to_pdf",
     "list_comments", "add_comments", "find_sensitive_data", "clean_scans",
 ]

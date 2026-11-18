@@ -643,6 +643,49 @@ class RedactResult(Protected):
     originals_kept: int
 
 
+class TextEdit(TypedDict):
+    """One change for edit_text: every place *find* is found gets *replace*."""
+
+    __pydantic_config__ = ConfigDict(extra="forbid")  # type: ignore[misc]
+
+    find: str                              # text on the page, found as search_text finds it
+    replace: str                           # one line; "" removes the text
+    # Which part of the old text the new keeps in place: its start (default), its end
+    # (amounts in a column), or its middle (centred headings).
+    align: NotRequired[Literal["left", "right", "center"]]
+
+
+class EditedText(TypedDict):
+    page: int                              # 1-based
+    find: str                              # the edit's find text
+    old: str                               # what was on the page
+    new: str
+    font: str                              # the font the new text is drawn in
+    # Drawn in the page's own font (or the very standard font it names, like Helvetica);
+    # else in the closest standard one, which may look a little different.
+    same_font: bool
+    original_font: str                     # the font the old text was in, as the PDF names it
+    size: float                            # points, as the old text
+    squeezed: float | None                 # narrowed to this share of its width to fit
+    # Points the rest of its line moved along (negative: back) to keep its spacing.
+    line_moved: float | None
+
+
+class EditTextResult(Protected):
+    output: str
+    change_count: int
+    changes: list[EditedText]              # in page order
+    pages_edited: list[int]
+    # The PDF has accessibility tags, and some new text isn't in them (it was drawn
+    # outside the old text's marked content): screen readers following tags may skip it.
+    new_text_untagged: bool
+    # Where else in the file the old texts are still written (edit_text changes pages
+    # only): "document info", "XMP metadata", "bookmarks", "comments", "form fields".
+    old_text_elsewhere: list[str]
+    # Forms holding edited text that other pages still draw unedited.
+    originals_kept: int
+
+
 class CompareResult(TypedDict):
     path_a: str
     path_b: str

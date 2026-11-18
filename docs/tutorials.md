@@ -32,6 +32,7 @@ connect it to your AI app with one command, and restart the app.
   [Clean up phone photos of documents](#clean-up-phone-photos-of-documents) ·
   [Write a document as a PDF](#write-a-document-as-a-pdf)
 - Editing and marking up: [Fill in forms](#fill-in-forms) ·
+  [Change words in a PDF](#change-words-in-a-pdf) ·
   [Watermarks, stamps and page numbers](#watermarks-stamps-and-page-numbers) ·
   [Review with comments](#review-with-comments) ·
   [Set the title and author](#set-the-title-and-author) ·
@@ -350,6 +351,22 @@ fills them in, checking each value first. The result stays editable unless you a
 to be [locked](#lock-a-finished-form).
 
 Video: [`fill-form.webm`](https://github.com/sudostash/paperboy/releases/download/demo-videos/fill-form.webm)
+
+### Change words in a PDF
+
+> *"The launch moved to Thursday 21 May and we're now 95 guests, so catering is £2,850.00
+> and the total £4,050.00. Update venue-booking.pdf."*
+
+`edit_text` swaps words on the page for new ones: a date, a name, a price, a typo. The old
+words are taken out of the file, not hidden under a white box, and the new ones are drawn
+in their place at the same size and colour, in the document's own font when it has the
+letters needed. Prices in a column can stay lined up on the right (`"align": "right"`),
+and when the new words are longer or shorter, the rest of the line moves along so the
+spacing stays even. It changes one line at a time and won't rewrap a paragraph: if new
+words don't fit, nothing is changed and you're told how much room there is. Check the
+result with `view_pages`.
+
+Video: [`edit-text.webm`](https://github.com/sudostash/paperboy/releases/download/demo-videos/edit-text.webm)
 
 ### Watermarks, stamps and page numbers
 

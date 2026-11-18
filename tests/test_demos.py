@@ -109,7 +109,11 @@ def test_scenario_is_well_formed(slug):
             assert step["tool"] in EXPECTED_TOOLS
             assert isinstance(step["args"], dict)
             assert set(step.get("show", {})) <= {"before", "after", "password", "highlight",
-                                                 "review", "layout"}
+                                                 "review", "layout", "crop"}
+            crop = step.get("show", {}).get("crop")
+            if crop is not None:   # a part of each page: [left, top, right, bottom]
+                assert len(crop) == 4 and 0 <= crop[0] < crop[2] <= 1 and \
+                    0 <= crop[1] < crop[3] <= 1
             views = [k for k in ("show", "showSchema", "showImages", "showTable",
                                  "showGrid", "showMarkdown") if step.get(k)]
             assert len(views) <= 1, f"pick one stage view, not {views}"

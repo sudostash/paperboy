@@ -116,6 +116,7 @@ and a demo video for each.
 | `redact_sensitive_data` | Redact the personal data you approve: you review every item on a local page, each shown where it is on its page, and untick what should stay. Only what you leave ticked is redacted, for real (as `redact_pdf`) |
 | `ocr_pdf` | Make scans searchable: Tesseract OCR reads each page and an invisible text layer is placed over the words, so they can be searched, selected and copied; the pages look exactly as before. Pages that already have text are skipped; any installed language *(needs Tesseract)* |
 | `convert_to_pdfa` | PDF/A-2b copy for long-term archiving (courts, governments, archives): adds the sRGB colour profile and PDF/A metadata, removes what PDF/A forbids (scripts, attachments, encryption, hidden annotations), never redraws pages. Checked by veraPDF when installed and written only if it passes; refuses with reasons what it can't fix (fonts not embedded, CMYK colour) |
+| `edit_text` | Change words on a page (a date, a name, an amount, a typo): the old text is removed from the page, not covered, and the new drawn in its place at the same size, angle and colour, in the page's own font when it has the characters (else the closest standard font). Amounts in a column can stay right-aligned, and the rest of a line moves along to keep its spacing. One line at a time; nothing is written unless every edit fits and checks out |
 | `add_watermark` | Text ("CONFIDENTIAL", "DRAFT") or image watermark, or a corner stamp ("APPROVED"): position, size, colour, opacity, rotation, over or under the content |
 | `add_page_numbers` | Page numbers ("Page {n} of {total}") or Bates numbers ("ACME-{n:06}"), any corner or edge, with a start number and page selection |
 | `render_pages` | Save pages as PNG or JPEG files at 36-600 dpi (copy-protected PDFs need the owner password) |
@@ -386,6 +387,21 @@ All configuration is environment variables. Sensible defaults; nothing is requir
   (memory is limited only on Linux); content is measured before it is parsed (16 MB and 1
   million tokens per page or form, 64 MB per call; fonts 64 MB), and a call stops after 3
   minutes, writing nothing. Signed PDFs are refused; Reader usage rights are dropped.
+- **Edits remove, then draw, then check.** `edit_text` takes the old characters out of the
+  page's content as `redact_pdf` does (only characters: pictures and drawings under them
+  stay), then draws the new text where they were, in the old text's place in the page's
+  reading order, after resetting any spacing the page had set. It uses the page's own font
+  only for characters that page already draws in that font, so the embedded copy is known
+  to have them, with codes taken from the font's own map and checked against what the
+  page shows; otherwise a standard font. Every page is read back before anything is
+  written: only the matched characters may be gone, everything else must be where it was
+  (or where its line was moved to), and the new text must be found. Text that's invisible
+  (a scan's OCR layer) or outlined, over more than one line, overlapping another edit, or
+  too long to fit is refused, as are right-to-left replacements and signed PDFs. A font's
+  map is read in one pass of at most 1 MB and 200,000 tokens, each code looked up once;
+  every pass over a page's characters is indexed by line and stops at the call's
+  2-minute limit. Only pages change: the result lists where else the old wording is
+  still written (document info, XMP, bookmarks, comments, form fields).
 - **OCR adds text and changes nothing else.** `ocr_pdf` checks and renders each page as
   displayed (rotation and crop box applied) with PDFium in a separate process, from a
   decrypted copy handed over in memory, with a CPU limit; it is killed at the call's

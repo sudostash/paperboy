@@ -7,6 +7,20 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `edit_text`: change words on a PDF's pages, such as a date, a name, an amount or a
+  typo. The old characters are removed from the page's content (as `redact_pdf` removes
+  them, but leaving pictures and drawings), and the new text is drawn in their place:
+  same baseline, size, angle and colour, in the old text's place in the reading order.
+  It is drawn in the page's own font when the page already draws every character needed
+  in it, otherwise in the closest standard font. `align` keeps the text's start, end
+  (amounts in a column) or middle in place; from the start, the rest of the line moves
+  along to keep its spacing when it can, and longer text is otherwise squeezed a little
+  or refused. Each page is read back to confirm only the old text went before anything
+  is written; the result lists where else the old wording is still written (document
+  info, XMP, bookmarks, comments, form fields). With a tutorial and demo video.
+- Redaction internals: `redact_pdf`'s content rewriter can now remove only text, report
+  each character it reads, and place new content where removed text was. Redaction
+  itself is unchanged (checked against its previous output).
 - `clean_scans`: phone photos of documents (or scanned PDFs) made to look like clean
   scans, as one PDF. The sheet is found by its edges and flattened to its real shape (the
   perspective solved from its corners), slanted text lines are levelled, and the

@@ -11,7 +11,8 @@ Step types:
      "show": {"before": file, "after": file,   call a tool, optionally render PDFs
               "highlight": result_field,        (outlining pages listed in the result
               "review": result_field,           in red, or amber for "look first";
-              "layout": "side-by-side"},        before/after next to each other),
+              "layout": "side-by-side",         before/after next to each other,
+              "crop": [l, t, r, b]},            only that part of each page, as fractions),
      "showSchema": True,                       or show its typed result vs. its schema,
      "showImages": True,                       or the images it returned / files it saved,
      "showTable": result_field}                or a result object as a findings table
@@ -432,6 +433,30 @@ SCENARIOS: dict[str, dict] = {
                                     "signatures are in blue ink, so the page stays in "
                                     "colour. It's a picture of the page: say the word and "
                                     "I'll run OCR to make the text searchable."},
+        ],
+    },
+    "edit-text": {
+        "title": "Change words in a PDF",
+        "subtitle": "A new date, guest count and prices, in place, in the same font.",
+        "files": ["venue-booking.pdf"],
+        "prompt": "The launch moved to Thursday 21 May and we're now 95 guests, so catering "
+                  "is £2,850.00 and the total £4,050.00. Update venue-booking.pdf.",
+        "steps": [
+            {"type": "call", "tool": "edit_text",
+             "args": {"input_path": "venue-booking.pdf", "edits": [
+                 {"find": "Thursday 14 May 2026", "replace": "Thursday 21 May 2026"},
+                 {"find": "80 guests", "replace": "95 guests"},
+                 {"find": "£2,400.00", "replace": "£2,850.00", "align": "right"},
+                 {"find": "£3,600.00", "replace": "£4,050.00", "align": "right"}]},
+             "show": {"before": "venue-booking.pdf", "after": "venue-booking_edited.pdf",
+                      "crop": [0.08, 0.08, 0.92, 0.5]}},
+            {"type": "call", "tool": "search_text",
+             "args": {"input_path": "venue-booking_edited.pdf", "query": "80 guests"}},
+            {"type": "say", "text": "Done: venue-booking_edited.pdf has the new date, 95 "
+                                    "guests in both places, and the new catering and total, "
+                                    "lined up on the right like the rest of the column. The "
+                                    "old words were taken out of the page, not covered, so "
+                                    "a search for \"80 guests\" finds nothing."},
         ],
     },
     "sensitive-data": {
@@ -868,8 +893,8 @@ GROUPS: list[tuple[str, list[str]]] = [
     ("Organizing pages", ["organize", "extract-crop", "blank-pages", "interleave",
                           "page-layout", "bookmarks"]),
     ("Creating PDFs", ["convert", "clean-scans", "markdown-to-pdf"]),
-    ("Editing and marking up", ["fill-form", "watermark-numbers", "comments", "metadata",
-                                "pipeline", "batch"]),
+    ("Editing and marking up", ["fill-form", "edit-text", "watermark-numbers", "comments",
+                                "metadata", "pipeline", "batch"]),
     ("Sharing safely", ["sanitize", "redaction", "sensitive-data", "protect",
                         "ask-password", "permissions", "scan"]),
     ("File health and size", ["repair", "target-size", "pdfa"]),
